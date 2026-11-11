@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold tracking-tight text-lg text-white">CENTRAL COMERCIAL</span>
                 <span className="px-2 py-0.5 text-xs font-semibold bg-blue-950 text-blue-300 rounded border border-blue-800">
-                  Privado v1.0
+                  {adminUser?.id === 'passwordless-testing' ? 'Pruebas · Sin contraseña' : 'Privado v1.0'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
@@ -170,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Authenticated Admin Badge & Logout */}
-            {adminUser && (
+            {adminUser && adminUser.id !== 'passwordless-testing' && (
               <div className="flex items-center space-x-1.5 pl-2 border-l border-slate-700 text-xs">
                 <span className="hidden xl:inline text-slate-300 font-medium" title={adminUser.email}>
                   {adminUser.email}
