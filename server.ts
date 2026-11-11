@@ -93,6 +93,30 @@ app.post('/api/auth/setup', (req, res) => {
   }
 });
 
+// One-time owner recovery. No credentials or recovery keys are logged.
+let recoveryAttempts: number[] = [];
+app.post('/api/auth/recover', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!req.is('application/json')) {
+    return res.status(415).json({ error: 'Se requiere JSON.' });
+  }
+  const now = Date.now();
+  recoveryAttempts = recoveryAttempts.filter(t => now - t < 15 * 60 * 1000);
+  if (recoveryAttempts.length >= 5) {
+    res.setHeader('Retry-After', '900');
+    return res.status(429).json({ error: 'Demasiados intentos. Espere 15 minutos.' });
+  }
+  recoveryAttempts.push(now);
+  try {
+    const { email, password, recoveryKey } = req.body;
+    authManager.recoverPassword(email, password, recoveryKey);
+    db.addLog('info', 'seguridad', 'Contraseña administrativa recuperada por el propietario; sesiones revocadas.');
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 // Admin Login
 app.post('/api/auth/login', (req, res) => {
   try {
