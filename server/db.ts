@@ -399,6 +399,27 @@ class DatabaseManager {
   private migrateData(schema: DatabaseSchema): boolean {
     let changed = false;
 
+    // Preserve the confirmed fixture for audit, but never count it as revenue.
+    for (const payment of schema.payments) {
+      if (payment.id === 'pay-1794435057839' &&
+          payment.reference === 'TRANSFER-TEST-9988' &&
+          payment.amount === 150 && payment.currency === 'USD' &&
+          payment.status === 'confirmado') {
+        payment.status = 'rechazado';
+        payment.auditorNote = 'Registro de prueba identificado por el propietario: no corresponde a un cobro real. Se conserva importe y referencia para auditoría.';
+        payment.reviewedBy = 'Migración: corrección de datos de prueba';
+        payment.reviewedAt = new Date().toISOString();
+        schema.logs.push({
+          id: 'audit-fixture-payment-150',
+          timestamp: new Date().toISOString(),
+          level: 'warning',
+          module: 'pagos',
+          message: 'Excluido de ingresos el registro de prueba TRANSFER-TEST-9988 (USD 150). No se eliminó el registro.'
+        });
+        changed = true;
+      }
+    }
+
     for (const app of schema.applications) {
       // 1. Unverified plans: Mark verified = false and add clear verification notice
       if (app.plans) {
@@ -583,7 +604,7 @@ class DatabaseManager {
     const hasPostgres = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'));
 
     return {
-      storageType: hasPostgres ? 'postgresql' : 'local_json_db',
+      storageType: 'local_json_db',
       filePath: DB_FILE,
       fileSizeBytes: sizeBytes,
       backupCount,
@@ -1391,215 +1412,13 @@ class DatabaseManager {
     testOrgName: string;
     contactPerson?: string;
   }): Promise<EmailSandboxRunResponse> {
-    const steps: SandboxStepResult[] = [];
-    const app = this.getApplicationById(params.appId);
-    if (!app) throw new Error('Aplicación no encontrada para la prueba.');
-
-    const testEmail = params.testEmail.trim().toLowerCase();
-    const testOrg = params.testOrgName.trim() || 'Club de Prueba Controlada';
-    const testPerson = params.contactPerson?.trim() || 'Administrador Evaluador';
-
-    // ETAPA 1: Contacto verificado
-    let contact = this.data.contacts.find(c => c.email && c.email.toLowerCase() === testEmail);
-    if (!contact) {
-      contact = this.saveContact({
-        id: `contact-sandbox-${Date.now()}`,
-        orgName: testOrg,
-        contactPerson: testPerson,
-        role: 'Director Deportivo / Evaluador',
-        orgType: 'Club Deportivo',
-        country: app.countries[0] || 'Argentina',
-        language: app.languages[0] || 'es',
-        timezone: 'America/Argentina/Buenos_Aires',
-        website: 'https://test.club.local',
-        email: testEmail,
-        phone: '+54 11 9999 0000',
-        source: 'Sandbox de Prueba Controlada del Administrador',
-        sourceReviewDate: new Date().toISOString(),
-        interestedAppIds: [app.id],
-        preferredChannel: 'email',
-        permission: 'autorizado',
-        status: 'nuevo',
-        notes: 'Contacto generado para validación de hito del recorrido de email.',
-        history: [],
-        nextFollowUpDate: null,
-        assignedTo: 'Administrador',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    } else {
-      contact.permission = 'autorizado';
-      contact.source = 'Sandbox de Prueba Controlada del Administrador';
-      if (!contact.interestedAppIds.includes(app.id)) contact.interestedAppIds.push(app.id);
-      this.save();
-    }
-
-    steps.push({
-      step: 1,
-      name: '1. Contacto verificado',
-      stage: 'verificar',
-      status: 'completado',
-      evidence: `Contacto verificado: "${contact.orgName}" (${contact.email}) registrado con permiso formal ("autorizado") y origen comprobado.`,
-      nextDependency: 'Generación de mensaje aprobado según ficha oficial de la aplicación.',
-      details: { contactId: contact.id, email: contact.email, status: contact.status }
-    });
-
-    // ETAPA 2: Mensaje aprobado según ficha comercial verificada
-    const verifiedFeatures = app.verifiedFeatures.length > 0 ? app.verifiedFeatures[0] : app.description;
-    const subject = `Propuesta de valor ${app.name} para ${contact.orgName}`;
-    const messageBody = `Estimado/a ${contact.contactPerson},\n\nNos ponemos en contacto desde Central Comercial para acercarles ${app.name}.\n\nFuncionalidad oficial verificada: ${verifiedFeatures}.\nSitio web oficial: ${app.website}.\n\n¿Tienen disponibilidad para una breve llamada de demostración de 10 minutos?\n\nAtentamente,\nEquipo Comercial de ${app.name}`;
-
-    let conv = this.data.conversations.find(c => c.contactId === contact!.id && c.appId === app.id);
-    if (!conv) {
-      conv = this.saveConversation({
-        id: `conv-sandbox-${Date.now()}`,
-        contactId: contact.id,
-        appId: app.id,
-        channel: 'email',
-        classification: 'solicita_informacion',
-        requiresHumanIntervention: false,
-        messages: [],
-        lastMessageAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      });
-    }
-
-    const outboundMsg = this.addMessageToConversation(conv.id, {
-      conversationId: conv.id,
-      direction: 'outbound',
-      channel: 'email',
-      content: `Asunto: ${subject}\n\n${messageBody}`,
-      status: 'preparado',
-      providerEvidence: 'Mensaje redactado a partir de la ficha oficial verificada (sin precios ni pruebas inventadas).'
-    });
-
-    steps.push({
-      step: 2,
-      name: '2. Mensaje aprobado',
-      stage: 'preparar',
-      status: 'completado',
-      evidence: `Mensaje redactado y aprobado ID ${outboundMsg.id}. Excluye datos no verificados y cita únicamente funciones autorizadas.`,
-      nextDependency: 'Verificación de conector SMTP y despacho.',
-      details: { messageId: outboundMsg.id, subject, bodyPreview: messageBody.substring(0, 120) }
-    });
-
-    // ETAPA 3: Envío real / intentado
-    const smtpConn = this.data.connectors.find(c => c.type === 'email_smtp');
-    let dispatchEvidence = '';
-    if (smtpConn?.status === 'conectado') {
-      outboundMsg.status = 'aceptado_proveedor';
-      outboundMsg.acceptedAt = new Date().toISOString();
-      outboundMsg.serviceConfirmationId = `smtp-msg-${Date.now()}`;
-      dispatchEvidence = `Aceptado por servidor SMTP proveedor real con ID de confirmación ${outboundMsg.serviceConfirmationId}.`;
-    } else {
-      outboundMsg.status = 'envio_intentado';
-      outboundMsg.attemptedAt = new Date().toISOString();
-      outboundMsg.serviceConfirmationId = `sandbox-dispatch-sim-${Date.now()}`;
-      dispatchEvidence = `Envío intentado en entorno de pruebas sandbox (SMTP en estado "${smtpConn?.status || 'pendiente_conexion'}"). Registrado con ID de prueba ${outboundMsg.serviceConfirmationId} sin falsedad de entrega externa.`;
-    }
-    contact.status = 'contactado';
-    this.save();
-
-    steps.push({
-      step: 3,
-      name: '3. Envío registrado',
-      stage: 'enviar',
-      status: 'completado',
-      evidence: dispatchEvidence,
-      nextDependency: 'Recepción de respuesta y asociación a la conversación.',
-      details: { msgStatus: outboundMsg.status, confirmationId: outboundMsg.serviceConfirmationId }
-    });
-
-    // ETAPA 4: Respuesta asociada
-    const inboundContent = `Hola, recibimos su correo sobre ${app.name}. Nos interesa evaluar cómo implementarlo con nuestro equipo y conocer los pasos para comenzar.`;
-    const inboundMsg = this.addMessageToConversation(conv.id, {
-      conversationId: conv.id,
-      direction: 'inbound',
-      channel: 'email',
-      content: inboundContent,
-      status: 'respuesta_recibida',
-      providerEvidence: 'Respuesta recibida y asociada al hilo de conversación del contacto.'
-    });
-
-    // Automatic intelligence: Halt follow-ups because response was received!
-    contact.nextFollowUpDate = null;
-    this.save();
-
-    steps.push({
-      step: 4,
-      name: '4. Respuesta asociada',
-      stage: 'recibir',
-      status: 'completado',
-      evidence: `Respuesta recibida ID ${inboundMsg.id} vinculada al hilo de conversación. Seguimientos programados cancelados de forma inmediata.`,
-      nextDependency: 'Clasificación de intención comercial y atención asistida con IA.',
-      details: { inboundId: inboundMsg.id, content: inboundContent }
-    });
-
-    // ETAPA 5: Atención comercial y sugerencia inteligente
-    conv.classification = 'interesado';
-    const suggestedAnswer = `Hola ${contact.contactPerson || 'estimado/a'},\n\n¡Excelente! Con gusto les coordinamos una llamada técnica para ver ${app.name} en detalle. ¿Tienen disponibilidad este jueves a las 11:00 hs?\n\nAtentamente,\nEquipo Comercial`;
-
-    steps.push({
-      step: 5,
-      name: '5. Atención comercial inteligente',
-      stage: 'responder',
-      status: 'completado',
-      evidence: `Intención clasificada como "interesado". Borrador de respuesta generado citando condiciones oficiales. No se promueven tarifas no autorizadas.`,
-      nextDependency: 'Actualización de contacto a "interesado" y registro de pago manual.',
-      details: { classification: conv.classification, suggestedAnswer: suggestedAnswer.substring(0, 100) }
-    });
-
-    // ETAPA 6: Interesado calificado
-    contact.status = 'interesado';
-    this.save();
-
-    steps.push({
-      step: 6,
-      name: '6. Interesado registrado en pipeline',
-      stage: 'seguimiento',
-      status: 'completado',
-      evidence: `Contacto ${contact.orgName} calificado como "interesado" en el panel general y en la base de datos comercial.`,
-      nextDependency: 'Revisión y confirmación manual de pago por el administrador.',
-      details: { newContactStatus: contact.status }
-    });
-
-    // ETAPA 7: Pago en cola de revisión manual
-    const testPayment = this.savePayment({
-      id: `pay-sandbox-${Date.now()}`,
-      clientId: contact.id,
-      clientName: contact.orgName,
-      appId: app.id,
-      amount: 50,
-      currency: 'USD',
-      status: 'pendiente_confirmacion_manual',
-      reference: `SANDBOX-TEST-PAY-${Date.now()}`,
-      channel: 'transferencia_bancaria',
-      notes: 'Pago generado en Sandbox para validación del ciclo completo de email.',
-      createdAt: new Date().toISOString()
-    });
-
-    steps.push({
-      step: 7,
-      name: '7. Pago en cola de revisión manual',
-      stage: 'seguimiento',
-      status: 'completado',
-      evidence: `Pago de USD 50 registrado en estado "pendiente_confirmacion_manual" (ID ${testPayment.id}). Por política de seguridad, solo el administrador puede auditarlo y confirmarlo con su firma.`,
-      nextDependency: 'Ninguna: Recorrido completo verificado exitosamente de punta a punta.',
-      details: { paymentId: testPayment.id, status: testPayment.status, amount: testPayment.amount }
-    });
-
-    this.addLog('info', 'campañas', `Recorrido completo de prueba por email validado para ${app.name} con destinatario ${testEmail}.`);
-
-    return {
-      success: true,
-      appId: app.id,
-      appName: app.name,
-      testEmail,
-      testOrgName: testOrg,
-      timestamp: new Date().toISOString(),
-      steps,
-      summary: `Validación completa de 7 etapas de prospección y gestión de clientes por email ejecutada con éxito para ${app.name}. Cada etapa cuenta con evidencia verificable en la base de datos y auditoría.`
-    };
+    // The previous walkthrough fabricated dispatch IDs and incoming replies.
+    // Keep this endpoint fail-closed until an actual transport and inbox exist.
+    throw new Error(
+      'Prueba deshabilitada: el recorrido anterior simulaba envíos y respuestas. ' +
+      'Todavía no hay un transporte de correo e ingreso de respuestas implementados. ' +
+      'No se envió ningún email ni se creó un contacto o pago.'
+    );
   }
 }
 
