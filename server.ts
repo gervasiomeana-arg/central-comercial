@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { scheduler } from './server/scheduler.js';
 import { analyzeAndSuggestResponse } from './server/ai.js';
-import { authManager, requireAdminAuth } from './server/auth.js';
+import { authManager, requireAdminAuth, passwordlessTestingEnabled, TESTING_ADMIN } from './server/auth.js';
 import { testConnectorReal } from './server/connectors.js';
 import type { Contact, Campaign, Application, PaymentRecord, ClientSubscription } from './src/types.js';
 
@@ -49,6 +49,16 @@ app.get('/api/status', (req, res) => {
 
 // Auth Status Check
 app.get('/api/auth/status', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (passwordlessTestingEnabled()) {
+    return res.json({
+      configured: true,
+      authenticated: true,
+      admin: { ...TESTING_ADMIN },
+      setupKeyRequired: false,
+      passwordlessTesting: true
+    });
+  }
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
@@ -67,6 +77,14 @@ app.get('/api/auth/status', (req, res) => {
     admin: session ? { id: session.adminId, email: session.email, name: session.name } : undefined,
     setupKeyRequired: !isConfigured
   });
+});
+
+// Credential changes are unnecessary while direct test access is enabled.
+app.use(['/api/auth/setup', '/api/auth/recover', '/api/auth/login'], (req, res, next) => {
+  if (passwordlessTestingEnabled()) {
+    return res.status(409).json({ error: 'El acceso de pruebas es directo y no requiere contraseña. Recargue la página.' });
+  }
+  next();
 });
 
 // Setup First Admin Account (Requires the server Master Setup Key to prevent random visitors becoming admin)
