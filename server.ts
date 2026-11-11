@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -751,7 +752,16 @@ adminRouter.post('/payments', (req, res) => {
       return res.status(400).json({ error: 'Cliente, importe y moneda son obligatorios.' });
     }
 
-    body.id = body.id || `pay-${Date.now()}`;
+    if (typeof body.amount !== 'number' || !Number.isFinite(body.amount) || body.amount <= 0) {
+      return res.status(400).json({ error: 'El importe debe ser un número finito mayor que cero.' });
+    }
+    if (typeof body.currency !== 'string' || !/^[A-Z]{3}$/.test(body.currency)) {
+      return res.status(400).json({ error: 'La moneda debe ser un código de tres letras mayúsculas, por ejemplo USD.' });
+    }
+    if (body.id && db.getPayments().some(p => p.id === body.id)) {
+      return res.status(409).json({ error: 'Ese pago ya existe. No se sobrescriben movimientos desde el alta de pagos.' });
+    }
+    body.id = body.id || `pay-${crypto.randomUUID()}`;
 
     // STRICT REQUIREMENT 6: ALL new payments MUST stay in pending status, even if the request tries to send it as confirmed!
     body.status = 'pendiente_confirmacion_manual';
