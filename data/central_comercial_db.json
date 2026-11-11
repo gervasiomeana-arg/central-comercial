@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-11T21:49:32.212Z",
+  "updatedAt": "2026-11-11T22:10:57.859Z",
   "scheduler": {
     "isRunning": true,
     "automationsPaused": false,
-    "lastRunAt": "2026-11-11T21:49:12.747Z",
-    "nextRunAt": "2026-11-11T21:49:42.747Z",
+    "lastRunAt": "2026-11-11T22:10:53.487Z",
+    "nextRunAt": "2026-11-11T22:11:23.487Z",
     "activeJobsCount": 0,
     "environmentNote": "El motor programado del backend procesará tareas cuando el proceso Node.js esté activo. Mantener abierta la pestaña del navegador no es necesario si se ejecuta como servicio o tarea en segundo plano.",
     "windowsExecutionGuide": "Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Abrir PowerShell o CMD en la carpeta del proyecto y ejecutar \"npm run start\" o instalar PM2 con \"npm install -g pm2\" y \"pm2 start server.ts --name central-comercial\".\n3. Alternativamente, configurar el script scripts/run-scheduler-windows.bat en el Programador de Tareas de Windows (Task Scheduler) para que se ejecute al iniciar sesión."
@@ -53,7 +53,9 @@
             "Estadísticas esenciales",
             "Exportación PDF",
             "Soporte vía email"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         },
         {
           "id": "ov-plan-club-pro",
@@ -67,7 +69,9 @@
             "Sincronización de video",
             "Multi-usuario cuerpo técnico",
             "Soporte prioritario"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         },
         {
           "id": "ov-plan-federacion",
@@ -80,7 +84,9 @@
             "Torneos completos",
             "Base de datos unificada",
             "Capacitación presencial/remota"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         }
       ],
       "registerUrl": "https://openvoley.com/registro",
@@ -90,19 +96,25 @@
           "id": "ov-faq-1",
           "question": "¿Se necesita conexión a internet en la cancha durante el partido?",
           "answer": "No. Open Voley cuenta con modo de toma de datos offline. Podés cargar el partido completo sin conexión y los datos se sincronizan automáticamente cuando el dispositivo vuelve a tener internet.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         },
         {
           "id": "ov-faq-2",
           "question": "¿En qué dispositivos se puede utilizar?",
           "answer": "Funciona en tablets (iPad y tablets Android modernas), laptops y cualquier navegador web actual.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         },
         {
           "id": "ov-faq-3",
           "question": "¿Ofrecen período de prueba para evaluar la plataforma?",
           "answer": "Sí, disponemos de 14 días de prueba gratuita sin compromiso para probar el scouting en tus entrenamientos y partidos de pretemporada.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         }
       ],
       "promotionalMaterials": [
@@ -117,7 +129,8 @@
       "campaignsAllowed": true,
       "internalNotes": "Priorizar clubes de vóley de Brasil (Superliga y ligas estaduales) y federaciones de Argentina y España.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z"
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
     },
     {
       "id": "app-visibility-ai",
@@ -159,7 +172,9 @@
             "Escaneo semanal",
             "Reportes estándar",
             "Soporte email"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         },
         {
           "id": "vai-plan-agency",
@@ -173,7 +188,9 @@
             "Reportes con marca blanca",
             "API de auditorías",
             "Soporte prioritario"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         }
       ],
       "registerUrl": "Pendiente de configurar",
@@ -183,13 +200,17 @@
           "id": "vai-faq-1",
           "question": "¿Cómo se ejecuta la auditoría del sitio web?",
           "answer": "Se realiza mediante un escaneo externo no invasivo sobre las URLs públicas del sitio. No requiere instalar scripts, plugins ni alterar el código del servidor del cliente.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         },
         {
           "id": "vai-faq-2",
           "question": "¿Las agencias pueden entregar el reporte con su propio logo?",
           "answer": "Sí. El plan Agency Pro permite personalizar el PDF con el logotipo, colores corporativos y datos de contacto de la agencia.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         }
       ],
       "promotionalMaterials": [],
@@ -197,7 +218,8 @@
       "campaignsAllowed": true,
       "internalNotes": "Enfocar prospección en agencias digitales medianas con cartera activa de clientes que busquen automatizar sus auditorías mensuales.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z"
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
     },
     {
       "id": "app-neuroplaneta",
@@ -237,7 +259,9 @@
             "Acceso a todos los juegos",
             "Panel de registro de uso",
             "Cancelación en cualquier momento"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         },
         {
           "id": "np-plan-familia-anual",
@@ -250,7 +274,9 @@
             "Perfiles ilimitados",
             "Guías de actividades descargables para imprimir",
             "Nuevos juegos mensuales"
-          ]
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
         }
       ],
       "registerUrl": "Pendiente de configurar",
@@ -266,7 +292,9 @@
           "id": "np-faq-2",
           "question": "¿Los niños pueden utilizar la aplicación solos?",
           "answer": "NeuroPlaneta promueve expresamente el acompañamiento y supervisión de un adulto responsable para enriquecer la experiencia compartida.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         }
       ],
       "promotionalMaterials": [],
@@ -275,7 +303,8 @@
       "medicalDisclaimer": "ADVERTENCIA ESTRICTA: NeuroPlaneta no es ni debe presentarse como herramienta de diagnóstico ni tratamiento médico o psicológico.",
       "internalNotes": "Nunca asociar con claims médicos ni diagnósticos en ninguna comunicación o mensaje de prospección.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z"
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
     },
     {
       "id": "app-funeraria",
@@ -308,7 +337,9 @@
           "id": "fun-faq-1",
           "question": "¿El software Funeraria ya se encuentra disponible para su contratación comercial?",
           "answer": "Actualmente el software se encuentra en etapa activa de desarrollo y homologación técnica. Las campañas comerciales permanecen expresamente suspendidas hasta concluir la versión 1.0 y recibir autorización de lanzamiento.",
-          "approved": true
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
         }
       ],
       "promotionalMaterials": [],
@@ -316,7 +347,8 @@
       "campaignsAllowed": false,
       "internalNotes": "BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z"
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
     }
   ],
   "contacts": [],
@@ -369,8 +401,35 @@
   "conversations": [],
   "clients": [],
   "subscriptions": [],
-  "payments": [],
+  "payments": [
+    {
+      "appId": "app-open-voley",
+      "clientId": "client-test-1",
+      "clientName": "Club Deportivo Voley",
+      "amount": 150,
+      "currency": "USD",
+      "status": "confirmado",
+      "reference": "TRANSFER-TEST-9988",
+      "channel": "transferencia_bancaria",
+      "id": "pay-1794435057839",
+      "reviewedBy": "gervasiomeana@gmail.com",
+      "reviewedAt": "2026-11-11T22:10:57.856Z",
+      "createdAt": "2026-11-11T22:10:57.839Z"
+    }
+  ],
   "tasks": [
+    {
+      "id": "task-pay-review-pay-1794435057839",
+      "title": "Revisar y auditar pago de USD 150",
+      "description": "Comprobante / Referencia: Sin número. Revisar extracto bancario y confirmar manualmente.",
+      "priority": "alta",
+      "category": "revision_pago",
+      "relatedType": "pago",
+      "relatedId": "pay-1794435057839",
+      "dueDate": null,
+      "status": "completada",
+      "createdAt": "2026-11-11T22:10:57.841Z"
+    },
     {
       "id": "task-ai-escalate-1794433772211",
       "title": "Intervención requerida: Consulta de Coach Silva (Open Voley)",
@@ -412,7 +471,7 @@
       "name": "Servidor de Correo Saliente (SMTP / Resend)",
       "type": "email_smtp",
       "status": "pendiente_conexion",
-      "statusDescription": "Pendiente de conexión. No se realizarán envíos por correo hasta contar con credenciales verificadas.",
+      "statusDescription": "Verificación fallida: Servidor SMTP no configurado.",
       "missingRequirements": [
         "Servidor SMTP (Host, Puerto, TLS)",
         "Usuario y Contraseña / API Key de envío (ej. Resend / SendGrid / Postmark / Brevo)",
@@ -424,7 +483,8 @@
         "fromEmail": "No configurado",
         "authConfigured": "No"
       },
-      "documentationUrl": "https://central-comercial.local/docs/conectores/smtp"
+      "documentationUrl": "https://central-comercial.local/docs/conectores/smtp",
+      "lastError": "Debe especificar un host SMTP real (ej. smtp.resend.com, smtp.sendgrid.net, etc.) y credenciales válidas."
     },
     {
       "id": "conn-whatsapp-cloud",
@@ -477,6 +537,90 @@
     }
   ],
   "logs": [
+    {
+      "id": "log-1794435057859-zxb5v",
+      "timestamp": "2026-11-11T22:10:57.859Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Auditoría de pago ID pay-1794435057839: CONFIRMADO por gervasiomeana@gmail.com",
+      "details": {
+        "paymentId": "pay-1794435057839",
+        "amount": 150,
+        "currency": "USD",
+        "status": "confirmado",
+        "auditor": "gervasiomeana@gmail.com"
+      }
+    },
+    {
+      "id": "log-1794435057856-ah8rc",
+      "timestamp": "2026-11-11T22:10:57.856Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Pago ID pay-1794435057839 modificado. Estado: confirmado"
+    },
+    {
+      "id": "log-1794435057841-q6714",
+      "timestamp": "2026-11-11T22:10:57.841Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Nueva tarea comercial: Revisar y auditar pago de USD 150"
+    },
+    {
+      "id": "log-1794435057839-eoa46",
+      "timestamp": "2026-11-11T22:10:57.839Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Nuevo cobro registrado: USD 150 (Estado: Pendiente de confirmación manual)"
+    },
+    {
+      "id": "log-1794435045065-o50bt",
+      "timestamp": "2026-11-11T22:10:45.065Z",
+      "level": "warning",
+      "module": "conectores",
+      "message": "Fallo al verificar conector Servidor de Correo Saliente (SMTP / Resend): Verificación fallida: Servidor SMTP no configurado."
+    },
+    {
+      "id": "log-1794435014701-6ziz0",
+      "timestamp": "2026-11-11T22:10:14.701Z",
+      "level": "info",
+      "module": "seguridad",
+      "message": "Administrador inicial configurado: gervasiomeana@gmail.com",
+      "details": {
+        "email": "gervasiomeana@gmail.com",
+        "ip": "127.0.0.1"
+      }
+    },
+    {
+      "id": "log-1794435010720-bwgku",
+      "timestamp": "2026-11-11T22:10:10.720Z",
+      "level": "warning",
+      "module": "seguridad",
+      "message": "Intento fallido de configuración de administrador: Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor.",
+      "details": {
+        "ip": "127.0.0.1",
+        "error": "Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor."
+      }
+    },
+    {
+      "id": "log-1794434993485-kk302",
+      "timestamp": "2026-11-11T22:09:53.485Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794434203647-4wfa4",
+      "timestamp": "2026-11-11T21:56:43.647Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
     {
       "id": "log-1794433772211-0b5g4",
       "timestamp": "2026-11-11T21:49:32.211Z",

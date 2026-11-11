@@ -8,6 +8,7 @@ import { ConversationsView } from './components/ConversationsView.js';
 import { ClientsView } from './components/ClientsView.js';
 import { ConnectorsAndSystemView } from './components/ConnectorsAndSystemView.js';
 import { TasksModal } from './components/TasksModal.js';
+import { AuthModal } from './components/AuthModal.js';
 import { api } from './api.js';
 import type {
   Application,
@@ -22,12 +23,19 @@ import type {
   AuditLog,
   DashboardMetrics,
   SchedulerState,
+  AuthStatusResponse,
+  AutomationPipelineStatus,
+  PersistenceStatus
 } from './types.js';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedAppFilter, setSelectedAppFilter] = useState('all');
   const [selectedPeriod, setSelectedPeriod] = useState('all');
+
+  // Authentication & Security State
+  const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
+  const [adminUser, setAdminUser] = useState<{ id: string; email: string; name: string } | undefined>(undefined);
 
   // Core Data States
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -41,6 +49,8 @@ export default function App() {
   const [tasks, setTasks] = useState<CommercialTask[]>([]);
   const [connectors, setConnectors] = useState<ConnectorInfo[]>([]);
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [pipelineStatus, setPipelineStatus] = useState<AutomationPipelineStatus | null>(null);
+  const [persistenceStatus, setPersistenceStatus] = useState<PersistenceStatus | null>(null);
   const [scheduler, setScheduler] = useState<SchedulerState>({
     isRunning: true,
     automationsPaused: false,
@@ -59,9 +69,23 @@ export default function App() {
   // Fetch all initial data
   const loadData = useCallback(async () => {
     try {
+      const auth = await api.getAuthStatus().catch(() => null);
+      if (auth) {
+        setAuthStatus(auth);
+        if (auth.authenticated && auth.admin) {
+          setAdminUser(auth.admin);
+        } else {
+          setAdminUser(undefined);
+          setLoading(false);
+          return;
+        }
+      }
+
       const [
         statusRes,
         dashMetrics,
+        pipelineRes,
+        persistenceRes,
         appsRes,
         contactsRes,
         campsRes,
@@ -75,6 +99,8 @@ export default function App() {
       ] = await Promise.all([
         api.getStatus().catch(() => ({ appName: '', status: 'offline', scheduler, geminiConfigured: false })),
         api.getDashboardMetrics(selectedAppFilter, selectedPeriod).catch(() => null),
+        api.getPipelineStatus().catch(() => null),
+        api.getPersistenceStatus().catch(() => null),
         api.getApplications().catch(() => []),
         api.getContacts().catch(() => []),
         api.getCampaigns().catch(() => []),
@@ -92,6 +118,8 @@ export default function App() {
         setGeminiConfigured(Boolean(statusRes.geminiConfigured));
       }
       if (dashMetrics) setMetrics(dashMetrics);
+      if (pipelineRes) setPipelineStatus(pipelineRes);
+      if (persistenceRes) setPersistenceStatus(persistenceRes);
       setApplications(appsRes);
       setContacts(contactsRes);
       setCampaigns(campsRes);
@@ -108,6 +136,16 @@ export default function App() {
       setLoading(false);
     }
   }, [selectedAppFilter, selectedPeriod]);
+
+  // Handle unauthorized session expiration
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setAuthStatus(prev => prev ? { ...prev, authenticated: false } : { configured: true, authenticated: false, setupKeyRequired: false });
+      setAdminUser(undefined);
+    };
+    window.addEventListener('auth-unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -235,6 +273,36 @@ export default function App() {
     return api.testConnector(id);
   };
 
+  const handleLogin = async (payload: { email: string; password: string }) => {
+    const res = await api.login(payload);
+    setAdminUser(res.admin);
+    setAuthStatus({
+      configured: true,
+      authenticated: true,
+      admin: res.admin,
+      setupKeyRequired: false
+    });
+    await loadData();
+  };
+
+  const handleSetup = async (payload: { email: string; password: string; name: string; setupKey: string }) => {
+    const res = await api.setupAdmin(payload);
+    setAdminUser(res.admin);
+    setAuthStatus({
+      configured: true,
+      authenticated: true,
+      admin: res.admin,
+      setupKeyRequired: false
+    });
+    await loadData();
+  };
+
+  const handleLogout = async () => {
+    api.logout();
+    setAdminUser(undefined);
+    setAuthStatus(prev => prev ? { ...prev, authenticated: false } : null);
+  };
+
   const errorLogsCount = logs.filter(l => l.level === 'error').length;
   const pendingTasksCount = tasks.filter(t => t.status === 'pendiente').length;
 
@@ -256,6 +324,8 @@ export default function App() {
         setSelectedAppFilter={setSelectedAppFilter}
         applications={applications}
         schedulerRunning={scheduler.isRunning}
+        adminUser={adminUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area */}
@@ -272,6 +342,8 @@ export default function App() {
                 metrics={metrics}
                 applications={applications}
                 tasks={tasks}
+                pipelineStatus={pipelineStatus}
+                persistenceStatus={persistenceStatus}
                 onOpenTasks={() => setTasksModalOpen(true)}
                 onOpenLogs={() => setCurrentTab('system')}
                 onNavigateTab={tab => setCurrentTab(tab)}
@@ -350,11 +422,21 @@ export default function App() {
                 onTestConnector={handleTestConnector}
                 onToggleAutomations={handleToggleAutomations}
                 geminiConfigured={geminiConfigured}
+                persistenceStatus={persistenceStatus}
               />
             )}
           </>
         )}
       </main>
+
+      {/* Admin Authentication & Setup Modal */}
+      {authStatus && !authStatus.authenticated && (
+        <AuthModal
+          authStatus={authStatus}
+          onLogin={handleLogin}
+          onSetup={handleSetup}
+        />
+      )}
 
       {/* Global Tasks & Follow-ups Modal */}
       <TasksModal

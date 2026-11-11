@@ -1,0 +1,616 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-11T22:10:23.487Z",
+  "scheduler": {
+    "isRunning": true,
+    "automationsPaused": false,
+    "lastRunAt": "2026-11-11T22:10:23.486Z",
+    "nextRunAt": "2026-11-11T22:10:53.486Z",
+    "activeJobsCount": 0,
+    "environmentNote": "El motor programado del backend procesará tareas cuando el proceso Node.js esté activo. Mantener abierta la pestaña del navegador no es necesario si se ejecuta como servicio o tarea en segundo plano.",
+    "windowsExecutionGuide": "Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Abrir PowerShell o CMD en la carpeta del proyecto y ejecutar \"npm run start\" o instalar PM2 con \"npm install -g pm2\" y \"pm2 start server.ts --name central-comercial\".\n3. Alternativamente, configurar el script scripts/run-scheduler-windows.bat en el Programador de Tareas de Windows (Task Scheduler) para que se ejecute al iniciar sesión."
+  },
+  "applications": [
+    {
+      "id": "app-open-voley",
+      "name": "Open Voley",
+      "slug": "open-voley",
+      "description": "Plataforma integral de scouting táctico y análisis estadístico de voleibol para entrenadores, cuerpos técnicos, clubes y asociaciones.",
+      "targetAudience": "Entrenadores de voleibol profesional y formativo, analistas de rendimiento, directores deportivos de clubes, asociaciones y federaciones.",
+      "countries": [
+        "Brasil",
+        "Argentina",
+        "España",
+        "Italia",
+        "México",
+        "Colombia"
+      ],
+      "languages": [
+        "pt-BR",
+        "es",
+        "it",
+        "en"
+      ],
+      "website": "https://openvoley.com",
+      "verifiedFeatures": [
+        "Registro táctico en vivo punto por punto",
+        "Scouting de rotaciones y mapas de calor de saques y ataques",
+        "Sincronización de video y clips por jugada",
+        "Reportes tácticos exportables en PDF para charlas de equipo",
+        "Modo offline para partidos sin conexión con sincronización posterior"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 14,
+      "plans": [
+        {
+          "id": "ov-plan-club-basico",
+          "name": "Club Básico",
+          "price": 29,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "1 Equipo",
+            "Estadísticas esenciales",
+            "Exportación PDF",
+            "Soporte vía email"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        },
+        {
+          "id": "ov-plan-club-pro",
+          "name": "Club Pro",
+          "price": 69,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Equipos ilimitados",
+            "Scouting táctico avanzado",
+            "Sincronización de video",
+            "Multi-usuario cuerpo técnico",
+            "Soporte prioritario"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        },
+        {
+          "id": "ov-plan-federacion",
+          "name": "Federación / Asociación",
+          "price": 199,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Múltiples clubes federados",
+            "Torneos completos",
+            "Base de datos unificada",
+            "Capacitación presencial/remota"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        }
+      ],
+      "registerUrl": "https://openvoley.com/registro",
+      "paymentUrl": "Pendiente de configurar",
+      "faqs": [
+        {
+          "id": "ov-faq-1",
+          "question": "¿Se necesita conexión a internet en la cancha durante el partido?",
+          "answer": "No. Open Voley cuenta con modo de toma de datos offline. Podés cargar el partido completo sin conexión y los datos se sincronizan automáticamente cuando el dispositivo vuelve a tener internet.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "ov-faq-2",
+          "question": "¿En qué dispositivos se puede utilizar?",
+          "answer": "Funciona en tablets (iPad y tablets Android modernas), laptops y cualquier navegador web actual.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "ov-faq-3",
+          "question": "¿Ofrecen período de prueba para evaluar la plataforma?",
+          "answer": "Sí, disponemos de 14 días de prueba gratuita sin compromiso para probar el scouting en tus entrenamientos y partidos de pretemporada.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [
+        {
+          "id": "ov-mat-1",
+          "title": "Ficha Técnica Open Voley (PDF)",
+          "url": "https://openvoley.com/docs/ficha-tecnica.pdf",
+          "type": "pdf"
+        }
+      ],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "Priorizar clubes de vóley de Brasil (Superliga y ligas estaduales) y federaciones de Argentina y España.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
+    },
+    {
+      "id": "app-visibility-ai",
+      "name": "Visibility AI",
+      "slug": "visibility-ai",
+      "description": "Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.",
+      "targetAudience": "Agencias de marketing digital, consultores de SEO/visibilidad, directores de marketing de PYMES y e-commerce.",
+      "countries": [
+        "España",
+        "México",
+        "Colombia",
+        "Argentina",
+        "Chile",
+        "Estados Unidos"
+      ],
+      "languages": [
+        "es",
+        "en"
+      ],
+      "website": "Pendiente de configurar",
+      "verifiedFeatures": [
+        "Auditoría técnica de Core Web Vitals y velocidad móvil",
+        "Diagnóstico de indexación y estructura de rastreo",
+        "Evaluación de preparación para motores de búsqueda de IA (AI Search Readiness)",
+        "Reportes marca blanca para agencias exportables en PDF",
+        "Alertas de caídas de rendimiento y enlaces rotos"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 7,
+      "plans": [
+        {
+          "id": "vai-plan-starter",
+          "name": "Starter PYME",
+          "price": 49,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Hasta 3 dominios",
+            "Escaneo semanal",
+            "Reportes estándar",
+            "Soporte email"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        },
+        {
+          "id": "vai-plan-agency",
+          "name": "Agency Pro",
+          "price": 149,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Dominios ilimitados",
+            "Escaneos diarios",
+            "Reportes con marca blanca",
+            "API de auditorías",
+            "Soporte prioritario"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        }
+      ],
+      "registerUrl": "Pendiente de configurar",
+      "paymentUrl": "Pendiente de configurar",
+      "faqs": [
+        {
+          "id": "vai-faq-1",
+          "question": "¿Cómo se ejecuta la auditoría del sitio web?",
+          "answer": "Se realiza mediante un escaneo externo no invasivo sobre las URLs públicas del sitio. No requiere instalar scripts, plugins ni alterar el código del servidor del cliente.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "vai-faq-2",
+          "question": "¿Las agencias pueden entregar el reporte con su propio logo?",
+          "answer": "Sí. El plan Agency Pro permite personalizar el PDF con el logotipo, colores corporativos y datos de contacto de la agencia.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "Enfocar prospección en agencias digitales medianas con cartera activa de clientes que busquen automatizar sus auditorías mensuales.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
+    },
+    {
+      "id": "app-neuroplaneta",
+      "name": "NeuroPlaneta",
+      "slug": "neuroplaneta",
+      "description": "Plataforma lúdica de actividades y juegos interactivos para niños de 4 a 12 años, con módulo de acompañamiento para adultos y registro de tiempo de uso.",
+      "targetAudience": "Familias con niños en edad escolar, educadores, centros lúdicos y de estimulación temprana.",
+      "countries": [
+        "España",
+        "Argentina",
+        "México",
+        "Colombia",
+        "Chile"
+      ],
+      "languages": [
+        "es"
+      ],
+      "website": "Pendiente de configurar",
+      "verifiedFeatures": [
+        "Catálogo de juegos interactivos de atención, memoria, lógica y creatividad",
+        "Panel de control parental para adultos con configuración de límites de tiempo",
+        "Registro de actividades realizadas y evolución lúdica",
+        "Actividades guiadas para realizar juntos adultos y niños",
+        "Entorno seguro sin publicidad ni compras integradas para menores"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 7,
+      "plans": [
+        {
+          "id": "np-plan-familia-mensual",
+          "name": "Plan Familia Mensual",
+          "price": 12,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Hasta 3 perfiles de niños",
+            "Acceso a todos los juegos",
+            "Panel de registro de uso",
+            "Cancelación en cualquier momento"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        },
+        {
+          "id": "np-plan-familia-anual",
+          "name": "Plan Familia Anual",
+          "price": 99,
+          "currency": "USD",
+          "interval": "anual",
+          "features": [
+            "Ahorro del 30%",
+            "Perfiles ilimitados",
+            "Guías de actividades descargables para imprimir",
+            "Nuevos juegos mensuales"
+          ],
+          "verified": false,
+          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+        }
+      ],
+      "registerUrl": "Pendiente de configurar",
+      "paymentUrl": "Pendiente de configurar",
+      "faqs": [
+        {
+          "id": "np-faq-1",
+          "question": "¿NeuroPlaneta diagnostica o trata alguna condición médica, TDAH o autismo?",
+          "answer": "NO. NeuroPlaneta es estrictamente una herramienta lúdica y educativa de entretenimiento acompañado. No constituye una herramienta de diagnóstico, tratamiento clínico, evaluación psicológica ni intervención médica de ningún tipo. Ante cualquier inquietud sobre la salud o el desarrollo infantil, debe consultarse siempre a profesionales de la salud matriculados.",
+          "approved": true
+        },
+        {
+          "id": "np-faq-2",
+          "question": "¿Los niños pueden utilizar la aplicación solos?",
+          "answer": "NeuroPlaneta promueve expresamente el acompañamiento y supervisión de un adulto responsable para enriquecer la experiencia compartida.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "medicalDisclaimer": "ADVERTENCIA ESTRICTA: NeuroPlaneta no es ni debe presentarse como herramienta de diagnóstico ni tratamiento médico o psicológico.",
+      "internalNotes": "Nunca asociar con claims médicos ni diagnósticos en ninguna comunicación o mensaje de prospección.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
+    },
+    {
+      "id": "app-funeraria",
+      "name": "Funeraria",
+      "slug": "funeraria",
+      "description": "Sistema integral de gestión operativa y administrativa para empresas de servicios funerarios, salas velatorias, traslados y cementerios parque. Actualmente en desarrollo activo.",
+      "targetAudience": "Empresas de servicios fúnebres, salas velatorias independientes, mutuales y cooperativas de previsión social funeraria.",
+      "countries": [
+        "Argentina",
+        "Uruguay",
+        "Chile",
+        "España"
+      ],
+      "languages": [
+        "es"
+      ],
+      "website": "Pendiente de configurar (En desarrollo)",
+      "verifiedFeatures": [
+        "Gestión de expedientes de servicios y actas de defunción (en desarrollo)",
+        "Control de inventario de ataúdes, urnas y suministros (en desarrollo)",
+        "Agenda de salas velatorias y coordinación de traslados (en desarrollo)"
+      ],
+      "trialAvailable": false,
+      "trialDurationDays": 0,
+      "plans": [],
+      "registerUrl": "Pendiente de configurar",
+      "paymentUrl": "Pendiente de configurar",
+      "faqs": [
+        {
+          "id": "fun-faq-1",
+          "question": "¿El software Funeraria ya se encuentra disponible para su contratación comercial?",
+          "answer": "Actualmente el software se encuentra en etapa activa de desarrollo y homologación técnica. Las campañas comerciales permanecen expresamente suspendidas hasta concluir la versión 1.0 y recibir autorización de lanzamiento.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "en_desarrollo",
+      "campaignsAllowed": false,
+      "internalNotes": "BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "trialVerified": false
+    }
+  ],
+  "contacts": [],
+  "campaigns": [
+    {
+      "id": "camp-open-voley-brasil-clubes",
+      "appId": "app-open-voley",
+      "name": "Open Voley — Clubes de Brasil",
+      "objective": "Prospección directa a directores deportivos y entrenadores de clubes de voleibol de Brasil para presentar la prueba gratuita de 14 días.",
+      "country": "Brasil",
+      "language": "pt-BR",
+      "segment": "Clubes federados de voleibol (Superliga A, B e campeonatos estaduais) e colégios esportivos.",
+      "channels": [
+        "email",
+        "whatsapp"
+      ],
+      "messageTemplate": "Olá {nombre}, acompanhamos o excelente trabalho da comissão técnica do {organizacion}.\n\nGostaria de apresentar o Open Voley (https://openvoley.com), plataforma de scouting e análise tática desenvolvida especialmente para treinadores e clubes.\n\nDisponibilizamos 14 dias de teste gratuito sem compromisso para os seus próximos jogos.\n\nSeria interessante agendarmos uma demonstração rápida de 10 minutos esta semana?",
+      "followUpTemplates": [
+        "Olá {nombre}, tudo bem? Queria verificar se você teve oportunidade de ver a mensagem anterior sobre o teste gratuito do Open Voley para o {organizacion}. Podemos liberar o acesso em 5 minutos.",
+        "Olá {nombre}, compreendo que a rotina de treinos e jogos seja intensa. Se fizer sentido mais adiante no campeonato, ficamos à disposição pelo site https://openvoley.com. Um abraço!"
+      ],
+      "timezone": "America/Sao_Paulo",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 25,
+      "startDate": "2026-11-15",
+      "endDate": "2026-12-31",
+      "maxFollowUps": 2,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "contacto_convertido"
+      ],
+      "mode": "revision_previa",
+      "status": "bloqueada_por_configuracion",
+      "blockingReason": "Conectores de salida (Email SMTP y WhatsApp API) en estado Pendiente de conexión. Configure las credenciales antes de activar envíos reales.",
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-11T21:48:42.606Z",
+      "updatedAt": "2026-11-11T21:48:42.607Z"
+    }
+  ],
+  "conversations": [],
+  "clients": [],
+  "subscriptions": [],
+  "payments": [],
+  "tasks": [
+    {
+      "id": "task-ai-escalate-1794433772211",
+      "title": "Intervención requerida: Consulta de Coach Silva (Open Voley)",
+      "description": "Motivo: Error técnico al procesar el asistente de IA. Se requiere atención manual.. Mensaje recibido: \"¿En qué dispositivos puedo usar Open Voley?\"",
+      "priority": "alta",
+      "category": "intervencion_ia",
+      "relatedType": "conversacion",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:49:32.211Z"
+    },
+    {
+      "id": "task-initial-1",
+      "title": "Configurar credenciales del conector SMTP para Open Voley",
+      "description": "Cargar servidor de correo saliente para habilitar el envío de invitaciones de prueba de Open Voley a clubes de Brasil.",
+      "priority": "alta",
+      "category": "conector",
+      "relatedType": "conector",
+      "relatedId": "conn-email-smtp",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:48:42.607Z"
+    },
+    {
+      "id": "task-initial-2",
+      "title": "Definir enlaces de pago y registro para Visibility AI y NeuroPlaneta",
+      "description": "Cargar las URLs oficiales de registro y cobro en las fichas de Visibility AI y NeuroPlaneta.",
+      "priority": "media",
+      "category": "general",
+      "relatedType": "campaña",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:48:42.607Z"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "conn-email-smtp",
+      "name": "Servidor de Correo Saliente (SMTP / Resend)",
+      "type": "email_smtp",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. No se realizarán envíos por correo hasta contar con credenciales verificadas.",
+      "missingRequirements": [
+        "Servidor SMTP (Host, Puerto, TLS)",
+        "Usuario y Contraseña / API Key de envío (ej. Resend / SendGrid / Postmark / Brevo)",
+        "Dirección de correo remitente verificada (From Email con SPF/DKIM)"
+      ],
+      "configSummary": {
+        "host": "No configurado",
+        "port": "587",
+        "fromEmail": "No configurado",
+        "authConfigured": "No"
+      },
+      "documentationUrl": "https://central-comercial.local/docs/conectores/smtp"
+    },
+    {
+      "id": "conn-whatsapp-cloud",
+      "name": "WhatsApp Business Cloud API (Meta)",
+      "type": "whatsapp_cloud",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. Requiere aplicación en Meta for Developers y número comercial validado.",
+      "missingRequirements": [
+        "Phone Number ID de Meta Business",
+        "System User Permanent Access Token",
+        "WhatsApp Business Account ID (WABA)",
+        "Plantillas de mensaje aprobadas por Meta"
+      ],
+      "configSummary": {
+        "phoneNumberId": "No configurado",
+        "wabaId": "No configurado",
+        "tokenConfigured": "No"
+      },
+      "documentationUrl": "https://developers.facebook.com/docs/whatsapp/cloud-api"
+    },
+    {
+      "id": "conn-telegram-bot",
+      "name": "Telegram Bot API",
+      "type": "telegram",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. Opcional para alertas internas al administrador o atención comercial.",
+      "missingRequirements": [
+        "Bot Token (@BotFather)",
+        "Chat ID del administrador para alertas de intervención"
+      ],
+      "configSummary": {
+        "botUsername": "No configurado",
+        "tokenConfigured": "No"
+      }
+    },
+    {
+      "id": "conn-webhooks",
+      "name": "Webhooks de Entrada y Pasarelas de Pago",
+      "type": "webhook",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. En esta etapa los pagos se verifican manualmente.",
+      "missingRequirements": [
+        "Endpoint público con HTTPS para recepción de webhooks",
+        "Clave secreta de firma de webhook (Webhook Signing Secret)"
+      ],
+      "configSummary": {
+        "webhookUrl": "/api/webhooks/incoming",
+        "secretConfigured": "No"
+      }
+    }
+  ],
+  "logs": [
+    {
+      "id": "log-1794435014701-6ziz0",
+      "timestamp": "2026-11-11T22:10:14.701Z",
+      "level": "info",
+      "module": "seguridad",
+      "message": "Administrador inicial configurado: gervasiomeana@gmail.com",
+      "details": {
+        "email": "gervasiomeana@gmail.com",
+        "ip": "127.0.0.1"
+      }
+    },
+    {
+      "id": "log-1794435010720-bwgku",
+      "timestamp": "2026-11-11T22:10:10.720Z",
+      "level": "warning",
+      "module": "seguridad",
+      "message": "Intento fallido de configuración de administrador: Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor.",
+      "details": {
+        "ip": "127.0.0.1",
+        "error": "Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor."
+      }
+    },
+    {
+      "id": "log-1794434993485-kk302",
+      "timestamp": "2026-11-11T22:09:53.485Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794434203647-4wfa4",
+      "timestamp": "2026-11-11T21:56:43.647Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794433772211-0b5g4",
+      "timestamp": "2026-11-11T21:49:32.211Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Nueva tarea comercial: Intervención requerida: Consulta de Coach Silva (Open Voley)"
+    },
+    {
+      "id": "log-1794433772211-8g49e",
+      "timestamp": "2026-11-11T21:49:32.211Z",
+      "level": "error",
+      "module": "ia",
+      "message": "Error al consultar Gemini API: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+      "details": {
+        "error": "ApiError: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+      }
+    },
+    {
+      "id": "log-1794433722744-ihqk8",
+      "timestamp": "2026-11-11T21:48:42.744Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-init-1",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Central Comercial inicializada con 4 aplicaciones (Open Voley, Visibility AI, NeuroPlaneta, Funeraria).",
+      "details": {
+        "version": "1.0.0",
+        "storage": "local_json_db"
+      }
+    },
+    {
+      "id": "log-init-2",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "warning",
+      "module": "conectores",
+      "message": "Conectores de correo y WhatsApp marcados como \"Pendiente de conexión\". Todo envío permanece deshabilitado hasta verificación.",
+      "details": {
+        "pendingConnectors": [
+          "conn-email-smtp",
+          "conn-whatsapp-cloud"
+        ]
+      }
+    },
+    {
+      "id": "log-init-3",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "Campaña \"Open Voley — Clubes de Brasil\" cargada como borrador editable sin destinatarios inventados.",
+      "details": {
+        "campaignId": "camp-open-voley-brasil-clubes"
+      }
+    }
+  ]
+}

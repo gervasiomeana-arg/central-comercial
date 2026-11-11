@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   Send,
@@ -14,18 +14,38 @@ import {
   ArrowRight,
   TrendingUp,
   ShieldAlert,
-  Server
+  Server,
+  Play,
+  Pause,
+  Target,
+  Mail,
+  ShieldCheck,
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
-import type { DashboardMetrics, Application, CommercialTask } from '../types.js';
+import type {
+  DashboardMetrics,
+  Application,
+  CommercialTask,
+  AutomationPipelineStatus,
+  PersistenceStatus,
+  ExecutiveSummary
+} from '../types.js';
 
 interface DashboardViewProps {
   metrics: DashboardMetrics | null;
+  executiveSummary?: ExecutiveSummary | null;
   applications: Application[];
   tasks: CommercialTask[];
+  pipelineStatus?: AutomationPipelineStatus | null;
+  persistenceStatus?: PersistenceStatus | null;
   onOpenTasks: () => void;
   onOpenLogs: () => void;
   onNavigateTab: (tab: string) => void;
   onToggleAutomations: () => void;
+  onOpenGuidedCampaign: () => void;
+  onOpenEmailSandbox: () => void;
+  onReviewPayment?: (id: string, review: any) => Promise<void>;
   selectedPeriod: string;
   setSelectedPeriod: (period: string) => void;
   selectedAppFilter: string;
@@ -34,83 +54,179 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   metrics,
+  executiveSummary,
   applications,
   tasks,
+  pipelineStatus,
+  persistenceStatus,
   onOpenTasks,
   onOpenLogs,
   onNavigateTab,
   onToggleAutomations,
+  onOpenGuidedCampaign,
+  onOpenEmailSandbox,
+  onReviewPayment,
   selectedPeriod,
   setSelectedPeriod,
   selectedAppFilter,
   setSelectedAppFilter,
 }) => {
+  const [reviewingPaymentId, setReviewingPaymentId] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   if (!metrics) {
     return (
-      <div className="flex items-center justify-center p-12 text-slate-500">
+      <div className="flex items-center justify-center p-16 text-slate-500">
         <Clock className="w-6 h-6 animate-spin mr-2 text-blue-600" />
-        <span>Cargando métricas comerciales...</span>
+        <span className="text-sm font-semibold">Cargando métricas de Central Comercial...</span>
       </div>
     );
   }
 
-  const pendingTasks = tasks.filter(t => t.status === 'pendiente').slice(0, 4);
+  // Derive executive 3-questions data
+  const whatIsDoingNow = executiveSummary?.whatIsDoingNow || {
+    daemonStatus: metrics.automationsPaused ? 'pausado' : 'activo',
+    lastHeartbeat: new Date().toISOString(),
+    activeCampaignsCount: 0,
+    activeJobsCount: 0,
+    currentStage: metrics.automationsPaused
+      ? 'Automatizaciones pausadas por el administrador'
+      : 'Monitoreo de tareas y calendario en segundo plano',
+    currentStageDescription: 'El proceso del backend ejecuta ciclos periódicos cada 30 segundos sin depender del navegador.',
+    automationsPaused: metrics.automationsPaused
+  };
+
+  const whatItAchieved = executiveSummary?.whatItAchieved || {
+    totalVerifiedContacts: metrics.contactsVerified,
+    totalMessagesSent: metrics.messagesSent,
+    totalResponsesReceived: metrics.responsesReceived,
+    totalInterested: metrics.interestedCount,
+    totalTrialClients: metrics.trialClientsCount,
+    totalActiveClients: metrics.activeSubscriptionsCount,
+    totalConfirmedPayments: metrics.paymentsByCurrency.map(p => ({ currency: p.currency, amount: p.confirmedTotal })),
+    byApplication: applications.map(app => ({
+      appId: app.id,
+      appName: app.name,
+      status: app.status === 'en_desarrollo' ? 'En desarrollo' : 'Lista',
+      contactsVerified: 0,
+      messagesSent: 0,
+      responsesReceived: 0,
+      interestedCount: 0,
+      trialCount: 0,
+      clientsCount: 0
+    }))
+  };
+
+  const whatItNeedsFromMe = executiveSummary?.whatItNeedsFromMe || {
+    pendingManualPayments: [],
+    humanInterventionConversations: [],
+    unconfiguredConnectors: [],
+    blockedCampaigns: []
+  };
+
+  const handleConfirmPaymentQuick = async (paymentId: string) => {
+    if (!onReviewPayment) return;
+    setSubmittingReview(true);
+    try {
+      await onReviewPayment(paymentId, {
+        status: 'confirmado',
+        notes: reviewNotes || 'Aprobado manualmente desde el panel de control.'
+      });
+      setReviewingPaymentId(null);
+      setReviewNotes('');
+    } catch (err: any) {
+      alert(`Error al confirmar pago: ${err.message}`);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const stagesList = [
+    { id: 'buscar', label: '1. Buscar', desc: 'Identificación de prospectos', status: pipelineStatus?.autonomousContactSearch.status === 'conectado' ? 'activo' : 'pendiente' },
+    { id: 'verificar', label: '2. Verificar', desc: 'Validación de datos y duplicados', status: 'activo' },
+    { id: 'preparar', label: '3. Preparar', desc: 'Redacción con datos aprobados', status: 'activo' },
+    { id: 'enviar', label: '4. Enviar', desc: 'Despacho por canal verificado', status: pipelineStatus?.outboundMessaging.status === 'conectado' ? 'activo' : 'pendiente' },
+    { id: 'recibir', label: '5. Recibir', desc: 'Asociación de respuestas entrantes', status: pipelineStatus?.inboundResponseListening.status === 'conectado' ? 'activo' : 'pendiente' },
+    { id: 'responder', label: '6. Responder', desc: 'Atención inteligente con IA', status: 'activo' },
+    { id: 'seguimiento', label: '7. Seguimiento', desc: 'Gestión de clientes y cuenta corriente', status: 'activo' },
+  ];
+
+  const totalNeedsActionCount =
+    whatItNeedsFromMe.pendingManualPayments.length +
+    whatItNeedsFromMe.humanInterventionConversations.length +
+    whatItNeedsFromMe.blockedCampaigns.length +
+    (whatItNeedsFromMe.unconfiguredConnectors.length > 0 ? 1 : 0);
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Fast Actions Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Bar with Context Filter and Primary Action Buttons */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-              Panel de Control Comercial
+            <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center space-x-2">
+              <span>Panel General Comercial</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                Control Central
+              </span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Supervisión de prospección, estado de mensajes, pipeline de clientes y cuenta corriente.
+              Supervisión de actividades en ejecución, resultados alcanzados y tareas que requieren tu decisión.
             </p>
           </div>
 
-          {/* Quick Action Buttons explicitly requested */}
+          {/* Primary Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={onOpenGuidedCampaign}
+              className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-xs"
+            >
+              <Target className="w-4 h-4" />
+              <span>+ Nueva Campaña Guiada</span>
+            </button>
+
+            <button
+              onClick={onOpenEmailSandbox}
+              className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-xs"
+              title="Probar el recorrido completo de 7 etapas con una dirección de email propia sin riesgo"
+            >
+              <Mail className="w-4 h-4" />
+              <span>Validar Recorrido por Email (Sandbox)</span>
+            </button>
+
+            <button
               onClick={onToggleAutomations}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 ${
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 ${
                 metrics.automationsPaused
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'bg-amber-600 text-white hover:bg-amber-700'
+                  ? 'bg-amber-600 text-white hover:bg-amber-500'
+                  : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
               }`}
             >
-              {metrics.automationsPaused ? '▶ Reanudar automatizaciones' : '⏸ Pausar automatizaciones'}
-            </button>
-
-            <button
-              onClick={onOpenTasks}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 flex items-center space-x-1.5"
-            >
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              <span>Ver tareas pendientes ({metrics.pendingTasksCount})</span>
-            </button>
-
-            <button
-              onClick={onOpenLogs}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 flex items-center space-x-1.5"
-            >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-              <span>Ver errores y auditoría</span>
+              {metrics.automationsPaused ? (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Reanudar automatizaciones</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  <span>Pausar automatizaciones</span>
+                </>
+              )}
             </button>
           </div>
         </div>
 
-        {/* Filters: App & Period */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+        {/* Global Context & Period Filter Bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center space-x-2">
-            <span className="text-slate-500 font-medium">Filtrar por Aplicación:</span>
+            <span className="text-slate-500 font-semibold">Contexto de Aplicación:</span>
             <select
               value={selectedAppFilter}
               onChange={e => setSelectedAppFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1 text-slate-700 font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className="bg-slate-50 border border-slate-300 rounded-md px-2.5 py-1 text-slate-700 font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-none"
             >
-              <option value="all">Todas las aplicaciones (Global)</option>
+              <option value="all">Todas las aplicaciones (Consolidado)</option>
               {applications.map(app => (
                 <option key={app.id} value={app.id}>
                   {app.name} ({app.status === 'en_desarrollo' ? 'En desarrollo' : 'Activa'})
@@ -120,13 +236,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex items-center space-x-1">
-            <span className="text-slate-500 font-medium mr-1.5">Período:</span>
+            <span className="text-slate-500 font-semibold mr-1.5">Período:</span>
             {['hoy', '7d', '30d', 'all'].map(p => {
               const labelMap: Record<string, string> = {
                 hoy: 'Hoy',
                 '7d': '7 días',
                 '30d': '30 días',
-                all: 'Todo el período'
+                all: 'Histórico Completo'
               };
               return (
                 <button
@@ -134,7 +250,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   onClick={() => setSelectedPeriod(p)}
                   className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
                     selectedPeriod === p
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -146,356 +262,442 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Primary KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Contacts */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contactos</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Users className="w-4 h-4" />
-            </div>
+      {/* ========================================================
+          QUESTION 1: ¿QUÉ ESTÁ HACIENDO AHORA?
+         ======================================================== */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className={`w-3 h-3 rounded-full ${
+              whatIsDoingNow.automationsPaused
+                ? 'bg-amber-500 animate-pulse'
+                : whatIsDoingNow.daemonStatus === 'activo'
+                ? 'bg-emerald-500 ring-4 ring-emerald-100'
+                : 'bg-slate-400'
+            }`} />
+            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+              1. ¿Qué está haciendo ahora?
+            </h2>
           </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-slate-900">{metrics.contactsTotal}</span>
-            <span className="text-xs text-slate-500 font-medium">registrados</span>
-          </div>
-          <div className="mt-2 text-xs text-slate-600 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span>Verificados con fuente:</span>
-            <span className="font-semibold text-emerald-700">{metrics.contactsVerified}</span>
-          </div>
-        </div>
 
-        {/* Pipeline & Interested */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Interés y Respuestas</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <MessageSquare className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-indigo-600">{metrics.interestedCount}</span>
-            <span className="text-xs text-slate-500 font-medium">interesados</span>
-          </div>
-          <div className="mt-2 text-xs text-slate-600 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span>Respuestas recibidas:</span>
-            <span className="font-semibold text-slate-900">{metrics.responsesReceived}</span>
-          </div>
-        </div>
-
-        {/* Trials & Active Subscriptions */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Clientes y Pruebas</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-emerald-700">{metrics.activeSubscriptionsCount}</span>
-            <span className="text-xs text-slate-500 font-medium">suscripciones activas</span>
-          </div>
-          <div className="mt-2 text-xs text-slate-600 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span>En prueba gratuita:</span>
-            <span className="font-semibold text-slate-900">{metrics.trialClientsCount}</span>
-          </div>
-        </div>
-
-        {/* Operational Attention Required */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Atención Operativa</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline space-x-2">
-            <span className="text-2xl font-black text-amber-700">
-              {metrics.connectorsNeedingAttention + metrics.pendingPaymentsCount}
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="text-slate-500">Última señal del proceso (Heartbeat):</span>
+            <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+              {whatIsDoingNow.lastHeartbeat
+                ? new Date(whatIsDoingNow.lastHeartbeat).toLocaleTimeString('es')
+                : 'Proceso inicializándose...'}
             </span>
-            <span className="text-xs text-slate-500 font-medium">puntos de atención</span>
           </div>
-          <div className="mt-2 text-xs text-slate-600 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span>Conectores pendientes:</span>
-            <span className="font-semibold text-amber-800">{metrics.connectorsNeedingAttention}</span>
+        </div>
+
+        {/* Current status description */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+            <span className="text-slate-400 text-[11px] font-semibold block">Estado del Motor en Segundo Plano:</span>
+            <span className={`text-sm font-black block ${
+              whatIsDoingNow.automationsPaused
+                ? 'text-amber-700'
+                : whatIsDoingNow.daemonStatus === 'activo'
+                ? 'text-emerald-700'
+                : 'text-slate-700'
+            }`}>
+              {whatIsDoingNow.automationsPaused ? 'PAUSADO POR ADMINISTRADOR' : 'ACTIVO (Ciclos cada 30s)'}
+            </span>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              Desacoplado del navegador: no requiere que la pestaña permanezca abierta.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+            <span className="text-slate-400 text-[11px] font-semibold block">Actividad en Curso:</span>
+            <span className="text-sm font-bold text-slate-900 block">
+              {whatIsDoingNow.currentStage}
+            </span>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              {whatIsDoingNow.currentStageDescription}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+            <span className="text-slate-400 text-[11px] font-semibold block">Campañas Activas:</span>
+            <span className="text-sm font-black text-blue-700 block">
+              {whatIsDoingNow.activeCampaignsCount} campaña(s) en curso
+            </span>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              {whatIsDoingNow.activeCampaignsCount === 0
+                ? 'Crea una instrucción guiada o valida el recorrido por email.'
+                : 'Ejecutando según límites diarios y ventanas horarias.'}
+            </p>
+          </div>
+        </div>
+
+        {/* 7 Stages Autonomous Progression Bar */}
+        <div className="space-y-2 pt-2">
+          <span className="font-bold text-slate-700 text-[11px] uppercase tracking-wider block">
+            Progreso por Etapas de Autonomía Comercial:
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {stagesList.map(stg => (
+              <div
+                key={stg.id}
+                className={`p-2.5 rounded-lg border text-center transition-all ${
+                  stg.status === 'activo'
+                    ? 'border-emerald-300 bg-emerald-50/50'
+                    : 'border-slate-200 bg-slate-50/80'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-1 mb-1">
+                  <span className={`w-2 h-2 rounded-full ${stg.status === 'activo' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <span className="font-extrabold text-[11px] text-slate-900">{stg.label}</span>
+                </div>
+                <span className={`text-[10px] font-bold block ${stg.status === 'activo' ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  {stg.status === 'activo' ? 'Operativo' : 'Pendiente conexión'}
+                </span>
+                <span className="text-[9px] text-slate-400 line-clamp-1 mt-0.5">{stg.desc}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Message Delivery Breakdown (Crucial: never fake confirmations!) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-              Estado Real de Envíos y Mensajería
+      {/* ========================================================
+          QUESTION 2: ¿QUÉ CONSIGUIÓ? (RESULTADOS POR APP Y TOTALES)
+         ======================================================== */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+              2. ¿Qué consiguió?
             </h2>
-            <p className="text-xs text-slate-500">
-              Solo se contabilizan mensajes con confirmación fehaciente del servicio de telecomunicaciones.
-            </p>
           </div>
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold border border-slate-200">
-            Cero simulación
+          <span className="text-xs text-slate-500">
+            Datos reales verificados · Sin invención ni números simulados
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-amber-50/60 border border-amber-200 rounded-lg p-3">
-            <div className="flex items-center space-x-1.5 text-xs text-amber-800 font-semibold">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Pendientes de envío</span>
-            </div>
-            <p className="text-2xl font-black text-amber-900 mt-1">{metrics.messagesPending}</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">En cola o esperando horario</p>
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Contactos Verificados</span>
+            <span className="text-xl font-black text-slate-900 mt-1 block">
+              {whatItAchieved.totalVerifiedContacts}
+            </span>
           </div>
 
-          <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3">
-            <div className="flex items-center space-x-1.5 text-xs text-emerald-800 font-semibold">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Enviados confirmados</span>
-            </div>
-            <p className="text-2xl font-black text-emerald-900 mt-1">{metrics.messagesSent}</p>
-            <p className="text-[11px] text-emerald-700 mt-0.5">Con ID de servicio SMTP/Meta</p>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Mensajes Enviados</span>
+            <span className="text-xl font-black text-blue-700 mt-1 block">
+              {whatItAchieved.totalMessagesSent}
+            </span>
           </div>
 
-          <div className="bg-rose-50/60 border border-rose-200 rounded-lg p-3">
-            <div className="flex items-center space-x-1.5 text-xs text-rose-800 font-semibold">
-              <XCircle className="w-3.5 h-3.5" />
-              <span>Fallidos</span>
-            </div>
-            <p className="text-2xl font-black text-rose-900 mt-1">{metrics.messagesFailed}</p>
-            <p className="text-[11px] text-rose-700 mt-0.5">Rechazo de servidor o número inválido</p>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Respuestas Recibidas</span>
+            <span className="text-xl font-black text-indigo-700 mt-1 block">
+              {whatItAchieved.totalResponsesReceived}
+            </span>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <div className="flex items-center space-x-1.5 text-xs text-slate-700 font-semibold">
-              <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
-              <span>Resultado desconocido</span>
-            </div>
-            <p className="text-2xl font-black text-slate-800 mt-1">{metrics.messagesUnknown}</p>
-            <p className="text-[11px] text-slate-600 mt-0.5">Sin acuse de recibo explícito</p>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Interesados</span>
+            <span className="text-xl font-black text-emerald-700 mt-1 block">
+              {whatItAchieved.totalInterested}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Clientes en Prueba</span>
+            <span className="text-xl font-black text-purple-700 mt-1 block">
+              {whatItAchieved.totalTrialClients}
+            </span>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-slate-400 text-[10px] font-bold block uppercase">Clientes Activos</span>
+            <span className="text-xl font-black text-emerald-800 mt-1 block">
+              {whatItAchieved.totalActiveClients}
+            </span>
+          </div>
+        </div>
+
+        {/* Confirmed Payments Box with Currency Distinction */}
+        <div className="p-3.5 bg-emerald-50/40 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div>
+            <span className="font-extrabold text-emerald-950 block">Pagos Confirmados por Auditoría Manual:</span>
+            <span className="text-[11px] text-emerald-800">
+              Solo se contabilizan transferencias y cobros verificados personalmente por el administrador.
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {whatItAchieved.totalConfirmedPayments.length > 0 ? (
+              whatItAchieved.totalConfirmedPayments.map(p => (
+                <span
+                  key={p.currency}
+                  className="px-3 py-1 rounded-lg bg-emerald-600 text-white font-black text-xs shadow-2xs"
+                >
+                  {p.currency} {p.amount.toLocaleString('es')}
+                </span>
+              ))
+            ) : (
+              <span className="text-slate-400 italic text-xs">Sin cobros confirmados aún en este período</span>
+            )}
+          </div>
+        </div>
+
+        {/* Results by Application Table explicitly requested */}
+        <div className="space-y-2">
+          <span className="font-bold text-slate-800 text-xs block uppercase tracking-wider">
+            Desglose de Resultados por Aplicación:
+          </span>
+
+          <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
+            <table className="w-full text-left">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                <tr>
+                  <th className="p-3">Aplicación</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3 text-center">Contactos Verificados</th>
+                  <th className="p-3 text-center">Mensajes Enviados</th>
+                  <th className="p-3 text-center">Respuestas</th>
+                  <th className="p-3 text-center">Interesados</th>
+                  <th className="p-3 text-center">En Prueba</th>
+                  <th className="p-3 text-center">Clientes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800 text-[11px]">
+                {whatItAchieved.byApplication.map(app => (
+                  <tr key={app.appId} className="hover:bg-slate-50/80">
+                    <td className="p-3 font-bold text-slate-900">{app.appName}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                        app.status === 'En desarrollo'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {app.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center font-semibold">{app.contactsVerified}</td>
+                    <td className="p-3 text-center font-semibold">{app.messagesSent}</td>
+                    <td className="p-3 text-center font-semibold">{app.responsesReceived}</td>
+                    <td className="p-3 text-center font-semibold text-emerald-700">{app.interestedCount}</td>
+                    <td className="p-3 text-center font-semibold text-purple-700">{app.trialCount}</td>
+                    <td className="p-3 text-center font-bold text-slate-900">{app.clientsCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      {/* Financial Breakdown (By Currency - NEVER mixed without explicit conversion) */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-          <div>
-            <div className="flex items-center space-x-2">
-              <CreditCard className="w-4 h-4 text-emerald-600" />
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Cuenta Corriente y Cobros por Moneda
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Por política contable estricta, las monedas nunca se suman entre sí sin una tasa de cambio oficial.
-            </p>
+      {/* ========================================================
+          QUESTION 3: ¿QUÉ NECESITA DE MÍ? (DECISIONES HUMANAS)
+         ======================================================== */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+            <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+              3. ¿Qué necesita de mí?
+            </h2>
           </div>
-          <button
-            onClick={() => onNavigateTab('clients')}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-          >
-            <span>Ver cuenta corriente y comprobantes</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+            totalNeedsActionCount > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {totalNeedsActionCount} acción(es) pendiente(s)
+          </span>
         </div>
 
-        {metrics.paymentsByCurrency.length === 0 ? (
-          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-6 text-center">
-            <CreditCard className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-            <p className="text-xs font-medium text-slate-600">
-              No hay cobros registrados todavía en el período seleccionado.
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Los pagos registrados permanecerán como "Pendiente de confirmación manual" hasta que el auditor los verifique.
+        {totalNeedsActionCount === 0 ? (
+          <div className="p-6 text-center text-slate-400 space-y-1">
+            <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+            <p className="font-bold text-slate-700 text-xs">Todo al día</p>
+            <p className="text-[11px] text-slate-500">
+              No hay pagos pendientes de revisión, consultas complejas ni conectores bloqueantes en este momento.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {metrics.paymentsByCurrency.map(c => (
-              <div key={c.currency} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-extrabold text-sm text-slate-900 bg-slate-200/80 px-2 py-0.5 rounded">
-                    {c.currency}
-                  </span>
-                  <span className="text-[11px] text-slate-500">Moneda oficial</span>
+          <div className="space-y-4">
+            {/* 1. Pending Manual Payments Queue */}
+            {whatItNeedsFromMe.pendingManualPayments.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-300 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-amber-950 font-extrabold text-xs">
+                    <CreditCard className="w-4 h-4 text-amber-700" />
+                    <span>Pagos Pendientes de Confirmación Manual ({whatItNeedsFromMe.pendingManualPayments.length})</span>
+                  </div>
+                  <button
+                    onClick={() => onNavigateTab('clients')}
+                    className="text-amber-800 hover:underline font-bold text-[11px]"
+                  >
+                    Ver en Cuenta Corriente →
+                  </button>
                 </div>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between items-center text-emerald-700 font-semibold">
-                    <span>Confirmado auditado:</span>
-                    <span className="text-sm font-bold">
-                      {c.currency} {c.confirmedTotal.toLocaleString('es', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-amber-700">
-                    <span>Pendiente de revisión:</span>
-                    <span className="font-semibold">
-                      {c.currency} {c.pendingTotal.toLocaleString('es', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
+
+                <div className="space-y-2">
+                  {whatItNeedsFromMe.pendingManualPayments.map(p => (
+                    <div
+                      key={p.id}
+                      className="p-3 bg-white border border-amber-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-slate-900">{p.clientName}</span>
+                        <span className="text-slate-400 mx-1.5">·</span>
+                        <span className="text-slate-600 font-medium">{p.appName}</span>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          Ref: <span className="font-mono text-slate-700">{p.reference || 'Sin ref'}</span>
+                          {' · '}
+                          Canal: <span className="capitalize">{p.channel.replace('_', ' ')}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3 shrink-0">
+                        <span className="text-sm font-black text-slate-900">
+                          {p.currency} {p.amount.toLocaleString('es')}
+                        </span>
+
+                        {reviewingPaymentId === p.id ? (
+                          <div className="flex items-center space-x-1">
+                            <input
+                              type="text"
+                              value={reviewNotes}
+                              onChange={e => setReviewNotes(e.target.value)}
+                              placeholder="Nota de comprobante..."
+                              className="border border-slate-300 rounded p-1 text-[11px] w-36"
+                            />
+                            <button
+                              onClick={() => handleConfirmPaymentQuick(p.id)}
+                              disabled={submittingReview}
+                              className="px-2 py-1 bg-emerald-600 text-white rounded text-[11px] font-bold hover:bg-emerald-700"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              onClick={() => setReviewingPaymentId(null)}
+                              className="px-1.5 py-1 text-slate-400 hover:text-slate-700 text-[11px]"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setReviewingPaymentId(p.id);
+                              setReviewNotes('');
+                            }}
+                            className="px-3 py-1 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-colors shadow-2xs"
+                          >
+                            Revisar y Confirmar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* 2. Human Intervention Required in Conversations */}
+            {whatItNeedsFromMe.humanInterventionConversations.length > 0 && (
+              <div className="p-4 rounded-xl bg-rose-50/60 border border-rose-300 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-rose-950 font-extrabold text-xs">
+                    <MessageSquare className="w-4 h-4 text-rose-700" />
+                    <span>Consultas con Intervención Humana Requerida ({whatItNeedsFromMe.humanInterventionConversations.length})</span>
+                  </div>
+                  <button
+                    onClick={() => onNavigateTab('conversaciones')}
+                    className="text-rose-800 hover:underline font-bold text-[11px]"
+                  >
+                    Abrir Bandeja de Entrada →
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {whatItNeedsFromMe.humanInterventionConversations.map(c => (
+                    <div
+                      key={c.id}
+                      className="p-3 bg-white border border-rose-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-900">{c.contactName}</span>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-semibold">{c.appName}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5 italic">
+                          "{c.lastMessageSnippet}..."
+                        </p>
+                        <span className="text-[10px] text-rose-800 font-bold block mt-1">
+                          Motivo: {c.reason}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => onNavigateTab('conversaciones')}
+                        className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-bold hover:bg-blue-700 transition-colors shrink-0 self-start sm:self-auto shadow-2xs"
+                      >
+                        Atender Consulta
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Blocked Campaigns */}
+            {whatItNeedsFromMe.blockedCampaigns.length > 0 && (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 space-y-2 text-xs">
+                <span className="font-extrabold text-slate-900 block">
+                  Campañas Bloqueadas por Requisitos ({whatItNeedsFromMe.blockedCampaigns.length}):
+                </span>
+                <div className="space-y-1.5">
+                  {whatItNeedsFromMe.blockedCampaigns.map(b => (
+                    <div key={b.id} className="p-2.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-slate-800">{b.name}</span>
+                        <span className="text-slate-400 mx-1">·</span>
+                        <span className="text-slate-500">{b.appName}</span>
+                        <p className="text-[11px] text-amber-800 mt-0.5">{b.reason}</p>
+                      </div>
+                      <button
+                        onClick={() => onNavigateTab('campaigns')}
+                        className="text-xs text-blue-600 hover:underline font-bold shrink-0 ml-2"
+                      >
+                        Configurar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Two columns: Next Tasks & Application Health Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Next Pending Tasks */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col justify-between">
+      {/* Cloud Persistence Notice & Backup Download */}
+      <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start space-x-2">
+          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-amber-600" />
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                  Próximas Tareas Comerciales
-                </h2>
-              </div>
-              <button
-                onClick={onOpenTasks}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-              >
-                Ver todas ({metrics.pendingTasksCount})
-              </button>
-            </div>
-
-            {pendingTasks.length === 0 ? (
-              <p className="text-xs text-slate-500 italic py-4">No hay tareas pendientes en este momento.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {pendingTasks.map(task => (
-                  <div
-                    key={task.id}
-                    className="p-3 rounded-lg border border-slate-100 bg-slate-50/70 hover:bg-slate-100/70 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center space-x-1.5">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            task.priority === 'alta'
-                              ? 'bg-rose-500'
-                              : task.priority === 'media'
-                              ? 'bg-amber-500'
-                              : 'bg-slate-400'
-                          }`}
-                        />
-                        <h3 className="text-xs font-bold text-slate-800">{task.title}</h3>
-                      </div>
-                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
-                        {task.category.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{task.description}</p>
-                    {task.dueDate && (
-                      <p className="text-[10px] text-slate-500 mt-1">Vencimiento: {task.dueDate}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={onOpenTasks}
-            className="w-full mt-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-xs font-semibold transition-colors"
-          >
-            Administrar tareas y seguimientos
-          </button>
-        </div>
-
-        {/* Four Applications Operational Status */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <Layers className="w-4 h-4 text-blue-600" />
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Estado de las 4 Aplicaciones
-              </h2>
-            </div>
-            <button
-              onClick={() => onNavigateTab('applications')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-            >
-              Ver fichas completas
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {applications.map(app => {
-              const isFuneraria = app.id === 'app-funeraria' || app.slug === 'funeraria';
-              const isNeuro = app.id === 'app-neuroplaneta' || app.slug === 'neuroplaneta';
-
-              return (
-                <div
-                  key={app.id}
-                  className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-extrabold text-xs text-slate-900">{app.name}</span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          app.status === 'en_desarrollo'
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : app.status === 'lista'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {app.status === 'en_desarrollo'
-                          ? 'En desarrollo'
-                          : app.status === 'lista'
-                          ? 'Lista para campaña'
-                          : 'Pausada'}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{app.description}</p>
-
-                    {isFuneraria && (
-                      <p className="text-[10px] text-amber-700 font-bold mt-1">
-                        🔒 Campañas estrictamente bloqueadas hasta autorización técnica.
-                      </p>
-                    )}
-                    {isNeuro && (
-                      <p className="text-[10px] text-blue-700 font-semibold mt-1">
-                        ℹ️ Lúdica acompañada con adultos · No diagnóstico ni tratamiento.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="text-right sm:pl-3 sm:border-l border-slate-200 shrink-0">
-                    <span className="text-[11px] text-slate-500 block">
-                      {app.website.startsWith('http') ? (
-                        <a
-                          href={app.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline font-medium"
-                        >
-                          {app.website.replace('https://', '')}
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 italic">Sitio pendiente</span>
-                      )}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setSelectedAppFilter(app.id);
-                        onNavigateTab('applications');
-                      }}
-                      className="text-[11px] text-slate-700 hover:text-blue-600 font-bold mt-0.5"
-                    >
-                      Editar ficha →
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            <span className="font-bold text-amber-900 block">
+              Persistencia y Copias de Seguridad:
+            </span>
+            <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+              Base de datos local guardada con escritura atómica (`fsync`) y {persistenceStatus?.backupCount ?? 0} copias rotativas. En contenedores efímeros (como Cloud Run sin volumen), descargue respaldos periódicos o configure una base de datos PostgreSQL permanente.
+            </p>
           </div>
         </div>
+        <a
+          href="/api/system/backup"
+          download
+          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-xs shrink-0 self-start sm:self-auto shadow-2xs"
+        >
+          Descargar Respaldo JSON
+        </a>
       </div>
     </div>
   );

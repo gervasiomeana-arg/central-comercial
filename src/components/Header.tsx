@@ -29,6 +29,8 @@ interface HeaderProps {
   setSelectedAppFilter: (appId: string) => void;
   applications: Array<{ id: string; name: string }>;
   schedulerRunning: boolean;
+  adminUser?: { id: string; email: string; name: string };
+  onLogout: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +46,8 @@ export const Header: React.FC<HeaderProps> = ({
   setSelectedAppFilter,
   applications,
   schedulerRunning,
+  adminUser,
+  onLogout,
 }) => {
   const tabs = [
     { id: 'dashboard', label: 'Panel General', icon: LayoutDashboard },
@@ -164,6 +168,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
             </button>
+
+            {/* Authenticated Admin Badge & Logout */}
+            {adminUser && (
+              <div className="flex items-center space-x-1.5 pl-2 border-l border-slate-700 text-xs">
+                <span className="hidden xl:inline text-slate-300 font-medium" title={adminUser.email}>
+                  {adminUser.email}
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-xs font-semibold border border-slate-700 transition-colors"
+                  title="Cerrar sesión de administrador"
+                >
+                  Salir
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

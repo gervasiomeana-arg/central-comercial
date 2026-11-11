@@ -17,7 +17,7 @@ import {
   Database,
   Cpu
 } from 'lucide-react';
-import type { ConnectorInfo, AuditLog, SchedulerState } from '../types.js';
+import type { ConnectorInfo, AuditLog, SchedulerState, PersistenceStatus } from '../types.js';
 
 interface ConnectorsAndSystemViewProps {
   connectors: ConnectorInfo[];
@@ -26,6 +26,7 @@ interface ConnectorsAndSystemViewProps {
   onTestConnector: (id: string) => Promise<any>;
   onToggleAutomations: () => void;
   geminiConfigured: boolean;
+  persistenceStatus?: PersistenceStatus | null;
 }
 
 export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = ({
@@ -35,13 +36,14 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
   onTestConnector,
   onToggleAutomations,
   geminiConfigured,
+  persistenceStatus,
 }) => {
   const [testingConnectorId, setTestingConnectorId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [logFilterLevel, setLogFilterLevel] = useState('all');
   const [logFilterModule, setLogFilterModule] = useState('all');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
-  const [activeTab, setActiveTab] = useState<'conectores' | 'scheduler_windows' | 'logs'>('conectores');
+  const [activeTab, setActiveTab] = useState<'conectores' | 'scheduler_windows' | 'persistencia_db' | 'logs'>('conectores');
 
   const filteredLogs = logs.filter(l => {
     const matchesLevel = logFilterLevel === 'all' || l.level === logFilterLevel;
@@ -130,6 +132,16 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
             }`}
           >
             Motor de Tareas y Ejecución en Windows
+          </button>
+          <button
+            onClick={() => setActiveTab('persistencia_db')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-colors ${
+              activeTab === 'persistencia_db'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Persistencia y Base de Datos
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -329,6 +341,109 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
                 <p>pm2 start server.ts --name "central-comercial" --interpreter "node" --node-args="--loader tsx"</p>
                 <p>pm2 save</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'persistencia_db' && (
+        <div className="space-y-6 text-xs">
+          {/* Storage Overview */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center space-x-2">
+                <Database className="w-5 h-5 text-blue-600" />
+                <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+                  Persistencia y Almacenamiento de Datos
+                </h2>
+              </div>
+
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                persistenceStatus?.postgresConfigured
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-blue-100 text-blue-800 border border-blue-300'
+              }`}>
+                {persistenceStatus?.postgresConfigured ? 'Motor: PostgreSQL Remoto' : 'Motor: Archivo JSON Local con Fsync'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                <span className="text-slate-400 text-[11px] block">Ruta del archivo local:</span>
+                <span className="font-mono text-slate-700 font-bold break-all">
+                  {persistenceStatus?.filePath || 'data/central_comercial_db.json'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                <span className="text-slate-400 text-[11px] block">Tamaño y Respaldos:</span>
+                <span className="text-slate-800 font-bold block">
+                  {persistenceStatus?.fileSizeBytes ? `${(persistenceStatus.fileSizeBytes / 1024).toFixed(1)} KB` : 'Activo'}
+                  {' · '}
+                  <span className="text-blue-600">{persistenceStatus?.backupCount ?? 0} copias rotativas</span>
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1 flex flex-col justify-between">
+                <span className="text-slate-400 text-[11px] block">Respaldo Inmediato:</span>
+                <a
+                  href="/api/system/backup"
+                  download
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-center transition-colors"
+                >
+                  Descargar Copia de Seguridad JSON
+                </a>
+              </div>
+            </div>
+
+            {/* Cloud Durability Warning */}
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 space-y-2">
+              <div className="flex items-center space-x-2 text-amber-900 font-bold">
+                <AlertTriangle className="w-4 h-4 text-amber-700" />
+                <span className="text-xs uppercase tracking-wider">Aviso Crítico sobre Durabilidad en Servidor Publicado</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-900">
+                El sistema implementa escritura atómica con <code>fsync</code> y mantenimiento automático de los últimos 10 respaldos en <code>data/backups/</code>.
+                Sin embargo, en entornos de hosting en contenedores (como Google Cloud Run sin volumen montado), <strong>el disco local es efímero</strong> y se restablece ante un nuevo despliegue. No afirmamos que los datos locales sobrevivan a una nueva publicación sin verificar la existencia de un volumen persistente o conectar una base de datos externa.
+              </p>
+            </div>
+          </div>
+
+          {/* PostgreSQL External Database Section */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center space-x-2">
+                <Cpu className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+                  Configuración de Base de Datos PostgreSQL
+                </h3>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                persistenceStatus?.postgresConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {persistenceStatus?.postgresConfigured ? 'DATABASE_URL detectada' : 'Pendiente de configurar en .env'}
+              </span>
+            </div>
+
+            <p className="text-slate-600 leading-relaxed text-xs">
+              Para entornos en producción permanente o cuando se requiera persistencia garantizada ante cualquier reinicio o redespliegue de contenedor, configure la variable de entorno <code>DATABASE_URL</code> en su archivo <code>.env</code> o en las variables secretas de la plataforma.
+            </p>
+
+            <div className="p-3 bg-slate-900 text-slate-100 rounded-lg space-y-2 font-mono text-[11px]">
+              <span className="text-emerald-400 block font-bold"># Formato de conexión PostgreSQL requerido:</span>
+              <p className="text-amber-300 break-all select-all">
+                postgresql://USUARIO:PASSWORD@HOST:PUERTO/NOMBRE_BD?sslmode=require
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-700 text-[11px]">
+              <span className="font-bold block text-slate-800">Pasos para activar PostgreSQL:</span>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Crear o aprovisionar una instancia PostgreSQL (ej. Cloud SQL, Neon, Supabase, o servidor propio).</li>
+                <li>Reemplazar USUARIO, PASSWORD, HOST, PUERTO y NOMBRE_BD con las credenciales asignadas.</li>
+                <li>Incluir <code>DATABASE_URL="postgresql://USUARIO:PASSWORD@HOST:PUERTO/NOMBRE_BD?sslmode=require"</code> en <code>.env</code>.</li>
+                <li>Reiniciar el servidor: Central Comercial detectará la conexión y operará con persistencia cloud permanente.</li>
+              </ol>
             </div>
           </div>
         </div>

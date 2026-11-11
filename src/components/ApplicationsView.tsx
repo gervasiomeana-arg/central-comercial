@@ -45,15 +45,18 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
     website: '',
     verifiedFeatures: [''],
     trialAvailable: true,
-    trialDurationDays: 7,
+    trialVerified: false,
+    trialDurationDays: null,
     plans: [
       {
         id: `plan-${Date.now()}`,
-        name: 'Estándar',
-        price: 29,
+        name: 'Estándar (Borrador)',
+        price: null,
         currency: 'USD',
         interval: 'mensual',
-        features: ['Acceso completo', 'Soporte vía email']
+        features: ['Característica principal'],
+        verified: false,
+        verificationNotes: 'Plan en borrador. Pendiente de verificación por la dirección.'
       }
     ],
     registerUrl: '',
@@ -62,8 +65,10 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
       {
         id: `faq-${Date.now()}`,
         question: '¿Cómo funciona el servicio?',
-        answer: 'Respuesta comercial aprobada...',
-        approved: true
+        answer: 'Respuesta comercial en revisión...',
+        approved: false,
+        verified: false,
+        verificationNotes: 'FAQ en borrador. Requiere aprobación para usarse en IA y mensajes.'
       }
     ],
     promotionalMaterials: [],
@@ -111,11 +116,13 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
     if (!editingApp) return;
     const newPlan: PlanItem = {
       id: `plan-${Date.now()}`,
-      name: 'Nuevo Plan',
-      price: 49,
+      name: 'Nuevo Plan (Borrador)',
+      price: null,
       currency: 'USD',
       interval: 'mensual',
-      features: ['Característica 1']
+      features: ['Característica 1'],
+      verified: false,
+      verificationNotes: 'Plan en borrador. Pendiente de verificación por la dirección.'
     };
     setEditingApp({
       ...editingApp,
@@ -137,7 +144,9 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
       id: `faq-${Date.now()}`,
       question: '',
       answer: '',
-      approved: true
+      approved: false,
+      verified: false,
+      verificationNotes: 'FAQ en borrador. Requiere aprobación para usarse en IA y mensajes.'
     };
     setEditingApp({
       ...editingApp,
@@ -306,14 +315,18 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                   </ul>
                 </div>
 
-                {/* Plans & Pricing Summary */}
+                {/* Plans & Pricing Summary with Verification Status */}
                 <div className="mt-4 pt-3 border-t border-slate-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-slate-400 font-semibold uppercase text-[10px]">
-                      Planes y Precios Oficiales
+                      Planes y Precios
                     </span>
-                    <span className="text-[11px] text-slate-500">
-                      Prueba: {app.trialAvailable ? `${app.trialDurationDays} días sin cargo` : 'No disponible'}
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                      app.trialVerified
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-50 text-amber-900 border border-amber-200'
+                    }`}>
+                      {app.trialVerified ? `✓ Prueba verificada: ${app.trialDurationDays}d` : '⚠️ Prueba NO verificada'}
                     </span>
                   </div>
 
@@ -322,14 +335,32 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {app.plans.map(p => (
-                        <div key={p.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-                          <div className="flex justify-between items-center font-bold text-slate-900">
-                            <span>{p.name}</span>
-                            <span className="text-blue-700">
-                              {p.currency} {p.price} / {p.interval}
+                        <div
+                          key={p.id}
+                          className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                            p.verified
+                              ? 'bg-emerald-50/30 border-emerald-300'
+                              : 'bg-amber-50/40 border-amber-300'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start font-bold">
+                            <span className="text-slate-900">{p.name}</span>
+                            <span className={p.verified ? 'text-emerald-700 font-extrabold' : 'text-amber-800'}>
+                              {p.price !== null ? `${p.currency} ${p.price} / ${p.interval}` : 'Por cotizar'}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
+
+                          <div className="flex items-center space-x-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                              p.verified
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}>
+                              {p.verified ? '✓ Verificado oficial' : '⚠️ No verificado (Excluido)'}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 line-clamp-1">
                             {p.features.join(' · ')}
                           </p>
                         </div>
@@ -342,9 +373,17 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
                   <span className="flex items-center space-x-1">
                     <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Preguntas comerciales aprobadas (IA Knowledge Base):</span>
+                    <span>Base de conocimiento IA:</span>
                   </span>
-                  <span className="font-bold text-slate-800">{app.faqs.filter(f => f.approved).length} preguntas</span>
+                  <div className="flex space-x-1 text-[11px]">
+                    <span className="font-bold text-emerald-700">
+                      {app.faqs.filter(f => f.approved && f.verified).length} aprobadas
+                    </span>
+                    <span>·</span>
+                    <span className="text-amber-700 font-medium">
+                      {app.faqs.filter(f => !f.verified).length} en revisión
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -511,39 +550,63 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                 </div>
               </div>
 
-              {/* Trial Period */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-slate-800 block">¿Ofrece prueba gratuita inicial?</span>
-                  <span className="text-[11px] text-slate-500">Permite registrar prospectos en fase de evaluación sin cargo.</span>
+              {/* Trial Period with Official Verification Toggle */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 block">¿Ofrece prueba gratuita inicial?</span>
+                    <span className="text-[11px] text-slate-500">Permite registrar prospectos en fase de evaluación sin cargo.</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={editingApp.trialAvailable}
+                      onChange={e => setEditingApp({ ...editingApp, trialAvailable: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 rounded"
+                    />
+                    {editingApp.trialAvailable && (
+                      <div className="flex items-center space-x-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="60"
+                          value={editingApp.trialDurationDays || 14}
+                          onChange={e => setEditingApp({ ...editingApp, trialDurationDays: Number(e.target.value) })}
+                          className="w-16 border border-slate-300 rounded p-1 text-xs text-center"
+                        />
+                        <span className="text-slate-600">días</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
+
+                <div className="pt-2 border-t border-slate-200 flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    checked={editingApp.trialAvailable}
-                    onChange={e => setEditingApp({ ...editingApp, trialAvailable: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
+                    id="modalTrialVerified"
+                    checked={editingApp.trialVerified}
+                    onChange={e => setEditingApp({ ...editingApp, trialVerified: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded"
                   />
-                  {editingApp.trialAvailable && (
-                    <div className="flex items-center space-x-1">
-                      <input
-                        type="number"
-                        min="1"
-                        max="60"
-                        value={editingApp.trialDurationDays}
-                        onChange={e => setEditingApp({ ...editingApp, trialDurationDays: Number(e.target.value) })}
-                        className="w-16 border border-slate-300 rounded p-1 text-xs text-center"
-                      />
-                      <span className="text-slate-600">días</span>
-                    </div>
-                  )}
+                  <label htmlFor="modalTrialVerified" className={`text-xs font-bold cursor-pointer ${
+                    editingApp.trialVerified ? 'text-emerald-800' : 'text-amber-800'
+                  }`}>
+                    {editingApp.trialVerified
+                      ? '✓ Período de prueba verificado y autorizado formalmente'
+                      : '⚠️ Período de prueba NO verificado (la IA y mensajes no prometerán días de prueba)'}
+                  </label>
                 </div>
               </div>
 
               {/* Plans Section */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-sm">Planes y Precios Oficiales</span>
+                  <div>
+                    <span className="font-bold text-slate-800 text-sm">Planes y Precios Oficiales</span>
+                    <p className="text-[11px] text-slate-500">
+                      Solo los planes marcados como "Verificados" se utilizarán en IA y automatizaciones.
+                    </p>
+                  </div>
                   <button
                     onClick={handleAddPlan}
                     className="text-blue-600 hover:text-blue-800 font-bold flex items-center space-x-1"
@@ -554,7 +617,9 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                 </div>
 
                 {editingApp.plans.map((plan, idx) => (
-                  <div key={plan.id || idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <div key={plan.id || idx} className={`p-3 border rounded-lg space-y-2 ${
+                    plan.verified ? 'bg-emerald-50/20 border-emerald-300' : 'bg-slate-50 border-slate-200'
+                  }`}>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                       <input
                         type="text"
@@ -584,10 +649,10 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                         </select>
                         <input
                           type="number"
-                          value={plan.price}
+                          value={plan.price !== null ? plan.price : ''}
                           onChange={e => {
                             const updated = [...editingApp.plans];
-                            updated[idx].price = Number(e.target.value);
+                            updated[idx].price = e.target.value === '' ? null : Number(e.target.value);
                             setEditingApp({ ...editingApp, plans: updated });
                           }}
                           className="border border-slate-300 rounded p-1.5 text-xs font-bold w-20"
@@ -607,6 +672,7 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                         <option value="anual">Anual</option>
                         <option value="trimestral">Trimestral</option>
                         <option value="unico">Pago único</option>
+                        <option value="por_definir">Por definir</option>
                       </select>
                       <button
                         onClick={() => handleRemovePlan(idx)}
@@ -627,6 +693,29 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                       className="w-full border border-slate-300 rounded p-1.5 text-xs"
                       placeholder="Características (separadas por coma)..."
                     />
+
+                    {/* Verification Toggle */}
+                    <div className="pt-1 flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`planVer-${idx}`}
+                        checked={plan.verified}
+                        onChange={e => {
+                          const updated = [...editingApp.plans];
+                          updated[idx].verified = e.target.checked;
+                          updated[idx].verificationNotes = e.target.checked ? 'Verificado por administrador' : 'No verificado';
+                          setEditingApp({ ...editingApp, plans: updated });
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded"
+                      />
+                      <label htmlFor={`planVer-${idx}`} className={`text-[11px] font-bold cursor-pointer ${
+                        plan.verified ? 'text-emerald-800' : 'text-amber-800'
+                      }`}>
+                        {plan.verified
+                          ? '✓ Plan Verificado y Autorizado para Automatizaciones'
+                          : '⚠️ No verificado (Conservar para revisión sin usar en IA ni campañas)'}
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -684,6 +773,32 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                       className="w-full border border-slate-300 rounded p-1.5 text-xs"
                       placeholder="Respuesta oficial autorizada..."
                     />
+
+                    {/* FAQ Official Verification Toggle */}
+                    <div className="pt-1 flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`faqVer-${idx}`}
+                        checked={Boolean(faq.verified && faq.approved)}
+                        onChange={e => {
+                          const updated = [...editingApp.faqs];
+                          updated[idx].verified = e.target.checked;
+                          updated[idx].approved = e.target.checked;
+                          updated[idx].verificationNotes = e.target.checked
+                            ? 'Respuesta verificada y autorizada para respuestas comerciales e IA.'
+                            : 'Respuesta no verificada oficialmente. Excluida de automatizaciones e IA.';
+                          setEditingApp({ ...editingApp, faqs: updated });
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded"
+                      />
+                      <label htmlFor={`faqVer-${idx}`} className={`text-[11px] font-bold cursor-pointer ${
+                        faq.verified && faq.approved ? 'text-emerald-800' : 'text-amber-800'
+                      }`}>
+                        {faq.verified && faq.approved
+                          ? '✓ FAQ Aprobada y Verificada Oficialmente (Activa para IA y respuestas automáticas)'
+                          : '⚠️ No verificada (Conservada para revisión; excluida de IA y respuestas)'}
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>

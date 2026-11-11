@@ -11,16 +11,61 @@ import type {
   AuditLog,
   DashboardMetrics,
   SchedulerState,
+  AuthStatusResponse,
+  AutomationPipelineStatus,
+  PersistenceStatus,
+  AdminUser,
+  ExecutiveSummary,
+  EmailSandboxRunResponse
 } from './types.js';
 
+const AUTH_TOKEN_KEY = 'central_comercial_auth_token';
+
+export const authStorage = {
+  getToken: (): string | null => {
+    try {
+      return localStorage.getItem(AUTH_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  setToken: (token: string) => {
+    try {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } catch {
+      // ignore
+    }
+  },
+  clearToken: () => {
+    try {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch {
+      // ignore
+    }
+  }
+};
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = authStorage.getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>)
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers
-    }
+    headers
   });
+
+  if (res.status === 401 && !url.includes('/api/auth/')) {
+    // Session expired or unauthorized
+    authStorage.clearToken();
+    window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+  }
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({ error: res.statusText }));
@@ -31,13 +76,57 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Status & Scheduler
-  getStatus: () => fetchJson<{ appName: string; status: string; scheduler: SchedulerState; geminiConfigured: boolean }>('/api/status'),
+  // Public Auth & Status
+  getStatus: () => fetchJson<{
+    appName: string;
+    status: string;
+    scheduler: SchedulerState;
+    persistence: PersistenceStatus;
+    pipeline: AutomationPipelineStatus;
+    adminConfigured: boolean;
+    geminiConfigured: boolean;
+  }>('/api/status'),
+
+  getAuthStatus: () => fetchJson<AuthStatusResponse>('/api/auth/status'),
+
+  setupAdmin: async (payload: { email: string; password: string; name: string; setupKey: string }) => {
+    const res = await fetchJson<{ success: boolean; sessionToken: string; admin: AdminUser }>('/api/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (res.sessionToken) {
+      authStorage.setToken(res.sessionToken);
+    }
+    return res;
+  },
+
+  login: async (payload: { email: string; password: string }) => {
+    const res = await fetchJson<{ success: boolean; sessionToken: string; admin: AdminUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (res.sessionToken) {
+      authStorage.setToken(res.sessionToken);
+    }
+    return res;
+  },
+
+  logout: () => {
+    fetchJson<{ success: boolean }>('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    authStorage.clearToken();
+  },
+
+  // Automation Pipeline & Persistence
+  getPipelineStatus: () => fetchJson<AutomationPipelineStatus>('/api/automation/pipeline'),
+  getPersistenceStatus: () => fetchJson<PersistenceStatus>('/api/system/persistence'),
+
+  // Scheduler & Pause
   pauseAutomations: () => fetchJson<{ success: boolean; scheduler: SchedulerState }>('/api/automation/pause', { method: 'POST' }),
   resumeAutomations: () => fetchJson<{ success: boolean; scheduler: SchedulerState }>('/api/automation/resume', { method: 'POST' }),
 
   // Dashboard
   getDashboardMetrics: (app = 'all', period = 'all') => fetchJson<DashboardMetrics>(`/api/dashboard?app=${app}&period=${period}`),
+  getExecutiveSummary: (app = 'all', period = 'all') => fetchJson<ExecutiveSummary>(`/api/dashboard/executive?app=${app}&period=${period}`),
 
   // Applications
   getApplications: () => fetchJson<Application[]>('/api/applications'),
@@ -50,6 +139,16 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(app)
   }),
+  verifyPlan: (appId: string, planId: string, verified: boolean) =>
+    fetchJson<Application>(`/api/applications/${appId}/plans/${planId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ verified })
+    }),
+  verifyFaq: (appId: string, faqId: string, approved: boolean) =>
+    fetchJson<Application>(`/api/applications/${appId}/faqs/${faqId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ approved })
+    }),
 
   // Contacts
   getContacts: (search = '', app = 'all', status = 'all') =>
@@ -96,6 +195,11 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(campaign)
   }),
+  runEmailSandbox: (params: { appId: string; testEmail: string; testOrgName: string; contactPerson?: string }) =>
+    fetchJson<EmailSandboxRunResponse>('/api/campaigns/sandbox-test-run', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
 
   // Conversations
   getConversations: () => fetchJson<Conversation[]>('/api/conversations'),
@@ -131,7 +235,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(payment)
   }),
-  reviewPayment: (id: string, review: { status: 'confirmado' | 'rechazado'; auditorNote?: string; reviewedBy?: string }) =>
+  reviewPayment: (id: string, review: { status: 'confirmado' | 'rechazado'; auditorNote?: string }) =>
     fetchJson<PaymentRecord>(`/api/payments/${id}/review`, {
       method: 'POST',
       body: JSON.stringify(review)
@@ -146,7 +250,7 @@ export const api = {
 
   // Connectors
   getConnectors: () => fetchJson<ConnectorInfo[]>('/api/connectors'),
-  testConnector: (id: string) => fetchJson<{ success: boolean; status: string; message?: string; missingRequirements?: string[] }>(`/api/connectors/${id}/test`, {
+  testConnector: (id: string) => fetchJson<{ success: boolean; status: string; message: string; errorDetails?: string; providerResponse?: any; lastPingAt?: string }>(`/api/connectors/${id}/test`, {
     method: 'POST'
   }),
 

@@ -3,17 +3,21 @@ export type AppStatus = 'en_desarrollo' | 'lista' | 'pausada';
 export interface PlanItem {
   id: string;
   name: string;
-  price: number;
+  price: number | null; // null if unverified / not yet set
   currency: string; // e.g. 'USD', 'EUR', 'BRL', 'ARS'
-  interval: 'mensual' | 'anual' | 'trimestral' | 'unico';
+  interval: 'mensual' | 'anual' | 'trimestral' | 'unico' | 'por_definir';
   features: string[];
+  verified: boolean; // Must be verified by admin to be used in AI responses or campaigns
+  verificationNotes?: string;
 }
 
 export interface FaqItem {
   id: string;
   question: string;
   answer: string;
-  approved: boolean;
+  approved: boolean; // Must be approved by admin
+  verified: boolean; // Verified against official sources
+  verificationNotes?: string;
 }
 
 export interface PromoMaterial {
@@ -21,6 +25,13 @@ export interface PromoMaterial {
   title: string;
   url: string;
   type: 'pdf' | 'link' | 'video' | 'imagen';
+}
+
+export interface FeatureItem {
+  id: string;
+  name: string;
+  verified: boolean;
+  notes?: string;
 }
 
 export interface Application {
@@ -32,9 +43,11 @@ export interface Application {
   countries: string[];
   languages: string[];
   website: string;
-  verifiedFeatures: string[];
+  verifiedFeatures: string[]; // List of confirmed features
+  unverifiedFeatures?: string[]; // Held for admin review
   trialAvailable: boolean;
-  trialDurationDays: number;
+  trialVerified: boolean; // Must be verified by admin
+  trialDurationDays: number | null;
   plans: PlanItem[];
   registerUrl: string;
   paymentUrl: string;
@@ -72,14 +85,14 @@ export interface Contact {
   orgName: string;
   contactPerson: string;
   role: string;
-  orgType: string; // 'club', 'asociacion', 'agencia', 'empresa', 'familia', 'funeraria', 'otro'
+  orgType: string;
   country: string;
   language: string;
   timezone: string;
   website: string;
   email: string;
-  phone: string; // International format e.g. +55 11 99999-9999
-  source: string; // Verifiable source (e.g. 'Federación Paulista de Voleibol - Directorio oficial')
+  phone: string;
+  source: string;
   sourceReviewDate: string;
   interestedAppIds: string[];
   assignedTo: string;
@@ -116,14 +129,14 @@ export interface Campaign {
   messageTemplate: string;
   followUpTemplates: string[];
   timezone: string;
-  sendWindowStart: string; // '09:00'
-  sendWindowEnd: string; // '18:00'
+  sendWindowStart: string;
+  sendWindowEnd: string;
   dailyLimit: number;
   startDate: string;
   endDate: string;
   maxFollowUps: number;
   followUpIntervalDays: number;
-  stopCriteria: string[]; // e.g. ['respuesta_recibida', 'solicitud_baja']
+  stopCriteria: string[];
   mode: CampaignMode;
   status: CampaignStatus;
   blockingReason?: string;
@@ -151,7 +164,16 @@ export type MessageClassification =
   | 'requiere_intervencion'
   | 'sin_clasificar';
 
-export type MessageStatus = 'pendiente' | 'enviado' | 'fallido' | 'resultado_desconocido';
+export type MessageStatus =
+  | 'preparado'
+  | 'envio_intentado'
+  | 'aceptado_proveedor'
+  | 'entrega_confirmada'
+  | 'respuesta_recibida'
+  | 'fallido'
+  | 'resultado_desconocido'
+  | 'pendiente'
+  | 'enviado';
 
 export interface Message {
   id: string;
@@ -160,8 +182,12 @@ export interface Message {
   channel: 'email' | 'whatsapp' | 'telegram';
   content: string;
   status: MessageStatus;
-  serviceConfirmationId?: string; // Real connector confirmation id. Never mock if not confirmed!
+  serviceConfirmationId?: string;
   serviceError?: string;
+  providerEvidence?: string;
+  attemptedAt?: string;
+  acceptedAt?: string;
+  deliveredAt?: string;
   sentAt?: string;
   createdAt: string;
 }
@@ -212,7 +238,7 @@ export interface PaymentRecord {
   paymentDate: string;
   status: PaymentStatus;
   auditorNote?: string;
-  reviewedBy?: string;
+  reviewedBy?: string; // Authenticated admin email
   reviewedAt?: string;
   createdAt: string;
 }
@@ -262,7 +288,7 @@ export interface AuditLog {
   id: string;
   timestamp: string;
   level: 'info' | 'warning' | 'error';
-  module: 'campañas' | 'conectores' | 'conversaciones' | 'pagos' | 'ia' | 'contactos' | 'sistema';
+  module: 'campañas' | 'conectores' | 'conversaciones' | 'pagos' | 'ia' | 'contactos' | 'sistema' | 'seguridad';
   message: string;
   details?: Record<string, any>;
 }
@@ -302,4 +328,149 @@ export interface DashboardMetrics {
   pendingTasksCount: number;
   connectorsNeedingAttention: number;
   automationsPaused: boolean;
+}
+
+// Security & Authentication Types
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin';
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export interface AuthStatusResponse {
+  configured: boolean;
+  authenticated: boolean;
+  admin?: { id: string; email: string; name: string };
+  setupKeyRequired: boolean;
+}
+
+// Real Automation Pipeline Status (Strict separation of capabilities)
+export interface AutomationPipelineStatus {
+  internalTaskScheduler: {
+    status: 'activo' | 'pausado' | 'detenido';
+    description: string;
+    lastTick: string | null;
+  };
+  autonomousContactSearch: {
+    status: 'pendiente_conexion';
+    description: string;
+    details: string;
+  };
+  outboundMessaging: {
+    status: 'pendiente_conexion' | 'conectado';
+    description: string;
+    details: string;
+  };
+  inboundResponseListening: {
+    status: 'pendiente_conexion' | 'conectado';
+    description: string;
+    details: string;
+  };
+}
+
+export interface PersistenceStatus {
+  storageType: 'local_json_db' | 'postgresql';
+  filePath: string;
+  fileSizeBytes: number;
+  backupCount: number;
+  lastBackupAt: string | null;
+  environmentDurabilityNotice: string;
+  postgresConfigured?: boolean;
+  postgresUriFormat?: string;
+}
+
+export type CampaignStage =
+  | 'buscar'
+  | 'verificar'
+  | 'preparar'
+  | 'enviar'
+  | 'recibir'
+  | 'responder'
+  | 'seguimiento';
+
+export interface SandboxStepResult {
+  step: number;
+  name: string;
+  stage: CampaignStage;
+  status: 'completado' | 'bloqueado' | 'atencion_requerida';
+  evidence: string;
+  nextDependency: string;
+  details?: Record<string, any>;
+}
+
+export interface EmailSandboxRunResponse {
+  success: boolean;
+  appId: string;
+  appName: string;
+  testEmail: string;
+  testOrgName: string;
+  timestamp: string;
+  steps: SandboxStepResult[];
+  summary: string;
+}
+
+export interface ExecutiveSummary {
+  whatIsDoingNow: {
+    daemonStatus: 'activo' | 'pausado' | 'detenido';
+    lastHeartbeat: string | null;
+    activeCampaignsCount: number;
+    activeJobsCount: number;
+    currentStage: string;
+    currentStageDescription: string;
+    automationsPaused: boolean;
+  };
+  whatItAchieved: {
+    totalVerifiedContacts: number;
+    totalMessagesSent: number;
+    totalResponsesReceived: number;
+    totalInterested: number;
+    totalTrialClients: number;
+    totalActiveClients: number;
+    totalConfirmedPayments: { currency: string; amount: number }[];
+    byApplication: {
+      appId: string;
+      appName: string;
+      status: string;
+      contactsVerified: number;
+      messagesSent: number;
+      responsesReceived: number;
+      interestedCount: number;
+      trialCount: number;
+      clientsCount: number;
+    }[];
+  };
+  whatItNeedsFromMe: {
+    pendingManualPayments: {
+      id: string;
+      clientName: string;
+      appName: string;
+      amount: number;
+      currency: string;
+      channel: string;
+      createdAt: string;
+      reference?: string;
+    }[];
+    humanInterventionConversations: {
+      id: string;
+      contactName: string;
+      appName: string;
+      lastMessageSnippet: string;
+      reason: string;
+    }[];
+    unconfiguredConnectors: {
+      id: string;
+      name: string;
+      type: string;
+      missingRequirements: string[];
+    }[];
+    blockedCampaigns: {
+      id: string;
+      name: string;
+      appName: string;
+      reason: string;
+    }[];
+  };
 }

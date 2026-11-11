@@ -48,24 +48,34 @@ export async function analyzeAndSuggestResponse(
     };
   }
 
-  // Build the strict knowledge base from verified app details only
+  // Build the strict knowledge base ONLY from verified app details
+  const verifiedPlans = app.plans.filter(p => p.verified === true && p.price !== null);
+  const approvedFaqs = app.faqs.filter(f => f.approved === true && f.verified === true);
+  const trialText = (app.trialAvailable && app.trialVerified)
+    ? `Disponible (${app.trialDurationDays ? `${app.trialDurationDays} días` : 'a convenir con asesor'})`
+    : 'Condiciones de prueba no verificadas oficialmente. NO prometer días específicos.';
+
   const knowledgeBase = `
 --- FICHA COMERCIAL OFICIAL DE ${app.name.toUpperCase()} ---
-Descripción: ${app.description}
+Descripción Oficial: ${app.description}
 Sitio Web Oficial: ${app.website}
 Público Objetivo: ${app.targetAudience}
 Funciones Verificadas en Producción:
-${app.verifiedFeatures.map(f => `- ${f}`).join('\n')}
+${app.verifiedFeatures.length > 0 ? app.verifiedFeatures.map(f => `- ${f}`).join('\n') : '- Alcance general de la aplicación'}
 
-Período de Prueba: ${app.trialAvailable ? `Disponible (${app.trialDurationDays} días de prueba)` : 'No disponible'}
-Planes y Precios Oficiales (NO OFRECER OTROS PRECIOS NI DESCUENTOS):
-${app.plans.length > 0 ? app.plans.map(p => `- Plan ${p.name}: ${p.currency} ${p.price} / ${p.interval}. Características: ${p.features.join(', ')}`).join('\n') : 'Precios no configurados aún. Derivar a cotización personalizada.'}
+Período de Prueba: ${trialText}
+Planes y Precios Oficiales:
+${verifiedPlans.length > 0
+  ? verifiedPlans.map(p => `- Plan ${p.name}: ${p.currency} ${p.price} / ${p.interval}. Características: ${p.features.join(', ')}`).join('\n')
+  : 'NO HAY PLANES DE PRECIO VERIFICADOS AÚN POR LA DIRECCIÓN. PROHIBIDO INVENTAR PRECIOS O TARIFAS. Indicar que el presupuesto es personalizado y se enviará por un asesor comercial.'}
 
 Enlace de Registro: ${app.registerUrl}
 ${app.medicalDisclaimer ? `AVISO LEGAL OBLIGATORIO: ${app.medicalDisclaimer}` : ''}
 
 Preguntas Frecuentes y Respuestas Comerciales Aprobadas:
-${app.faqs.filter(f => f.approved).map(f => `P: ${f.question}\nR: ${f.answer}`).join('\n\n')}
+${approvedFaqs.length > 0
+  ? approvedFaqs.map(f => `P: ${f.question}\nR: ${f.answer}`).join('\n\n')
+  : 'No hay preguntas frecuentes aprobadas aún para esta aplicación.'}
 `;
 
   const ai = getAiClient();

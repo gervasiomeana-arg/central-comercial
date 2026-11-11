@@ -1,10 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { scheduler } from './server/scheduler.js';
 import { analyzeAndSuggestResponse } from './server/ai.js';
+import { authManager, requireAdminAuth } from './server/auth.js';
+import { testConnectorReal } from './server/connectors.js';
 import type { Contact, Campaign, Application, PaymentRecord, ClientSubscription } from './src/types.js';
 
 dotenv.config();
@@ -21,11 +24,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Start background task runner
 scheduler.start(30000);
 
-// --- API ROUTES ---
+// --- PUBLIC AUTH & HEALTH ROUTES ---
 
-// Health & System Status
+// Health & System Status (Public, does not reveal private business data)
 app.get('/api/status', (req, res) => {
   const schedulerState = db.getSchedulerState();
+  const persistenceStatus = db.getPersistenceStatus();
+  const pipelineStatus = db.getAutomationPipelineStatus();
+
   res.json({
     appName: 'Central Comercial',
     status: 'online',
@@ -33,35 +39,156 @@ app.get('/api/status', (req, res) => {
     mode: isProduction ? 'production' : 'development',
     scheduler: schedulerState,
     storage: 'local_file_db',
+    persistence: persistenceStatus,
+    pipeline: pipelineStatus,
+    adminConfigured: authManager.isConfigured(),
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY')
   });
 });
 
+// Auth Status Check
+app.get('/api/auth/status', (req, res) => {
+  const authHeader = req.headers.authorization;
+  let token: string | undefined;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else if (req.headers['x-auth-token']) {
+    token = String(req.headers['x-auth-token']).trim();
+  }
+
+  const session = authManager.validateSession(token);
+  const isConfigured = authManager.isConfigured();
+
+  res.json({
+    configured: isConfigured,
+    authenticated: Boolean(session),
+    admin: session ? { id: session.adminId, email: session.email, name: session.name } : undefined,
+    setupKeyRequired: !isConfigured
+  });
+});
+
+// Setup First Admin Account (Requires the server Master Setup Key to prevent random visitors becoming admin)
+app.post('/api/auth/setup', (req, res) => {
+  try {
+    const { email, password, name, setupKey } = req.body;
+    const result = authManager.setupFirstAdmin(email, password, name, setupKey);
+
+    db.addLog('info', 'seguridad', `Administrador inicial configurado: ${result.admin.email}`, {
+      email: result.admin.email,
+      ip: req.ip
+    });
+
+    res.json({
+      success: true,
+      sessionToken: result.sessionToken,
+      admin: result.admin
+    });
+  } catch (err: any) {
+    db.addLog('warning', 'seguridad', `Intento fallido de configuración de administrador: ${err.message}`, {
+      ip: req.ip,
+      error: err.message
+    });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin Login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const result = authManager.login(email, password);
+
+    db.addLog('info', 'seguridad', `Inicio de sesión exitoso: ${result.admin.email}`, {
+      email: result.admin.email,
+      ip: req.ip
+    });
+
+    res.json({
+      success: true,
+      sessionToken: result.sessionToken,
+      admin: result.admin
+    });
+  } catch (err: any) {
+    db.addLog('warning', 'seguridad', `Intento fallido de inicio de sesión: ${err.message}`, {
+      email: req.body.email,
+      ip: req.ip
+    });
+    res.status(401).json({ error: err.message });
+  }
+});
+
+// Admin Logout
+app.post('/api/auth/logout', (req, res) => {
+  const authHeader = req.headers.authorization;
+  let token: string | undefined;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else if (req.headers['x-auth-token']) {
+    token = String(req.headers['x-auth-token']).trim();
+  }
+
+  authManager.logout(token);
+  res.json({ success: true });
+});
+
+// --- PROTECTED ADMINISTRATIVE ROUTES ---
+// ALL endpoints below require real authenticated admin token
+const adminRouter = express.Router();
+adminRouter.use(requireAdminAuth);
+
+// Automation Pipeline Status: explicitly separating each stage (Requirement 3)
+adminRouter.get('/automation/pipeline', (req, res) => {
+  res.json(db.getAutomationPipelineStatus());
+});
+
+// Persistence & Backup status (Requirement 5)
+adminRouter.get('/system/persistence', (req, res) => {
+  res.json(db.getPersistenceStatus());
+});
+
+// Download JSON database backup file
+adminRouter.get('/system/backup', (req, res) => {
+  const data = db.getRaw();
+  const filename = `central_comercial_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(JSON.stringify(data, null, 2));
+});
+
 // Dashboard Metrics
-app.get('/api/dashboard', (req, res) => {
+adminRouter.get('/dashboard', (req, res) => {
   const appFilter = (req.query.app as string) || 'all';
   const period = (req.query.period as string) || 'all';
   const metrics = db.getDashboardMetrics(appFilter, period);
   res.json(metrics);
 });
 
+// Executive Summary: answering What is it doing, What did it achieve, What does it need from me
+adminRouter.get('/dashboard/executive', (req, res) => {
+  const appFilter = (req.query.app as string) || 'all';
+  const period = (req.query.period as string) || 'all';
+  const summary = db.getExecutiveSummary(appFilter, period);
+  res.json(summary);
+});
+
 // Global Automation Pause / Resume
-app.post('/api/automation/pause', (req, res) => {
+adminRouter.post('/automation/pause', (req, res) => {
   const state = db.setAutomationsPaused(true);
   res.json({ success: true, scheduler: state });
 });
 
-app.post('/api/automation/resume', (req, res) => {
+adminRouter.post('/automation/resume', (req, res) => {
   const state = db.setAutomationsPaused(false);
   res.json({ success: true, scheduler: state });
 });
 
 // --- APPLICATIONS ---
-app.get('/api/applications', (req, res) => {
+adminRouter.get('/applications', (req, res) => {
   res.json(db.getApplications());
 });
 
-app.get('/api/applications/:id', (req, res) => {
+adminRouter.get('/applications/:id', (req, res) => {
   const application = db.getApplicationById(req.params.id);
   if (!application) {
     return res.status(404).json({ error: 'Aplicación no encontrada' });
@@ -69,7 +196,7 @@ app.get('/api/applications/:id', (req, res) => {
   res.json(application);
 });
 
-app.post('/api/applications', (req, res) => {
+adminRouter.post('/applications', (req, res) => {
   try {
     const body: Application = req.body;
     if (!body.name || !body.slug) {
@@ -82,7 +209,7 @@ app.post('/api/applications', (req, res) => {
   }
 });
 
-app.put('/api/applications/:id', (req, res) => {
+adminRouter.put('/applications/:id', (req, res) => {
   try {
     const body: Application = req.body;
     body.id = req.params.id;
@@ -93,8 +220,30 @@ app.put('/api/applications/:id', (req, res) => {
   }
 });
 
+// Admin verification toggle for a plan (Requirement 2)
+adminRouter.post('/applications/:appId/plans/:planId/verify', (req, res) => {
+  try {
+    const { verified } = req.body;
+    const updated = db.verifyPlan(req.params.appId, req.params.planId, Boolean(verified));
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin verification toggle for an FAQ (Requirement 2)
+adminRouter.post('/applications/:appId/faqs/:faqId/verify', (req, res) => {
+  try {
+    const { approved } = req.body;
+    const updated = db.verifyFaq(req.params.appId, req.params.faqId, Boolean(approved));
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- CONTACTS ---
-app.get('/api/contacts', (req, res) => {
+adminRouter.get('/contacts', (req, res) => {
   let contacts = db.getContacts();
   const search = (req.query.search as string || '').toLowerCase();
   const appFilter = req.query.app as string;
@@ -119,7 +268,7 @@ app.get('/api/contacts', (req, res) => {
   res.json(contacts);
 });
 
-app.get('/api/contacts/:id', (req, res) => {
+adminRouter.get('/contacts/:id', (req, res) => {
   const contact = db.getContactById(req.params.id);
   if (!contact) {
     return res.status(404).json({ error: 'Contacto no encontrado' });
@@ -127,7 +276,7 @@ app.get('/api/contacts/:id', (req, res) => {
   res.json(contact);
 });
 
-app.post('/api/contacts', (req, res) => {
+adminRouter.post('/contacts', (req, res) => {
   try {
     const body: Partial<Contact> = req.body;
     if (!body.orgName) {
@@ -149,7 +298,7 @@ app.post('/api/contacts', (req, res) => {
       source: body.source || 'Carga manual directa',
       sourceReviewDate: body.sourceReviewDate || new Date().toISOString().split('T')[0],
       interestedAppIds: body.interestedAppIds || [],
-      assignedTo: body.assignedTo || 'Administrador',
+      assignedTo: (req as any).admin?.name || 'Administrador',
       notes: body.notes || '',
       history: [],
       preferredChannel: body.preferredChannel || 'email',
@@ -167,7 +316,7 @@ app.post('/api/contacts', (req, res) => {
   }
 });
 
-app.put('/api/contacts/:id', (req, res) => {
+adminRouter.put('/contacts/:id', (req, res) => {
   try {
     const existing = db.getContactById(req.params.id);
     if (!existing) {
@@ -186,13 +335,13 @@ app.put('/api/contacts/:id', (req, res) => {
   }
 });
 
-app.delete('/api/contacts/:id', (req, res) => {
+adminRouter.delete('/contacts/:id', (req, res) => {
   const success = db.deleteContact(req.params.id);
   res.json({ success });
 });
 
 // Check duplicates
-app.post('/api/contacts/check-duplicates', (req, res) => {
+adminRouter.post('/contacts/check-duplicates', (req, res) => {
   const { contact, excludeId } = req.body;
   const duplicates = db.findDuplicateContacts(contact, excludeId);
   const hasDuplicates =
@@ -207,7 +356,7 @@ app.post('/api/contacts/check-duplicates', (req, res) => {
 });
 
 // Merge duplicate contacts
-app.post('/api/contacts/merge', (req, res) => {
+adminRouter.post('/contacts/merge', (req, res) => {
   try {
     const { targetId, sourceId } = req.body;
     if (!targetId || !sourceId) {
@@ -221,7 +370,7 @@ app.post('/api/contacts/merge', (req, res) => {
 });
 
 // CSV Import Preview & Validation
-app.post('/api/contacts/import-preview', (req, res) => {
+adminRouter.post('/contacts/import-preview', (req, res) => {
   try {
     const { csvContent } = req.body;
     if (!csvContent || typeof csvContent !== 'string') {
@@ -287,7 +436,7 @@ app.post('/api/contacts/import-preview', (req, res) => {
 });
 
 // CSV Import Commit
-app.post('/api/contacts/import-commit', (req, res) => {
+adminRouter.post('/contacts/import-commit', (req, res) => {
   try {
     const { rows, appId } = req.body;
     if (!Array.isArray(rows)) {
@@ -314,14 +463,14 @@ app.post('/api/contacts/import-commit', (req, res) => {
         source: r.source || 'Importación masiva CSV',
         sourceReviewDate: new Date().toISOString().split('T')[0],
         interestedAppIds: appId ? [appId] : [],
-        assignedTo: 'Administrador',
+        assignedTo: (req as any).admin?.name || 'Administrador',
         notes: `Importado en lote el ${new Date().toLocaleDateString('es')}.`,
         history: [{
           id: `hist-${Date.now()}`,
           timestamp: new Date().toISOString(),
           type: 'creacion',
           description: 'Contacto importado desde archivo CSV',
-          author: 'Administrador'
+          author: (req as any).admin?.name || 'Administrador'
         }],
         preferredChannel: r.email ? 'email' : (r.phone ? 'whatsapp' : 'email'),
         permission: 'desconocido',
@@ -344,10 +493,10 @@ app.post('/api/contacts/import-commit', (req, res) => {
 });
 
 // CSV Export
-app.get('/api/contacts/export', (req, res) => {
+adminRouter.get('/contacts/export', (req, res) => {
   const contacts = db.getContacts();
   const headers = ['ID', 'Organizacion', 'Persona_Contacto', 'Cargo', 'Tipo', 'Pais', 'Email', 'Telefono', 'Sitio_Web', 'Fuente', 'Permiso', 'Estado', 'Proximo_Seguimiento'];
-  
+
   const rows = contacts.map(c => [
     c.id,
     `"${c.orgName.replace(/"/g, '""')}"`,
@@ -371,17 +520,17 @@ app.get('/api/contacts/export', (req, res) => {
 });
 
 // --- CAMPAIGNS ---
-app.get('/api/campaigns', (req, res) => {
+adminRouter.get('/campaigns', (req, res) => {
   res.json(db.getCampaigns());
 });
 
-app.get('/api/campaigns/:id', (req, res) => {
+adminRouter.get('/campaigns/:id', (req, res) => {
   const camp = db.getCampaignById(req.params.id);
   if (!camp) return res.status(404).json({ error: 'Campaña no encontrada' });
   res.json(camp);
 });
 
-app.post('/api/campaigns', (req, res) => {
+adminRouter.post('/campaigns', (req, res) => {
   try {
     const body: Campaign = req.body;
     if (!body.name || !body.appId) {
@@ -397,7 +546,7 @@ app.post('/api/campaigns', (req, res) => {
   }
 });
 
-app.put('/api/campaigns/:id', (req, res) => {
+adminRouter.put('/campaigns/:id', (req, res) => {
   try {
     const body: Campaign = req.body;
     body.id = req.params.id;
@@ -411,19 +560,38 @@ app.put('/api/campaigns/:id', (req, res) => {
   }
 });
 
+// Próximo Hito: End-to-end email sandbox simulation run
+adminRouter.post('/campaigns/sandbox-test-run', async (req, res) => {
+  try {
+    const { appId, testEmail, testOrgName, contactPerson } = req.body;
+    if (!appId || !testEmail) {
+      return res.status(400).json({ error: 'Debe especificar la aplicación (appId) y el correo electrónico de prueba (testEmail).' });
+    }
+    const result = await db.executeEmailSandboxRun({
+      appId,
+      testEmail,
+      testOrgName: testOrgName || 'Club de Prueba Controlada',
+      contactPerson: contactPerson || 'Administrador Evaluador'
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- CONVERSATIONS & INBOX ---
-app.get('/api/conversations', (req, res) => {
+adminRouter.get('/conversations', (req, res) => {
   res.json(db.getConversations());
 });
 
-app.get('/api/conversations/:id', (req, res) => {
+adminRouter.get('/conversations/:id', (req, res) => {
   const conv = db.getConversationById(req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
   res.json(conv);
 });
 
-// AI Assistant Response Suggestion Endpoint
-app.post('/api/conversations/ai-suggest', async (req, res) => {
+// AI Assistant Response Suggestion Endpoint (Uses only verified plans & approved FAQs)
+adminRouter.post('/conversations/ai-suggest', async (req, res) => {
   try {
     const { appId, contactName, messageContent, conversationHistory } = req.body;
     const app = db.getApplicationById(appId);
@@ -438,7 +606,6 @@ app.post('/api/conversations/ai-suggest', async (req, res) => {
       conversationHistory || []
     );
 
-    // If suggestion requires human intervention, create a high-priority task for admin
     if (suggestion.requiresHumanIntervention) {
       db.saveTask({
         id: `task-ai-escalate-${Date.now()}`,
@@ -460,7 +627,7 @@ app.post('/api/conversations/ai-suggest', async (req, res) => {
 });
 
 // Add message to conversation
-app.post('/api/conversations/:id/messages', (req, res) => {
+adminRouter.post('/conversations/:id/messages', (req, res) => {
   try {
     const { content, direction, channel, status, serviceConfirmationId } = req.body;
     if (!content) {
@@ -489,7 +656,7 @@ app.post('/api/conversations/:id/messages', (req, res) => {
 });
 
 // Create new conversation
-app.post('/api/conversations', (req, res) => {
+adminRouter.post('/conversations', (req, res) => {
   try {
     const body = req.body;
     const newConv = {
@@ -514,11 +681,11 @@ app.post('/api/conversations', (req, res) => {
 });
 
 // --- CLIENTS & CURRENT ACCOUNT (CUENTA CORRIENTE) ---
-app.get('/api/clients', (req, res) => {
+adminRouter.get('/clients', (req, res) => {
   res.json(db.getClients());
 });
 
-app.post('/api/clients/convert-from-contact', (req, res) => {
+adminRouter.post('/clients/convert-from-contact', (req, res) => {
   try {
     const { contactId } = req.body;
     if (!contactId) return res.status(400).json({ error: 'contactId es obligatorio.' });
@@ -530,11 +697,11 @@ app.post('/api/clients/convert-from-contact', (req, res) => {
 });
 
 // Subscriptions
-app.get('/api/subscriptions', (req, res) => {
+adminRouter.get('/subscriptions', (req, res) => {
   res.json(db.getSubscriptions());
 });
 
-app.post('/api/subscriptions', (req, res) => {
+adminRouter.post('/subscriptions', (req, res) => {
   try {
     const body: ClientSubscription = req.body;
     if (!body.clientId || !body.appId || !body.planName) {
@@ -548,12 +715,12 @@ app.post('/api/subscriptions', (req, res) => {
   }
 });
 
-// Payments & Manual Confirmation Workflow
-app.get('/api/payments', (req, res) => {
+// Payments & STRICT Manual Confirmation Workflow (Requirement 6)
+adminRouter.get('/payments', (req, res) => {
   res.json(db.getPayments());
 });
 
-app.post('/api/payments', (req, res) => {
+adminRouter.post('/payments', (req, res) => {
   try {
     const body: PaymentRecord = req.body;
     if (!body.clientId || !body.amount || !body.currency) {
@@ -561,25 +728,26 @@ app.post('/api/payments', (req, res) => {
     }
 
     body.id = body.id || `pay-${Date.now()}`;
-    // Force manual confirmation status initially as requested
-    body.status = body.status || 'pendiente_confirmacion_manual';
+
+    // STRICT REQUIREMENT 6: ALL new payments MUST stay in pending status, even if the request tries to send it as confirmed!
+    body.status = 'pendiente_confirmacion_manual';
+    body.reviewedBy = undefined;
+    body.reviewedAt = undefined;
 
     const saved = db.savePayment(body);
 
-    if (saved.status === 'pendiente_confirmacion_manual') {
-      db.saveTask({
-        id: `task-pay-review-${saved.id}`,
-        title: `Revisar y auditar pago de ${saved.currency} ${saved.amount}`,
-        description: `Comprobante / Referencia: ${saved.referenceNumber || 'Sin número'}. Revisar extracto bancario o pasarela y confirmar manualmente.`,
-        priority: 'alta',
-        category: 'revision_pago',
-        relatedType: 'pago',
-        relatedId: saved.id,
-        dueDate: null,
-        status: 'pendiente',
-        createdAt: new Date().toISOString()
-      });
-    }
+    db.saveTask({
+      id: `task-pay-review-${saved.id}`,
+      title: `Revisar y auditar pago de ${saved.currency} ${saved.amount}`,
+      description: `Comprobante / Referencia: ${saved.referenceNumber || 'Sin número'}. Revisar extracto bancario y confirmar manualmente.`,
+      priority: 'alta',
+      category: 'revision_pago',
+      relatedType: 'pago',
+      relatedId: saved.id,
+      dueDate: null,
+      status: 'pendiente',
+      createdAt: new Date().toISOString()
+    });
 
     res.json(saved);
   } catch (err: any) {
@@ -587,34 +755,38 @@ app.post('/api/payments', (req, res) => {
   }
 });
 
-app.post('/api/payments/:id/review', (req, res) => {
+// Review payment (ONLY authenticated admin can confirm or reject!)
+adminRouter.post('/payments/:id/review', (req, res) => {
   try {
-    const { status, auditorNote, reviewedBy } = req.body;
+    const { status, auditorNote } = req.body;
+    if (status !== 'confirmado' && status !== 'rechazado') {
+      return res.status(400).json({ error: 'El estado solo puede ser "confirmado" o "rechazado".' });
+    }
+
     const payments = db.getPayments();
     const payment = payments.find(p => p.id === req.params.id);
     if (!payment) return res.status(404).json({ error: 'Registro de pago no encontrado.' });
 
-    payment.status = status; // 'confirmado' | 'rechazado' | 'pendiente_confirmacion_manual'
+    const admin = (req as any).admin;
+    payment.status = status;
     payment.auditorNote = auditorNote || payment.auditorNote;
-    payment.reviewedBy = reviewedBy || 'Administrador Comercial';
+    payment.reviewedBy = admin?.email || 'Administrador Central';
     payment.reviewedAt = new Date().toISOString();
 
     db.savePayment(payment);
 
-    // If confirmed, mark any associated task as completed
-    if (status === 'confirmado' || status === 'rechazado') {
-      const task = db.getTasks().find(t => t.relatedId === payment.id && t.status === 'pendiente');
-      if (task) {
-        task.status = 'completada';
-        db.saveTask(task);
-      }
+    // If confirmed/rejected, complete pending task
+    const task = db.getTasks().find(t => t.relatedId === payment.id && t.status === 'pendiente');
+    if (task) {
+      task.status = 'completada';
+      db.saveTask(task);
     }
 
     db.addLog(
       status === 'confirmado' ? 'info' : 'warning',
       'pagos',
       `Auditoría de pago ID ${payment.id}: ${status.toUpperCase()} por ${payment.reviewedBy}`,
-      { paymentId: payment.id, amount: payment.amount, currency: payment.currency, status }
+      { paymentId: payment.id, amount: payment.amount, currency: payment.currency, status, auditor: payment.reviewedBy }
     );
 
     res.json(payment);
@@ -624,11 +796,11 @@ app.post('/api/payments/:id/review', (req, res) => {
 });
 
 // --- TASKS ---
-app.get('/api/tasks', (req, res) => {
+adminRouter.get('/tasks', (req, res) => {
   res.json(db.getTasks());
 });
 
-app.put('/api/tasks/:id', (req, res) => {
+adminRouter.put('/tasks/:id', (req, res) => {
   try {
     const existing = db.getTasks().find(t => t.id === req.params.id);
     if (!existing) return res.status(404).json({ error: 'Tarea no encontrada' });
@@ -640,33 +812,44 @@ app.put('/api/tasks/:id', (req, res) => {
   }
 });
 
-// --- CONNECTORS ---
-app.get('/api/connectors', (req, res) => {
+// --- CONNECTORS (REAL PROVIDER VERIFICATION: Requirement 4) ---
+adminRouter.get('/connectors', (req, res) => {
   res.json(db.getConnectors());
 });
 
-app.post('/api/connectors/:id/test', (req, res) => {
+adminRouter.post('/connectors/:id/test', async (req, res) => {
   const connector = db.getConnectors().find(c => c.id === req.params.id);
   if (!connector) return res.status(404).json({ error: 'Conector no encontrado' });
 
-  // Real connection verification logic (contract test)
-  if (connector.status === 'pendiente_conexion') {
-    return res.json({
-      success: false,
-      status: 'pendiente_conexion',
-      message: 'Prueba de ping no realizada: faltan credenciales requeridas.',
-      missingRequirements: connector.missingRequirements
-    });
+  // Execute REAL provider network check (does not send messages!)
+  const testResult = await testConnectorReal(connector);
+
+  if (testResult.success) {
+    connector.status = 'conectado';
+    connector.lastPingAt = new Date().toISOString();
+    connector.lastError = undefined;
+    connector.statusDescription = `Conectado y verificado con el proveedor: ${testResult.message}`;
+    db.save();
+    db.addLog('info', 'conectores', `Conector ${connector.name} verificado exitosamente con proveedor real.`);
+  } else {
+    connector.status = connector.configSummary.host !== 'No configurado' ? 'error' : 'pendiente_conexion';
+    connector.lastError = testResult.errorDetails || testResult.message;
+    connector.statusDescription = testResult.message;
+    db.save();
+    db.addLog('warning', 'conectores', `Fallo al verificar conector ${connector.name}: ${testResult.message}`);
   }
 
   res.json({
-    success: true,
+    success: testResult.success,
     status: connector.status,
-    lastPingAt: new Date().toISOString()
+    message: testResult.message,
+    errorDetails: testResult.errorDetails,
+    providerResponse: testResult.providerResponse,
+    lastPingAt: connector.lastPingAt
   });
 });
 
-app.put('/api/connectors/:id', (req, res) => {
+adminRouter.put('/connectors/:id', (req, res) => {
   try {
     const updated = db.updateConnector(req.params.id, req.body);
     res.json(updated);
@@ -676,7 +859,7 @@ app.put('/api/connectors/:id', (req, res) => {
 });
 
 // --- LOGS & AUDIT ---
-app.get('/api/logs', (req, res) => {
+adminRouter.get('/logs', (req, res) => {
   const logs = db.getRaw().logs;
   const level = req.query.level as string;
   const moduleName = req.query.module as string;
@@ -692,6 +875,9 @@ app.get('/api/logs', (req, res) => {
   res.json(filtered);
 });
 
+// Mount protected adminRouter on /api
+app.use('/api', adminRouter);
+
 // --- VITE MIDDLEWARE SETUP ---
 async function startServer() {
   if (!isProduction) {
@@ -702,7 +888,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Serve static files in production
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
