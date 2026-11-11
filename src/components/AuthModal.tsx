@@ -23,6 +23,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSetup,
 }) => {
   const isSetup = !authStatus.configured;
+  const [isRecovery, setIsRecovery] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState('');
+  const [notice, setNotice] = useState('');
 
   const [email, setEmail] = useState('gervasiomeana@gmail.com');
   const [password, setPassword] = useState('');
@@ -39,7 +42,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      if (isSetup) {
+      if (isRecovery) {
+        if (password !== confirmPassword) throw new Error('Las contraseñas no coinciden.');
+        if (password.length < 12 || password.length > 128) throw new Error('Use entre 12 y 128 caracteres.');
+        const response = await fetch('/api/auth/recover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password, recoveryKey })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'No se pudo recuperar el acceso.');
+        setPassword('');
+        setConfirmPassword('');
+        setRecoveryKey('');
+        setIsRecovery(false);
+        setNotice('Contraseña actualizada. Inicie sesión con la nueva contraseña.');
+      } else if (isSetup) {
         if (password !== confirmPassword) {
           throw new Error('Las contraseñas no coinciden.');
         }
@@ -81,7 +99,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div>
               <h2 className="text-base font-extrabold tracking-tight">CENTRAL COMERCIAL</h2>
               <span className="text-[11px] font-semibold text-blue-300">
-                {isSetup ? 'Inicialización Segura de Administrador' : 'Acceso Privado Exclusivo'}
+                {isRecovery ? 'Recuperar acceso' : isSetup ? 'Inicialización Segura de Administrador' : 'Acceso Privado Exclusivo'}
               </span>
             </div>
           </div>
@@ -94,6 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          {notice && <p role="status" className="text-green-800 bg-green-50 p-3 rounded-lg">{notice}</p>}
           {error && (
             <div className="p-3 rounded-lg bg-rose-50 border border-rose-300 text-rose-900 flex items-start space-x-2 text-xs">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -185,14 +204,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </>
           )}
 
+          {isRecovery && (
+            <div className="space-y-3">
+              <p className="text-slate-600">Configure primero una clave nueva y privada de al menos 32 caracteres en el secreto del servidor ADMIN_RECOVERY_KEY. Esta clave se usa una sola vez. No es ADMIN_SETUP_KEY. No la publique ni la envíe por chat.</p>
+              <label className="block font-bold">Confirmar nueva contraseña
+                <input type="password" autoComplete="new-password" required minLength={12} maxLength={128}
+                  value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                  className="w-full p-2 mt-1 border rounded-lg" />
+              </label>
+              <label className="block font-bold">Clave privada de recuperación
+                <input type="password" autoComplete="off" required minLength={32} maxLength={512}
+                  value={recoveryKey} onChange={e => setRecoveryKey(e.target.value)}
+                  className="w-full p-2 mt-1 border rounded-lg" />
+              </label>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 shadow-xs disabled:opacity-50"
           >
-            <span>{loading ? 'Verificando...' : isSetup ? 'Configurar Administrador Único' : 'Iniciar Sesión'}</span>
+            <span>{loading ? 'Verificando...' : isRecovery ? 'Guardar nueva contraseña' : isSetup ? 'Configurar Administrador Único' : 'Iniciar Sesión'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
+          {!isSetup && <button type="button" disabled={loading}
+            className="w-full text-blue-700 underline py-2"
+            onClick={() => { setIsRecovery(!isRecovery); setError(null); setNotice(''); setPassword(''); setConfirmPassword(''); setRecoveryKey(''); }}>
+            {isRecovery ? 'Volver a iniciar sesión' : 'Recuperar acceso'}
+          </button>}
         </form>
 
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-center text-[11px] text-slate-400">
