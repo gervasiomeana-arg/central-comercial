@@ -805,6 +805,9 @@ class DatabaseManager {
   }
 
   public mergeContacts(targetId: string, sourceId: string): Contact {
+    if (targetId === sourceId) {
+      throw new Error('Seleccione dos contactos distintos para fusionar.');
+    }
     const target = this.getContactById(targetId);
     const source = this.getContactById(sourceId);
     if (!target || !source) {
@@ -1104,6 +1107,12 @@ class DatabaseManager {
 
   // FORCE MANUAL PAYMENT STATUS: Requirement 6
   public savePayment(payment: PaymentRecord): PaymentRecord {
+    if (typeof payment.amount !== 'number' || !Number.isFinite(payment.amount) || payment.amount <= 0) {
+      throw new Error('El importe debe ser un número finito mayor que cero.');
+    }
+    if (typeof payment.currency !== 'string' || !/^[A-Z]{3}$/.test(payment.currency)) {
+      throw new Error('La moneda debe ser un código de tres letras mayúsculas, por ejemplo USD.');
+    }
     const index = this.data.payments.findIndex(p => p.id === payment.id);
     if (index >= 0) {
       this.data.payments[index] = payment;
