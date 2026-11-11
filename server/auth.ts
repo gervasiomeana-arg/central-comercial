@@ -31,6 +31,17 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
+// Temporary single-user testing mode requested by the owner.
+// Set REQUIRE_ADMIN_AUTH=true on the server to restore the existing login.
+export const TESTING_ADMIN = {
+  id: 'passwordless-testing',
+  email: 'pruebas@localhost',
+  name: 'Modo de pruebas'
+};
+export function passwordlessTestingEnabled(): boolean {
+  return process.env.REQUIRE_ADMIN_AUTH !== 'true';
+}
+
 // In-memory active sessions store
 const activeSessions = new Map<string, SessionRecord>();
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -265,6 +276,11 @@ export const authManager = new AuthManager();
 
 // Express Middleware for backend protection
 export function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  if (passwordlessTestingEnabled()) {
+    (req as any).admin = { ...TESTING_ADMIN };
+    next();
+    return;
+  }
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
