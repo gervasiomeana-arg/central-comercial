@@ -19,6 +19,7 @@ export interface StoredAdmin {
   passwordSalt: string;
   createdAt: string;
   lastLoginAt?: string;
+  usedRecoveryKeyHash?: string;
 }
 
 export interface SessionRecord {
@@ -157,6 +158,32 @@ class AuthManager {
         createdAt: newAdmin.createdAt
       }
     };
+  }
+
+  // Recovery is disabled until the owner configures a NEW private server secret.
+  // Never accept ADMIN_SETUP_KEY or a key shipped in the repository.
+  public recoverPassword(email: string, password: string, recoveryKey: string): void {
+    const expected = process.env.ADMIN_RECOVERY_KEY?.trim();
+    const rejected = () => new Error('Recuperación no disponible o datos inválidos. Verifique la clave privada y el correo.');
+    if (!this.admin || !expected || expected.length < 32 ||
+        typeof recoveryKey !== 'string' || recoveryKey.length > 512 ||
+        typeof email !== 'string' || email.trim().toLowerCase() !== this.admin.email) {
+      throw rejected();
+    }
+    const digest = (value: string) => crypto.createHash('sha256').update(value).digest();
+    const keyHash = digest(expected).toString('hex');
+    if (this.admin.usedRecoveryKeyHash === keyHash ||
+        !crypto.timingSafeEqual(digest(recoveryKey.trim()), digest(expected))) {
+      throw rejected();
+    }
+    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
+      throw new Error('La nueva contraseña debe tener entre 12 y 128 caracteres.');
+    }
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    this.saveAdmin({ ...this.admin, passwordSalt: salt, passwordHash: hash,
+      usedRecoveryKeyHash: keyHash });
+    activeSessions.clear();
   }
 
   public login(email: string, password: string): { sessionToken: string; admin: AdminUser } {
