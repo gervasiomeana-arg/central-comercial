@@ -218,7 +218,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
               <Users className="w-5 h-5 text-blue-600" />
-              <span>Base Central de Contactos y Prospectos</span>
+              <span>Contactos</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Registro comercial soberano con fuente verificable, detección de duplicados y trazabilidad histórica.
@@ -1014,3 +1014,4 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
     </div>
   );
 };
+

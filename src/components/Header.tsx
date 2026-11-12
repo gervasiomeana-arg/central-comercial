@@ -30,7 +30,7 @@ export function Header(props: HeaderProps) {
     <aside className={'cc-sidebar ' + (open ? 'is-open' : '')} aria-label="Navegación principal">
       <div className="cc-brand">
         <div className="cc-brand-mark"><Command size={22} strokeWidth={1.3} /></div>
-        <div><span className="cc-brand-name">Central<br/>Comercial<span className="cc-brand-dot">.</span></span><span className="cc-brand-caption">TU ESPACIO DE CRECIMIENTO</span></div>
+        <div><span className="cc-brand-name">Central<br/>Comercial<span className="cc-brand-dot">.</span></span><span className="cc-brand-caption">GESTIÓN COMERCIAL</span></div>
         <button className="cc-close-nav" aria-label="Cerrar navegación" onClick={() => setOpen(false)}><X size={20}/></button>
       </div>
       <div className="cc-nav-section">ESPACIO DE TRABAJO</div>

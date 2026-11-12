@@ -164,7 +164,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
               <CreditCard className="w-5 h-5 text-emerald-600" />
-              <span>Clientes y Cuenta Corriente</span>
+              <span>Clientes y pagos</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Gestión multi-aplicación por cliente. En esta fase la revisión y confirmación de cobros es 100% manual por auditoría.
@@ -886,3 +886,4 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
     </div>
   );
 };
+

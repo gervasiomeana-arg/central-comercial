@@ -184,7 +184,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
               <MessageSquare className="w-5 h-5 text-blue-600" />
-              <span>Bandeja Unificada de Conversaciones Comerciales</span>
+              <span>Conversaciones</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Atención exclusiva de prospectos comerciales. Asistente IA restringido estrictamente a las FAQ oficiales aprobadas.
@@ -567,3 +567,4 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     </div>
   );
 };
+
