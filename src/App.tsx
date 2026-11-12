@@ -345,6 +345,7 @@ export default function App() {
           <>
             {currentTab === 'dashboard' && (
               <DashboardView
+                onRefresh={loadData}
                 onOpenGuidedCampaign={() => setCurrentTab('campaigns')}
                 onOpenEmailSandbox={() => setCurrentTab('system')}
                 metrics={metrics}

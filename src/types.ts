@@ -125,6 +125,7 @@ export type CampaignStatus =
 export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 
 export interface Campaign {
+  maxContacts?: number;
   goalMonth?: string;
   autoSendEmail?: boolean;
   allowPublicEmail?: boolean;
@@ -525,3 +526,12 @@ export interface ExecutiveSummary {
   };
 }
 
+
+export interface AutonomousRun {
+  id: string; campaignId: string; appId: string; country: string;
+  maxContacts: number; startedAt: string;
+}
+export interface StartAutonomousInput {
+  appId: string; country: string; maxContacts: number;
+  targetClients: number; sendWindowStart: string; sendWindowEnd: string;
+}

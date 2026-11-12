@@ -77,6 +77,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getAutonomousRun:()=>fetchJson<any>('/api/automation/run'),
+  startAutonomousRun:(input:import('./types.js').StartAutonomousInput)=>fetchJson<any>('/api/automation/start',{method:'POST',body:JSON.stringify(input)}),
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
   saveSalesGoal: (goal: import('./types.js').MonthlySalesGoal) => fetchJson<any>('/api/sales-goals', {method:'PUT', body:JSON.stringify(goal)}),
   getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),

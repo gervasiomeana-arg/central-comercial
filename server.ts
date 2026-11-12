@@ -208,6 +208,9 @@ adminRouter.post('/channel-tests', (req, res) => {
 adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalReport(typeof req.query.month === 'string' ? req.query.month : undefined)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 
+adminRouter.get('/automation/run', (req,res)=>res.json(db.getAutonomousRunReport()));
+adminRouter.post('/automation/start', (req,res)=>{try{const report=db.startAutonomousRun(req.body);void scheduler.tick();res.json(report);}catch(error:any){res.status(400).json({error:error.message});}});
+
 adminRouter.get('/automation/pipeline', (req, res) => {
   res.json(db.getAutomationPipelineStatus());
 });
