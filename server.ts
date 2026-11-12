@@ -666,6 +666,19 @@ adminRouter.get('/conversations/:id', (req, res) => {
   res.json(conv);
 });
 
+adminRouter.post('/conversations/:id/resolve', (req,res) => {
+  const conversation = db.getConversationById(req.params.id);
+  if(!conversation) return res.status(404).json({error:'Conversación no encontrada.'});
+  const note = typeof req.body.note === 'string' ? req.body.note.trim() : '';
+  if(!note || note.length > 2000) return res.status(400).json({error:'Indicá una nota de revisión de hasta 2.000 caracteres.'});
+  conversation.requiresHumanIntervention = false;
+  conversation.adminNote = `${conversation.adminNote || ''}\n${new Date().toISOString()} · ${note}`.trim();
+  for(const task of db.getTasks().filter(t=>t.relatedType==='conversacion' && t.relatedId===conversation.id && t.status==='pendiente' && t.category==='intervencion_ia' && !/pago|comprobante/i.test(`${t.title} ${t.description}`))) { task.status='completada'; db.saveTask(task); }
+  db.saveConversation(conversation);
+  db.addLog('info','conversaciones','Consulta marcada como revisada por el propietario.',{conversationId:conversation.id,note});
+  db.save();res.json({success:true});
+});
+
 // AI Assistant Response Suggestion Endpoint (Uses only verified plans & approved FAQs)
 adminRouter.post('/conversations/ai-suggest', async (req, res) => {
   try {
@@ -711,7 +724,9 @@ adminRouter.post('/conversations/:id/messages/:messageId/review', (req, res) => 
     const { action, expectedRevision, content } = req.body;
     const updated = reviewEmailDraft(conversation.messages[index], { action, expectedRevision, content }, {
       app: db.getApplicationById(conversation.appId), contact: db.getContactById(conversation.contactId),
-      actor: (req as any).admin?.email || 'Operador Central Comercial'
+      actor: (req as any).admin?.email || 'Operador Central Comercial',
+      replyReceivedIds: conversation.messages.filter(m=>m.direction==='inbound' && m.providerMessageId).map(m=>m.providerMessageId!),
+      allowPublicEmail: conversation.campaignId ? db.getCampaignById(conversation.campaignId)?.allowPublicEmail === true : false
     });
     conversation.messages[index] = updated;
     if (!conversation.messages.some(m => m.direction === 'inbound')) conversation.requiresHumanIntervention = conversation.messages.some(m => m.direction === 'outbound' && m.status === 'preparado' && (!m.reviewStatus || m.reviewStatus === 'pending'));
