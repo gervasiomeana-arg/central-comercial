@@ -1,3 +1,4 @@
+import { SalesGoalPanel } from './SalesGoalPanel.js';
 import React from 'react';
 import { ArrowUpRight, ArrowRight, Layers, Users, Send, MessageSquare, CreditCard, Circle, ChevronRight, PlugZap, Check, Clock3 } from 'lucide-react';
 import type { DashboardMetrics, Application, CommercialTask, AutomationPipelineStatus, PersistenceStatus, ExecutiveSummary, Campaign, Contact } from '../types.js';
@@ -25,7 +26,7 @@ export function DashboardView(props: DashboardViewProps) {
     { label: 'Suscripciones activas', value: metrics.activeSubscriptionsCount, detail: metrics.trialClientsCount + ' en período de prueba', icon: CreditCard }
   ];
   const channels = [
-    { label: 'Búsqueda de contactos', ready: false, action: 'Requiere configuración' },
+    { label: 'Búsqueda de contactos', ready: pipelineStatus?.autonomousContactSearch.status === 'conectado', action: pipelineStatus?.autonomousContactSearch.status === 'error' ? 'Requiere revisión' : 'Primera búsqueda pendiente' },
     { label: 'Envío de campañas', ready: pipelineStatus?.outboundMessaging.status === 'conectado', action: 'Pendiente de conexión' },
     { label: 'Recepción de respuestas', ready: pipelineStatus?.inboundResponseListening.status === 'conectado', action: 'Pendiente de conexión' }
   ];
@@ -44,6 +45,7 @@ export function DashboardView(props: DashboardViewProps) {
       <div className="cc-kpi-title"><span>{kpi.label}</span><kpi.icon size={17} strokeWidth={1.5}/></div><strong className="cc-kpi-value">{kpi.value.toLocaleString('es-AR')}</strong><span className="cc-kpi-detail">{kpi.detail}</span>
     </article>)}</section>
 
+    <SalesGoalPanel/>
     <div className="cc-dashboard-columns">
       <section className="cc-panel cc-portfolio">
         <div className="cc-panel-heading"><div><p className="cc-eyebrow">PORTAFOLIO</p><h2>Tus aplicaciones</h2></div><button className="cc-text-button" onClick={() => props.onNavigateTab('applications')}>Ver todas <ArrowUpRight size={15}/></button></div>

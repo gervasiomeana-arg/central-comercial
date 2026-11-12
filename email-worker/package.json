@@ -1,0 +1,1 @@
+{"name":"central-comercial-email-worker","private":true,"type":"module","scripts":{"start":"node worker.mjs"},"dependencies":{"dotenv":"^17.2.3","nodemailer":"^10.5.0","imapflow":"^1.2.0","mailparser":"^3.9.0"}}

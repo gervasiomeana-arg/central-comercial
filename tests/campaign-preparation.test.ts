@@ -50,3 +50,10 @@ test('WhatsApp-only campaigns remain untouched; responses stop new outreach', ()
 test('accepts multiple countries from the existing campaign wizard', () => {
   assert.equal(prepareCampaign({ ...campaign, country: 'Uruguay, Argentina' }, app, [contact('one')], [], now).drafts.length, 1);
 });
+
+test('public business outreach must be explicitly enabled and never overrides revocation', () => {
+  const publicContact = contact('public', { permission:'desconocido', outreachBasis:'public_business_contact' });
+  assert.equal(prepareCampaign(campaign, app, [publicContact], [], now).drafts.length,0);
+  assert.equal(prepareCampaign({...campaign,allowPublicEmail:true}, app, [publicContact], [], now).drafts.length,1);
+  assert.equal(prepareCampaign({...campaign,allowPublicEmail:true}, app, [{...publicContact,permission:'revocado'}], [], now).drafts.length,0);
+});

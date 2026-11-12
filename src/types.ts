@@ -87,6 +87,7 @@ export interface ContactHistoryItem {
 }
 
 export interface Contact {
+  outreachBasis?: 'public_business_contact';
   id: string;
   orgName: string;
   contactPerson: string;
@@ -124,6 +125,14 @@ export type CampaignStatus =
 export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 
 export interface Campaign {
+  goalMonth?: string;
+  autoSendEmail?: boolean;
+  allowPublicEmail?: boolean;
+  researchQueries?: string[];
+  researchSegment?: string;
+  lastResearchAt?: string;
+  researchCount?: number;
+  researchDay?: string;
   autoPrepare?: boolean;
   lastPreparation?: { at: string; created: number; skipped: Record<string, number>; blockedReason?: string };
   id: string;
@@ -184,6 +193,12 @@ export type MessageStatus =
   | 'enviado';
 
 export interface Message {
+  providerMessageId?: string;
+  replyToProviderId?: string;
+  emailSubject?: string;
+  sendLease?: string;
+  sendWorker?: string;
+  sendDeadline?: number;
   draftRevision?: number;
   approvedRecipient?: string;
   reviewStatus?: 'pending' | 'approved' | 'rejected';
@@ -240,6 +255,13 @@ export interface ClientSubscription {
 }
 
 export type PaymentStatus = 'pendiente_confirmacion_manual' | 'confirmado' | 'rechazado';
+
+export interface MonthlySalesGoal {
+  month: string; targetClients: number; enabled: boolean;
+  discoverContacts: boolean; sendEmail: boolean; answerEmail: boolean;
+  countries: string[]; dailyEmailLimit: number; dailyResearchLimit: number;
+  updatedAt: string;
+}
 
 export interface PaymentRecord {
   ledgerAssignedAt?: string;
@@ -383,7 +405,7 @@ export interface AutomationPipelineStatus {
     lastTick: string | null;
   };
   autonomousContactSearch: {
-    status: 'pendiente_conexion';
+    status: 'pendiente_conexion' | 'conectado' | 'error';
     description: string;
     details: string;
   };

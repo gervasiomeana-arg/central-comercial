@@ -35,7 +35,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const countries = campaign.country.split(',').map(normalized);
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
-    if (contact.permission !== 'autorizado' || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
+    if (!(contact.permission === 'autorizado' || (contact.permission === 'desconocido' && campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact')) || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) { skip('Fuente sin revisar'); continue; }
     const email = contact.email?.trim().toLowerCase();

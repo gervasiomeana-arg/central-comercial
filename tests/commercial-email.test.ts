@@ -1,0 +1,44 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { commercialCatalog } from '../server/commercial-catalog.js';
+
+test('commercial email lifecycle persists attempts, stops repeats, routes verified replies and escalates payment reports',async()=>{
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'central-commercial-email-'));
+  try{
+    for(const folder of ['server','src','data'])await fs.mkdir(path.join(directory,folder));
+    await fs.writeFile(path.join(directory,'package.json'),'{"type":"module"}');
+    for(const name of ['db.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
+    const {db}=await import(pathToFileURL(path.join(directory,'server','db.ts')).href);
+    const {claimCommercialEmail,completeCommercialEmail,importCommercialReply,replyDecision,currentReplyText}=await import(pathToFileURL(path.join(directory,'server','commercial-email.ts')).href);
+    const app=db.getApplications().find((a:any)=>/voley/i.test(a.name)), now=new Date();
+    db.setAutomationsPaused(false);db.saveMonthlyGoal({...db.getMonthlyGoal(),enabled:true,targetClients:5});
+    const campaign=db.getCampaigns().find((c:any)=>c.goalMonth&&c.appId===app.id);campaign.sendWindowStart='00:00';campaign.sendWindowEnd='23:59';campaign.startDate='2026-11-01';
+    db.saveContact({id:'research-contact',orgName:'Club prueba',contactPerson:'',role:'Contacto',orgType:'Club',country:'Argentina',language:'es',timezone:'America/Argentina/Buenos_Aires',website:'https://club.test',email:'info@club.test',phone:'',source:'https://club.test/contacto',sourceReviewDate:new Date(now.getTime()-1000).toISOString(),interestedAppIds:[app.id],assignedTo:'',notes:'',history:[],preferredChannel:'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
+    db.prepareCampaignDrafts(campaign.id);db.commercialEmailHeartbeat('test-worker',true,true,'owner@test.org');
+    assert.throws(()=>claimCommercialEmail('another-worker'));
+    const job=claimCommercialEmail('test-worker',now);assert.ok(job);assert.equal(job.recipient,'info@club.test');
+    assert.equal(claimCommercialEmail('test-worker',now),null,'never leases same draft twice');
+    assert.throws(()=>completeCommercialEmail({...job,workerId:'test-worker',lease:'wrong',outcome:'accepted',response:'250 OK'}));
+    completeCommercialEmail({...job,workerId:'test-worker',outcome:'accepted',response:'250 OK',providerMessageId:job.providerMessageId});
+    const conv=db.getConversationById(job.conversationId);assert.equal(conv.messages[0].status,'aceptado_proveedor');assert.equal(conv.messages[0].deliveredAt,undefined);assert.equal(db.getContactById('research-contact').history.filter((h:any)=>h.type==='mensaje_enviado').length,1);
+    completeCommercialEmail({...job,workerId:'test-worker',outcome:'accepted',response:'250 OK'});assert.equal(db.getContactById('research-contact').history.filter((h:any)=>h.type==='mensaje_enviado').length,1);
+    assert.throws(()=>importCommercialReply({messageId:'<bad@test>',from:'other@test.org',references:[job.providerMessageId],text:'precio'}));
+    const incoming={messageId:'<reply1@test>',from:'info@club.test',references:[job.providerMessageId],text:'Quisiera información y una demo.\nOn Thu, Sender wrote:\n> responder BAJA'};
+    importCommercialReply(incoming);assert.equal(db.getContactById('research-contact').permission,'desconocido');assert.equal(conv.messages.filter((m:any)=>m.replyToProviderId==='<reply1@test>').length,1);
+    importCommercialReply(incoming);assert.equal(conv.messages.filter((m:any)=>m.providerMessageId==='<reply1@test>').length,1);
+    assert.equal(currentReplyText('precio\n> BAJA'),'precio');
+    const answer=claimCommercialEmail('test-worker',now);assert.ok(answer?.inReplyTo);
+    completeCommercialEmail({...answer,workerId:'test-worker',outcome:'unknown',response:'timeout'});assert.equal(claimCommercialEmail('test-worker',now),null,'unknown outcomes never resend');
+    importCommercialReply({messageId:'<payment@test>',from:'info@club.test',references:[job.providerMessageId],text:'Ya pagué, adjunto comprobante.'});
+    assert.ok(db.getTasks().some((t:any)=>t.relatedId===conv.id&&t.status==='pendiente'));assert.equal(db.getPayments().filter((p:any)=>p.status==='confirmado').length,0);assert.equal(db.getSalesGoalReport().achieved,0);
+    importCommercialReply({messageId:'<stop@test>',from:'info@club.test',references:[job.providerMessageId],text:'BAJA'});assert.equal(db.getContactById('research-contact').permission,'revocado');assert.equal(claimCommercialEmail('test-worker',now),null);
+    assert.equal(replyDecision('Quiero un descuento',app,'Argentina').kind,'human');assert.equal(replyDecision('precio',app,'Brasil').kind,'human');
+    assert.equal(replyDecision('Quiero contratar',app,'Argentina').kind,'purchase');
+    assert.ok(!replyDecision('precio',commercialCatalog()[2],'Argentina').text?.includes('99'));
+  }finally{await fs.rm(directory,{recursive:true,force:true});}
+});
