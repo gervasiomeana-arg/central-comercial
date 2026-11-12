@@ -12,6 +12,7 @@ import { AuthModal } from './components/AuthModal.js';
 import { api } from './api.js';
 import type {
   Application,
+  AccountCharge,
   Contact,
   Campaign,
   Conversation,
@@ -39,6 +40,7 @@ export default function App() {
 
   // Core Data States
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [accountCharges, setAccountCharges] = useState<AccountCharge[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -95,7 +97,8 @@ export default function App() {
         paysRes,
         tasksRes,
         connsRes,
-        logsRes
+        logsRes,
+        chargesRes
       ] = await Promise.all([
         api.getStatus().catch(() => ({ appName: '', status: 'offline', scheduler, geminiConfigured: false })),
         api.getDashboardMetrics(selectedAppFilter, selectedPeriod).catch(() => null),
@@ -110,7 +113,8 @@ export default function App() {
         api.getPayments().catch(() => []),
         api.getTasks().catch(() => []),
         api.getConnectors().catch(() => []),
-        api.getLogs().catch(() => [])
+        api.getLogs().catch(() => []),
+        api.getAccountCharges().catch(() => [])
       ]);
 
       if (statusRes && statusRes.scheduler) {
@@ -130,6 +134,7 @@ export default function App() {
       setTasks(tasksRes);
       setConnectors(connsRes);
       setLogs(logsRes);
+      setAccountCharges(chargesRes);
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -413,6 +418,10 @@ export default function App() {
                 subscriptions={subscriptions}
                 payments={payments}
                 applications={applications}
+                accountCharges={accountCharges}
+                onReconcileLedger={async () => { await api.reconcileLedger(); await loadData(); }}
+                onVoidCharge={async (id, reason) => { await api.voidAccountCharge(id, reason); await loadData(); }}
+                onAssignPayment={async (id, subId) => { await api.assignPayment(id, subId); await loadData(); }}
                 onSaveSubscription={handleSaveSubscription}
                 onSavePayment={handleSavePayment}
                 onReviewPayment={handleReviewPayment}

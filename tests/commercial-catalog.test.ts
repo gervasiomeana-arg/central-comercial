@@ -64,16 +64,35 @@ test('normalizes known aliases without replacing custom product IDs', () => {
 test('database startup persists the catalog while preserving commercial records', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'central-catalog-test-'));
   try {
-    await fs.mkdir(path.join(directory, 'server')); await fs.mkdir(path.join(directory, 'data'));
+    await fs.mkdir(path.join(directory, 'server')); await fs.mkdir(path.join(directory, 'data')); await fs.mkdir(path.join(directory, 'src'));
+    await fs.copyFile(new URL('../src/ledger.ts', import.meta.url), path.join(directory, 'src', 'ledger.ts'));
     await fs.writeFile(path.join(directory, 'package.json'), '{"type":"module"}');
     for (const file of ['db.ts', 'commercial-catalog.ts', 'campaign-preparation.ts']) await fs.copyFile(new URL(`../server/${file}`, import.meta.url), path.join(directory, 'server', file));
     const original = { version: 1, applications: [{ ...commercialCatalog()[0], commercialCatalogVersion: undefined }], contacts: [{ id: 'saved-contact', orgName: 'Datos existentes' }], campaigns: [], conversations: [{ id: 'saved-conversation', messages: [] }], clients: [{ id: 'saved-client' }], subscriptions: [{ id: 'saved-subscription', agreedAmount: 37 }], payments: [{ id: 'saved-payment', amount: 37, currency: 'USD', status: 'pendiente_confirmacion_manual' }], tasks: [], connectors: [], logs: [] };
     const filename = path.join(directory, 'data', 'central_comercial_db.json');
     await fs.writeFile(filename, JSON.stringify(original));
-    await import(pathToFileURL(path.join(directory, 'server', 'db.ts')).href);
+    const { db } = await import(pathToFileURL(path.join(directory, 'server', 'db.ts')).href);
     const saved = JSON.parse(await fs.readFile(filename, 'utf8'));
     assert.equal(saved.applications.length, 4);
     for (const field of ['contacts', 'campaigns', 'conversations', 'clients', 'subscriptions', 'payments'] as const) assert.deepEqual(saved[field], original[field]);
+    const { accountingDay, addBillingMonths, clientLedger } = await import('../src/ledger.js');
+    const day = accountingDay();
+    const subscription = db.saveSubscription({ id: 'ledger-sub', clientId: 'saved-client', appId: 'app-open-voley', planId: 'manual', planName: 'Plan acordado', currency: 'USD', agreedAmount: 20, billingInterval: 'mensual', startDate: day, renewalDate: addBillingMonths(day, 1), status: 'activa', ledgerEnabled: true });
+    assert.equal(db.getAccountCharges().length, 1);
+    assert.equal(db.processLedger().created, 0);
+    assert.throws(() => db.saveSubscription({ ...subscription, currency: 'ARS' }));
+    const payment = db.savePayment({ id: 'linked-payment', clientId: 'saved-client', appId: 'app-open-voley', subscriptionId: subscription.id, amount: 25, currency: 'USD', method: 'transferencia_bancaria', referenceNumber: 'fixture', paymentDate: day, status: 'confirmado' });
+    assert.equal(payment.status, 'pendiente_confirmacion_manual');
+    payment.status = 'confirmado'; db.savePayment(payment); db.processLedger();
+    const ledger = clientLedger('saved-client', db.getAccountCharges(), db.getPayments(), db.getSubscriptions());
+    assert.equal(ledger.totals[0].outstanding, 0);
+    assert.equal(ledger.totals[0].credit, 5);
+    assert.throws(() => db.assignPaymentToSubscription('saved-payment', subscription.id, 'test-operator'));
+    const charge = db.getAccountCharges()[0];
+    db.voidAccountCharge(charge.id, 'Corrección de prueba aislada', 'test-operator');
+    assert.equal(db.processLedger().created, 0);
+    assert.equal(db.getAccountCharges()[0].status, 'anulado');
+
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 

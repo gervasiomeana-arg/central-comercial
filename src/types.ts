@@ -223,6 +223,8 @@ export interface Conversation {
 export type SubscriptionStatus = 'en_prueba' | 'activa' | 'vencida' | 'cancelada';
 
 export interface ClientSubscription {
+  ledgerEnabled?: boolean;
+  ledgerStartDate?: string;
   id: string;
   clientId: string;
   appId: string;
@@ -230,7 +232,7 @@ export interface ClientSubscription {
   planName: string;
   currency: string;
   agreedAmount: number;
-  billingInterval: 'mensual' | 'anual' | 'trimestral' | 'prueba';
+  billingInterval: 'mensual' | 'anual' | 'trimestral' | 'prueba' | 'unico';
   startDate: string;
   renewalDate: string;
   status: SubscriptionStatus;
@@ -240,6 +242,7 @@ export interface ClientSubscription {
 export type PaymentStatus = 'pendiente_confirmacion_manual' | 'confirmado' | 'rechazado';
 
 export interface PaymentRecord {
+  ledgerAssignedAt?: string;
   // Compatibility with existing stored records created by earlier versions.
   reference?: string;
   clientName?: string;
@@ -274,12 +277,19 @@ export interface Client {
   updatedAt: string;
 }
 
+export interface AccountCharge {
+  id: string; clientId: string; subscriptionId: string; appId: string;
+  currency: string; amount: number; periodStart: string; periodEnd: string; dueDate: string;
+  status: 'vigente' | 'anulado'; createdAt: string;
+  voidReason?: string; voidedAt?: string; voidedBy?: string;
+}
+
 export interface CommercialTask {
   id: string;
   title: string;
   description: string;
   priority: 'alta' | 'media' | 'baja';
-  category: 'seguimiento' | 'revision_pago' | 'intervencion_ia' | 'conector' | 'general';
+  category: 'seguimiento' | 'revision_pago' | 'intervencion_ia' | 'conector' | 'general' | 'vencimiento';
   relatedType?: 'contacto' | 'pago' | 'conversacion' | 'campaña' | 'conector';
   relatedId?: string;
   dueDate: string | null;
