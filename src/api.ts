@@ -188,6 +188,8 @@ export const api = {
       body: JSON.stringify({ rows, appId })
     }),
 
+  prepareCampaign: (id: string) => fetchJson<NonNullable<Campaign['lastPreparation']>>(`/api/campaigns/${encodeURIComponent(id)}/prepare`, { method: 'POST' }),
+
   // Campaigns
   getCampaigns: () => fetchJson<Campaign[]>('/api/campaigns'),
   getCampaign: (id: string) => fetchJson<Campaign>(`/api/campaigns/${id}`),

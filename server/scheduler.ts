@@ -88,6 +88,13 @@ class CommercialScheduler {
         }
       }
 
+      for (const campaign of campaigns) {
+        if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
+          try { db.prepareCampaignDrafts(campaign.id); }
+          catch (error) { db.addLog('error', 'campañas', `No se pudo preparar la campaña ${campaign.name}`, { error: String(error) }); }
+        }
+      }
+
       state.activeJobsCount = campaigns.filter(c => c.status === 'activa').length;
       db.save();
     } catch (err: any) {
@@ -99,3 +106,4 @@ class CommercialScheduler {
 }
 
 export const scheduler = new CommercialScheduler();
+

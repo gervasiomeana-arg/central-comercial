@@ -118,6 +118,8 @@ export type CampaignStatus =
 export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 
 export interface Campaign {
+  autoPrepare?: boolean;
+  lastPreparation?: { at: string; created: number; skipped: Record<string, number>; blockedReason?: string };
   id: string;
   appId: string;
   name: string;

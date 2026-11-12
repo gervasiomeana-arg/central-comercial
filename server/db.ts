@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { prepareCampaign } from './campaign-preparation.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type {
@@ -921,6 +922,20 @@ class DatabaseManager {
     return { campaign };
   }
 
+  public prepareCampaignDrafts(id: string) {
+    const campaign = this.getCampaignById(id);
+    if (!campaign) throw new Error('Campaña no encontrada');
+    const result = prepareCampaign(campaign, this.getApplicationById(campaign.appId), this.data.contacts, this.data.conversations);
+    this.data.conversations.unshift(...result.drafts);
+    campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
+    const conversations = this.data.conversations.filter(c => c.campaignId === id);
+    campaign.stats.contactsCount = new Set(conversations.map(c => c.contactId)).size;
+    campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status)).length;
+    if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de correo preparados para ${campaign.name}. Sin envíos.`, { campaignId: id });
+    this.save();
+    return campaign.lastPreparation;
+  }
+
   // --- Conversations & Messages ---
   public getConversations(): Conversation[] {
     return this.data.conversations;
@@ -1225,7 +1240,7 @@ class DatabaseManager {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
-          if (m.status === 'pendiente') messagesPending++;
+          if (m.status === 'pendiente' || m.status === 'preparado') messagesPending++;
           else if (m.status === 'enviado') messagesSent++;
           else if (m.status === 'fallido') messagesFailed++;
           else if (m.status === 'resultado_desconocido') messagesUnknown++;
