@@ -110,7 +110,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
             <Send className="w-5 h-5 text-blue-600" />
-            <span>Gestor de Campañas de Prospección</span>
+            <span>Campañas</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Definición de objetivos, ventanas horarias por huso horario del destinatario, plantillas de mensajes y bloqueos de seguridad.
@@ -591,3 +591,4 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
     </div>
   );
 };
+

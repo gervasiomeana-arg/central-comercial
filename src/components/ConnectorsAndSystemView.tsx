@@ -82,7 +82,7 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
           <div>
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
               <Settings className="w-5 h-5 text-blue-600" />
-              <span>Conectores Externos, Automatizaciones y Auditoría</span>
+              <span>Conexiones y actividad</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Estado real de telecomunicaciones, motor programado de fondo y registro estructurado de eventos.

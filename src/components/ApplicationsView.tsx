@@ -172,10 +172,10 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
         <div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
             <Layers className="w-5 h-5 text-blue-600" />
-            <span>Fichas de Aplicaciones Comerciales</span>
+            <span>Tus aplicaciones</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configuración oficial de precios, funcionalidades aprobadas, FAQs autorizadas y estado de campañas.
+            Servicios, precios y condiciones de cada aplicación.
           </p>
         </div>
 
@@ -828,3 +828,4 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
     </div>
   );
 };
+
