@@ -1,3 +1,4 @@
+import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import fs from 'fs';
 import { prepareCampaign } from './campaign-preparation.js';
@@ -5,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type {
   Application,
+  AccountCharge,
   Contact,
   Campaign,
   Conversation,
@@ -33,6 +35,7 @@ export interface DatabaseSchema {
   updatedAt: string;
   scheduler: SchedulerState;
   applications: Application[];
+  accountCharges: AccountCharge[];
   contacts: Contact[];
   campaigns: Campaign[];
   conversations: Conversation[];
@@ -259,6 +262,7 @@ class DatabaseManager {
           updatedAt: parsed.updatedAt || new Date().toISOString(),
           scheduler: parsed.scheduler || INITIAL_SCHEDULER,
           applications: parsed.applications || INITIAL_APPLICATIONS,
+          accountCharges: parsed.accountCharges || [],
           contacts: parsed.contacts || [],
           campaigns: parsed.campaigns || INITIAL_CAMPAIGNS,
           conversations: parsed.conversations || [],
@@ -288,6 +292,7 @@ class DatabaseManager {
       updatedAt: new Date().toISOString(),
       scheduler: INITIAL_SCHEDULER,
       applications: INITIAL_APPLICATIONS,
+      accountCharges: [],
       contacts: [],
       campaigns: INITIAL_CAMPAIGNS,
       conversations: [],
@@ -894,6 +899,20 @@ class DatabaseManager {
   }
 
   public saveSubscription(sub: ClientSubscription): ClientSubscription {
+    if (!this.data.clients.some(c => c.id === sub.clientId) || !this.getApplicationById(sub.appId)) throw new Error('Cliente o aplicación no encontrados.');
+    sub.ledgerEnabled = sub.ledgerEnabled === true;
+    if (!['activa', 'en_prueba', 'vencida', 'cancelada'].includes(sub.status) || !['mensual', 'anual', 'trimestral', 'prueba', 'unico'].includes(sub.billingInterval)) throw new Error('Estado o período de suscripción no válido.');
+    if (!validDay(sub.startDate) || !validDay(sub.renewalDate) || sub.renewalDate < sub.startDate || !/^[A-Z]{3}$/.test(sub.currency) || cents(sub.agreedAmount) < (sub.billingInterval === 'prueba' ? 0 : 1)) throw new Error('Revisá fechas, moneda e importe de la suscripción.');
+    const previous = this.data.subscriptions.find(s => s.id === sub.id);
+    if (previous?.ledgerStartDate) {
+      for (const field of ['clientId', 'appId', 'currency', 'startDate', 'billingInterval'] as const) if (sub[field] !== previous[field]) throw new Error('Para cambiar cliente, aplicación, moneda o período, registrá otra suscripción. Se conserva la cuenta anterior.');
+    }
+    if (sub.ledgerEnabled) {
+      sub.ledgerStartDate = previous?.ledgerEnabled ? previous.ledgerStartDate : (sub.startDate > accountingDay() ? sub.startDate : accountingDay());
+      validateLedgerSubscription(sub);
+      if (this.getApplicationById(sub.appId)?.status !== 'lista') throw new Error('La aplicación debe estar lista antes de registrar vencimientos automáticos.');
+    } else if (previous?.ledgerStartDate) sub.ledgerStartDate = previous.ledgerStartDate;
+    if (previous?.ledgerEnabled) this.processLedger();
     const index = this.data.subscriptions.findIndex(s => s.id === sub.id);
     if (index >= 0) {
       this.data.subscriptions[index] = sub;
@@ -903,7 +922,51 @@ class DatabaseManager {
       this.addLog('info', 'pagos', `Nueva suscripción registrada: ${sub.planName} (${sub.currency} ${sub.agreedAmount})`);
     }
     this.save();
+    if (sub.ledgerEnabled) this.processLedger();
     return sub;
+  }
+
+  public getAccountCharges(): AccountCharge[] { return this.data.accountCharges; }
+
+  public processLedger() {
+    const result = generateCharges(this.data.subscriptions.filter(s => this.getApplicationById(s.appId)?.status === 'lista' && this.data.clients.some(c => c.id === s.clientId)), this.data.accountCharges);
+    this.data.accountCharges = result.charges;
+    let changed = result.created > 0;
+    for (const client of this.data.clients) {
+      const ledger = clientLedger(client.id, result.charges, this.data.payments, this.data.subscriptions);
+      for (const row of ledger.rows) {
+        const id = `task-ledger-${row.id}`;
+        const task = this.data.tasks.find(t => t.id === id);
+        if (row.state === 'vencido' && !task) {
+          this.data.tasks.push({ id, title: `Vencimiento: ${client.orgName} · ${row.currency} ${row.remaining}`, description: `Revisar cuenta corriente. Vencimiento ${row.dueDate}. No se realizó ningún cobro ni se envió un aviso.`, priority: 'media', category: 'vencimiento', relatedType: 'pago', relatedId: row.id, dueDate: row.dueDate, status: 'pendiente', createdAt: new Date().toISOString() }); changed = true;
+        } else if (task?.status === 'pendiente' && ['pagado', 'anulado'].includes(row.state)) { task.status = 'completada'; changed = true; }
+      }
+    }
+    if (result.created) this.addLog('info', 'pagos', `${result.created} vencimientos registrados en cuenta corriente. Sin cargos bancarios.`);
+    if (changed) this.save();
+    return { created: result.created, issues: result.issues };
+  }
+
+  public voidAccountCharge(id: string, reason: string, actor: string) {
+    const charge = this.data.accountCharges.find(c => c.id === id);
+    if (!charge) throw new Error('Vencimiento no encontrado.');
+    if (typeof reason !== 'string' || reason.trim().length < 3 || reason.length > 500) throw new Error('Indicá el motivo de anulación (3 a 500 caracteres).');
+    if (charge.status === 'anulado') return charge;
+    charge.status = 'anulado'; charge.voidReason = reason.trim(); charge.voidedAt = new Date().toISOString(); charge.voidedBy = actor;
+    this.addLog('warning', 'pagos', 'Vencimiento anulado sin borrar su registro.', { chargeId: id, reason: charge.voidReason, actor });
+    this.processLedger(); this.save(); return charge;
+  }
+
+  public assignPaymentToSubscription(paymentId: string, subscriptionId: string, actor: string) {
+    const payment = this.data.payments.find(p => p.id === paymentId);
+    const sub = this.data.subscriptions.find(s => s.id === subscriptionId);
+    if (!payment || !sub || payment.status !== 'confirmado') throw new Error('Seleccioná un pago confirmado y una suscripción existente.');
+    if (payment.clientId !== sub.clientId || payment.appId !== sub.appId || payment.currency !== sub.currency) throw new Error('El pago y la suscripción deben coincidir en cliente, aplicación y moneda.');
+    if (cents(payment.amount) <= 0) throw new Error('El pago debe tener un importe válido mayor que cero.');
+    const previousSubscriptionId = payment.subscriptionId;
+    payment.subscriptionId = sub.id; payment.ledgerAssignedAt = new Date().toISOString();
+    this.addLog('info', 'pagos', 'Pago confirmado asignado a cuenta corriente.', { paymentId, subscriptionId, previousSubscriptionId, actor });
+    this.processLedger(); this.save(); return payment;
   }
 
   public getPayments(): PaymentRecord[] {
@@ -918,11 +981,17 @@ class DatabaseManager {
     if (typeof payment.currency !== 'string' || !/^[A-Z]{3}$/.test(payment.currency)) {
       throw new Error('La moneda debe ser un código de tres letras mayúsculas, por ejemplo USD.');
     }
+    if (cents(payment.amount) <= 0) throw new Error('El pago debe tener un importe válido mayor que cero.');
     const index = this.data.payments.findIndex(p => p.id === payment.id);
     if (index >= 0) {
       this.data.payments[index] = payment;
       this.addLog('info', 'pagos', `Pago ID ${payment.id} modificado. Estado: ${payment.status}`);
     } else {
+      if (payment.subscriptionId) {
+        const sub = this.data.subscriptions.find(s => s.id === payment.subscriptionId);
+        if (!sub || sub.clientId !== payment.clientId || sub.appId !== payment.appId || sub.currency !== payment.currency) throw new Error('La suscripción del pago debe coincidir en cliente, aplicación y moneda.');
+        payment.ledgerAssignedAt = new Date().toISOString();
+      } else delete payment.ledgerAssignedAt;
       payment.createdAt = new Date().toISOString();
       // ALWAYS FORCE PENDING MANUAL CONFIRMATION ON NEW PAYMENTS
       payment.status = 'pendiente_confirmacion_manual';

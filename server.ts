@@ -791,6 +791,19 @@ adminRouter.post('/clients/convert-from-contact', (req, res) => {
   }
 });
 
+adminRouter.get('/account-charges', (req, res) => res.json(db.getAccountCharges()));
+adminRouter.post('/account-charges/reconcile', (req, res) => {
+  try { res.json(db.processLedger()); } catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+adminRouter.post('/account-charges/:id/void', (req, res) => {
+  try { res.json(db.voidAccountCharge(req.params.id, req.body.reason, (req as any).admin?.email || 'Operador Central Comercial')); }
+  catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+adminRouter.post('/payments/:id/assign-subscription', (req, res) => {
+  try { res.json(db.assignPaymentToSubscription(req.params.id, req.body.subscriptionId, (req as any).admin?.email || 'Operador Central Comercial')); }
+  catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
 // Subscriptions
 adminRouter.get('/subscriptions', (req, res) => {
   res.json(db.getSubscriptions());
@@ -878,6 +891,7 @@ adminRouter.post('/payments/:id/review', (req, res) => {
     payment.reviewedAt = new Date().toISOString();
 
     db.savePayment(payment);
+    db.processLedger();
 
     // If confirmed/rejected, complete pending task
     const task = db.getTasks().find(t => t.relatedId === payment.id && t.status === 'pendiente');

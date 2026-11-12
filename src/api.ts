@@ -1,5 +1,6 @@
 import type {
   Application,
+  AccountCharge,
   Contact,
   Campaign,
   Conversation,
@@ -208,6 +209,11 @@ export const api = {
     }),
 
   reviewDraft: (conversationId: string, messageId: string, input: { action: 'edit' | 'approve' | 'reject'; expectedRevision: number; content?: string }) => fetchJson(`/api/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/review`, { method: 'POST', body: JSON.stringify(input) }),
+
+  getAccountCharges: () => fetchJson<AccountCharge[]>('/api/account-charges'),
+  reconcileLedger: () => fetchJson('/api/account-charges/reconcile', { method: 'POST' }),
+  voidAccountCharge: (id: string, reason: string) => fetchJson(`/api/account-charges/${encodeURIComponent(id)}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  assignPayment: (id: string, subscriptionId: string) => fetchJson(`/api/payments/${encodeURIComponent(id)}/assign-subscription`, { method: 'POST', body: JSON.stringify({ subscriptionId }) }),
 
   // Conversations
   getConversations: () => fetchJson<Conversation[]>('/api/conversations'),

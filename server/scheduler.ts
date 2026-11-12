@@ -45,6 +45,8 @@ class CommercialScheduler {
         return;
       }
 
+      db.processLedger();
+
       // Check tasks due
       const now = new Date();
       const contacts = db.getContacts();

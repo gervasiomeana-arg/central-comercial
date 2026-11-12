@@ -1,3 +1,5 @@
+import { AccountLedgerPanel } from './AccountLedgerPanel.js';
+import { accountingDay, addBillingMonths } from '../ledger.js';
 import React, { useState } from 'react';
 import {
   CreditCard,
@@ -19,11 +21,16 @@ import type {
   Client,
   ClientSubscription,
   PaymentRecord,
-  Application
+  Application,
+  AccountCharge
 } from '../types.js';
 
 interface ClientsViewProps {
   clients: Client[];
+  accountCharges?: AccountCharge[];
+  onReconcileLedger?: () => Promise<void>;
+  onVoidCharge?: (id: string, reason: string) => Promise<void>;
+  onAssignPayment?: (id: string, subId: string) => Promise<void>;
   subscriptions: ClientSubscription[];
   payments: PaymentRecord[];
   applications: Application[];
@@ -35,6 +42,7 @@ interface ClientsViewProps {
 
 export const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
+  accountCharges = [], onReconcileLedger, onVoidCharge, onAssignPayment,
   subscriptions,
   payments,
   applications,
@@ -50,37 +58,56 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [subClientId, setSubClientId] = useState(clients[0]?.id || '');
   const [subAppId, setSubAppId] = useState(applications[0]?.id || '');
-  const [subPlanName, setSubPlanName] = useState('Club Pro');
+  const [subPlanName, setSubPlanName] = useState('');
   const [subCurrency, setSubCurrency] = useState('USD');
-  const [subAmount, setSubAmount] = useState<number>(69);
-  const [subInterval, setSubInterval] = useState<'mensual' | 'anual' | 'trimestral' | 'prueba'>('mensual');
+  const [subAmount, setSubAmount] = useState<number>(0);
+  const [subInterval, setSubInterval] = useState<ClientSubscription['billingInterval']>('mensual');
   const [subStatus, setSubStatus] = useState<ClientSubscription['status']>('activa');
+
+  const [subLedgerEnabled, setSubLedgerEnabled] = useState(true);
+  const [subPlanId, setSubPlanId] = useState('');
+
+  const [subStartDate, setSubStartDate] = useState(accountingDay());
+  const [subRenewalDate, setSubRenewalDate] = useState(addBillingMonths(accountingDay(), 1));
+  const trialDays = applications.find(a => a.id === subAppId)?.trialVerified ? applications.find(a => a.id === subAppId)?.trialDurationDays : null;
+  React.useEffect(() => {
+    if (!subStartDate) return;
+    try {
+      if (subInterval === 'unico') setSubRenewalDate(subStartDate);
+      else if (subInterval === 'prueba') {
+        if (trialDays) { const end = new Date(subStartDate + 'T12:00:00Z'); end.setUTCDate(end.getUTCDate() + trialDays); setSubRenewalDate(end.toISOString().slice(0, 10)); }
+        else setSubRenewalDate('');
+      } else setSubRenewalDate(addBillingMonths(subStartDate, subInterval === 'anual' ? 12 : subInterval === 'trimestral' ? 3 : 1));
+    } catch { setSubRenewalDate(''); }
+  }, [subStartDate, subInterval, subAppId, trialDays]);
 
   // New Payment Modal
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [payClientId, setPayClientId] = useState(clients[0]?.id || '');
   const [payAppId, setPayAppId] = useState(applications[0]?.id || '');
-  const [payAmount, setPayAmount] = useState<number>(69);
+  const [payAmount, setPayAmount] = useState<number>(0);
   const [payCurrency, setPayCurrency] = useState('USD');
   const [payMethod, setPayMethod] = useState<PaymentRecord['method']>('transferencia_bancaria');
+  const [paySubscriptionId, setPaySubscriptionId] = useState('');
   const [payRef, setPayRef] = useState('');
-  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payDate, setPayDate] = useState(accountingDay());
 
   // Payment Review Modal
   const [reviewingPayment, setReviewingPayment] = useState<PaymentRecord | null>(null);
   const [auditorNote, setAuditorNote] = useState('');
   const [auditorName, setAuditorName] = useState('Administrador Comercial');
 
-  const selectedClient = clients.find(c => c.id === selectedClientId) || clients[0] || null;
+  const displayedClients = selectedAppFilter === 'all' ? clients : clients.filter(c => subscriptions.some(s => s.clientId === c.id && s.appId === selectedAppFilter));
+  const selectedClient = displayedClients.find(c => c.id === selectedClientId) || displayedClients[0] || null;
 
   // Subscriptions for selected client
   const clientSubscriptions = selectedClient
-    ? subscriptions.filter(s => s.clientId === selectedClient.id)
+    ? subscriptions.filter(s => s.clientId === selectedClient.id && (selectedAppFilter === 'all' || s.appId === selectedAppFilter))
     : [];
 
   // Payments for selected client
   const clientPayments = selectedClient
-    ? payments.filter(p => p.clientId === selectedClient.id)
+    ? payments.filter(p => p.clientId === selectedClient.id && (selectedAppFilter === 'all' || p.appId === selectedAppFilter))
     : [];
 
   // Group payments by currency for selected client (Never mix without conversion)
@@ -104,13 +131,14 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
         id: `sub-${Date.now()}`,
         clientId: subClientId,
         appId: subAppId,
-        planId: `plan-${Date.now()}`,
+        planId: subPlanId || `plan-${Date.now()}`,
+        ledgerEnabled: subLedgerEnabled && subInterval !== 'prueba',
         planName: subPlanName,
         currency: subCurrency,
         agreedAmount: subAmount,
         billingInterval: subInterval,
-        startDate: new Date().toISOString().split('T')[0],
-        renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        startDate: subStartDate,
+        renewalDate: subRenewalDate,
         status: subStatus
       });
       setIsSubModalOpen(false);
@@ -126,6 +154,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
     try {
       await onSavePayment({
         clientId: payClientId,
+        subscriptionId: paySubscriptionId || undefined,
         appId: payAppId,
         amount: Number(payAmount),
         currency: payCurrency,
@@ -227,10 +256,10 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
           {/* Client selector (4 cols) */}
           <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Clientes Oficiales Registrados ({clients.length})
+              Clientes registrados ({displayedClients.length})
             </h2>
 
-            {clients.length === 0 ? (
+            {displayedClients.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-lg">
                 <Users className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                 <p>No hay clientes convertidos aún.</p>
@@ -240,7 +269,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
               </div>
             ) : (
               <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1">
-                {clients.map(client => {
+                {displayedClients.map(client => {
                   const isSelected = selectedClient?.id === client.id;
                   const clientSubs = subscriptions.filter(s => s.clientId === client.id);
 
@@ -360,6 +389,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                   </div>
                 </div>
 
+                {onReconcileLedger && onVoidCharge && onAssignPayment && <AccountLedgerPanel clientId={selectedClient.id} charges={accountCharges.filter(c => selectedAppFilter === 'all' || c.appId === selectedAppFilter)} payments={clientPayments} subscriptions={clientSubscriptions} applications={applications} onReconcile={onReconcileLedger} onVoid={onVoidCharge} onAssign={onAssignPayment} onSaveSubscription={onSaveSubscription}/>}
                 {/* Payments & Receipts Ledger */}
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-3">
                   <div className="flex justify-between items-center">
@@ -581,7 +611,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Aplicación Comercial *</label>
                 <select
                   value={subAppId}
-                  onChange={e => setSubAppId(e.target.value)}
+                  onChange={e => { setSubAppId(e.target.value); setSubPlanId(''); setSubPlanName(''); setSubAmount(0); }}
                   className="w-full border rounded p-2"
                 >
                   {applications.map(a => (
@@ -590,6 +620,11 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 </select>
               </div>
 
+              <label className="block text-xs font-semibold">Plan del catálogo<select className="w-full border rounded p-2 mt-1" value={subPlanId} onChange={e => {
+                const plan = applications.find(a => a.id === subAppId)?.plans.find(p => p.id === e.target.value);
+                setSubPlanId(e.target.value);
+                if (plan && plan.price !== null) { setSubPlanName(plan.name); setSubAmount(plan.price); setSubCurrency(plan.currency); if (plan.interval !== 'por_definir') setSubInterval(plan.interval); }
+              }}><option value="">Importe acordado con el cliente</option>{applications.find(a => a.id === subAppId)?.plans.filter(p => p.verified && !p.archived && p.price !== null).map(p => <option key={p.id} value={p.id}>{p.name} · {p.currency} {p.price} / {p.interval}</option>)}</select></label>
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Nombre del Plan *</label>
                 <input
@@ -623,6 +658,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                     type="number"
                     required
                     value={subAmount}
+                    min={subInterval === 'prueba' ? '0' : '0.01'} step="0.01"
                     onChange={e => setSubAmount(Number(e.target.value))}
                     className="w-full border rounded p-2 font-bold"
                   />
@@ -640,6 +676,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                     <option value="mensual">Mensual</option>
                     <option value="anual">Anual</option>
                     <option value="trimestral">Trimestral</option>
+                    <option value="unico">Pago único</option>
                     <option value="prueba">Prueba gratuita</option>
                   </select>
                 </div>
@@ -659,6 +696,8 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3 text-xs"><label>Inicio<input required type="date" className="w-full border rounded p-2 mt-1" value={subStartDate} onChange={e => setSubStartDate(e.target.value)}/></label><label>Próxima renovación / fin de prueba<input required type="date" min={subStartDate} className="w-full border rounded p-2 mt-1" readOnly={subLedgerEnabled && subInterval !== 'prueba'} value={subRenewalDate} onChange={e => setSubRenewalDate(e.target.value)}/></label></div>
+              <label className="flex items-start gap-3 text-xs"><input type="checkbox" checked={subLedgerEnabled && subInterval !== 'prueba'} disabled={subInterval === 'prueba'} onChange={e => setSubLedgerEnabled(e.target.checked)}/><span>Registrar vencimientos automáticamente desde hoy. No realiza débitos ni confirma pagos.</span></label>
               <div className="pt-3 border-t flex justify-end space-x-2">
                 <button
                   type="button"
@@ -693,7 +732,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Cliente *</label>
                 <select
                   value={payClientId}
-                  onChange={e => setPayClientId(e.target.value)}
+                  onChange={e => { setPayClientId(e.target.value); setPaySubscriptionId(''); }}
                   className="w-full border rounded p-2"
                 >
                   {clients.map(c => (
@@ -706,7 +745,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Aplicación Comercial *</label>
                 <select
                   value={payAppId}
-                  onChange={e => setPayAppId(e.target.value)}
+                  onChange={e => { setPayAppId(e.target.value); setPaySubscriptionId(''); }}
                   className="w-full border rounded p-2"
                 >
                   {applications.map(a => (
@@ -715,12 +754,13 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 </select>
               </div>
 
+              <label className="block text-xs font-semibold">Aplicar a suscripción<select className="w-full border rounded p-2 mt-1" value={paySubscriptionId} onChange={e => setPaySubscriptionId(e.target.value)}><option value="">Sin asignar por ahora</option>{subscriptions.filter(s => s.clientId === payClientId && s.appId === payAppId && s.currency === payCurrency).map(s => <option key={s.id} value={s.id}>{s.planName}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">Moneda *</label>
                   <select
                     value={payCurrency}
-                    onChange={e => setPayCurrency(e.target.value)}
+                    onChange={e => { setPayCurrency(e.target.value); setPaySubscriptionId(''); }}
                     className="w-full border rounded p-2 font-bold"
                   >
                     <option value="USD">USD</option>
