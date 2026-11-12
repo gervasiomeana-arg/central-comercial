@@ -339,6 +339,8 @@ export default function App() {
           <>
             {currentTab === 'dashboard' && (
               <DashboardView
+                onOpenGuidedCampaign={() => setCurrentTab('campaigns')}
+                onOpenEmailSandbox={() => setCurrentTab('system')}
                 metrics={metrics}
                 applications={applications}
                 tasks={tasks}
@@ -459,3 +461,4 @@ export default function App() {
     </div>
   );
 }
+

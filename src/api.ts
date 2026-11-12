@@ -76,6 +76,10 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),
+  startRealChannelTests: (channels: string[]) => fetchJson<any>('/api/channel-tests', {
+    method: 'POST', body: JSON.stringify({ channels })
+  }),
   // Public Auth & Status
   getStatus: () => fetchJson<{
     appName: string;
@@ -257,3 +261,4 @@ export const api = {
   // Logs
   getLogs: (level = 'all', module = 'all') => fetchJson<AuditLog[]>(`/api/logs?level=${level}&module=${module}`)
 };
+

@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local messaging sessions and test evidence
+channel-worker/private-state/
+channel-worker/.wwebjs_auth/
+channel-worker/.wwebjs_cache/
+data/channel_test_jobs.json*
+

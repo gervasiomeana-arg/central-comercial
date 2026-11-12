@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { RealChannelTests } from './RealChannelTests.js';
 import {
   Settings,
   Server,
@@ -74,6 +75,7 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
 
   return (
     <div className="space-y-6">
+      <RealChannelTests />
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -570,3 +572,4 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
     </div>
   );
 };
+

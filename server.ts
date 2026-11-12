@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { scheduler } from './server/scheduler.js';
+import { ChannelTestQueue, registerWorkerTestRoutes } from './server/channelTests.js';
 import { analyzeAndSuggestResponse } from './server/ai.js';
 import { authManager, requireAdminAuth, passwordlessTestingEnabled, TESTING_ADMIN } from './server/auth.js';
 import { testConnectorReal } from './server/connectors.js';
@@ -21,6 +22,9 @@ const PORT = 3000;
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+const channelTests = new ChannelTestQueue(path.join(__dirname, 'data/channel_test_jobs.json'));
+registerWorkerTestRoutes(app, channelTests);
 
 // Start background task runner
 scheduler.start(30000);
@@ -179,6 +183,23 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+
+adminRouter.get('/channel-tests', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ...channelTests.status(), workerConfigured: (process.env.CHANNEL_TEST_WORKER_KEY || '').length >= 32 });
+});
+
+adminRouter.post('/channel-tests', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if ((process.env.CHANNEL_TEST_WORKER_KEY || '').length < 32) {
+    return res.status(409).json({ error: 'Falta configurar la clave privada del ejecutor. No se envió ningún mensaje.' });
+  }
+  if (!Array.isArray(req.body.channels) || req.body.channels.length < 1 || req.body.channels.length > 2) {
+    return res.status(400).json({ error: 'Seleccione uno o dos canales.' });
+  }
+  try { return res.json({ jobs: channelTests.enqueue(req.body.channels) }); }
+  catch (error: any) { return res.status(409).json({ error: error.message }); }
+});
 
 // Automation Pipeline Status: explicitly separating each stage (Requirement 3)
 adminRouter.get('/automation/pipeline', (req, res) => {
@@ -954,3 +975,4 @@ async function startServer() {
 startServer().catch(err => {
   console.error('Error starting Central Comercial server:', err);
 });
+
