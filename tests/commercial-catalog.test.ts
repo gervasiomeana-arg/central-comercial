@@ -39,11 +39,11 @@ test('repeat startup does not duplicate products or overwrite later owner edits'
   assert.deepEqual(next.applications, first);
 });
 test('known seed prices are archived without deletion and excluded from commercial answers', () => {
-  const previous = { ...commercialCatalog()[0], commercialCatalogVersion: undefined, plans: [{ id: 'ov-plan-club-basico', name: 'Club Básico (Borrador inicial)', price: 29, currency: 'USD', interval: 'mensual' as const, features: [], verified: false }] };
+  const previous = { ...commercialCatalog()[0], commercialCatalogVersion: undefined, plans: [{ id: 'ov-plan-club-basico', name: 'Club Básico', price: 29, currency: 'USD', interval: 'mensual' as const, features: [], verified: false }] };
   const app = mergeCommercialCatalog([previous]).applications[0];
   assert.equal(app.plans[0].archived, true);
   assert.equal(app.plans[0].price, 29);
-  assert.ok(!verifiedPriceSummary(app).includes('Borrador inicial'));
+  assert.ok(!verifiedPriceSummary(app).includes('Club Básico'));
   assert.ok(verifiedPriceSummary(app).includes('USD 20'));
 });
 test('Brasil remains separate from the general USD table and never becomes BRL', () => {
@@ -75,4 +75,12 @@ test('database startup persists the catalog while preserving commercial records'
     assert.equal(saved.applications.length, 4);
     for (const field of ['contacts', 'campaigns', 'conversations', 'clients', 'subscriptions', 'payments'] as const) assert.deepEqual(saved[field], original[field]);
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+test('archives the historical annual NeuroPlaneta seed without losing its record', () => {
+  const previous = { ...commercialCatalog()[2], commercialCatalogVersion: '2026-11-12.1', plans: [{ id: 'old-custom-seed-id', name: 'Plan Familia Anual', price: 99, currency: 'USD', interval: 'anual' as const, features: [], verified: false }] };
+  const app = mergeCommercialCatalog([previous]).applications[0];
+  assert.equal(app.plans[0].archived, true);
+  assert.equal(app.plans[0].price, 99);
+  assert.ok(!verifiedPriceSummary(app).includes('Anual'));
 });
