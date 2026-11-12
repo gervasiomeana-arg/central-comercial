@@ -1,6 +1,10 @@
 export type AppStatus = 'en_desarrollo' | 'lista' | 'pausada';
 
 export interface PlanItem {
+  archived?: boolean;
+  sourceUrl?: string;
+  verifiedAt?: string;
+  market?: string;
   id: string;
   name: string;
   price: number | null; // null if unverified / not yet set
@@ -35,6 +39,8 @@ export interface FeatureItem {
 }
 
 export interface Application {
+  commercialCatalogVersion?: string;
+  commercialNotes?: string;
   id: string;
   name: string;
   slug: string;
@@ -178,6 +184,12 @@ export type MessageStatus =
   | 'enviado';
 
 export interface Message {
+  draftRevision?: number;
+  approvedRecipient?: string;
+  reviewStatus?: 'pending' | 'approved' | 'rejected';
+  reviewedAt?: string;
+  reviewedBy?: string;
+  editedAt?: string;
   id: string;
   conversationId: string;
   direction: 'inbound' | 'outbound';

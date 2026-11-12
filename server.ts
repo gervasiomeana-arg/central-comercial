@@ -1,3 +1,4 @@
+import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
@@ -694,6 +695,30 @@ adminRouter.post('/conversations/ai-suggest', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Edit or review an existing prepared email; no sending operation is performed.
+adminRouter.post('/conversations/:id/messages/:messageId/review', (req, res) => {
+  const conversation = db.getConversationById(req.params.id);
+  const index = conversation?.messages.findIndex(m => m.id === req.params.messageId) ?? -1;
+  if (!conversation || index < 0) return res.status(404).json({ error: 'Borrador no encontrado.' });
+  try {
+    const { action, expectedRevision, content } = req.body;
+    const updated = reviewEmailDraft(conversation.messages[index], { action, expectedRevision, content }, {
+      app: db.getApplicationById(conversation.appId), contact: db.getContactById(conversation.contactId),
+      actor: (req as any).admin?.email || 'Operador Central Comercial'
+    });
+    conversation.messages[index] = updated;
+    if (!conversation.messages.some(m => m.direction === 'inbound')) conversation.requiresHumanIntervention = conversation.messages.some(m => m.direction === 'outbound' && m.status === 'preparado' && (!m.reviewStatus || m.reviewStatus === 'pending'));
+    db.saveConversation(conversation);
+    if (conversation.campaignId) {
+      const campaign = db.getCampaignById(conversation.campaignId);
+      if (campaign) campaign.stats.messagesPending = db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && m.reviewStatus !== 'rejected').length;
+    }
+    db.addLog('info', 'conversaciones', 'Revisión de borrador de email guardada. Sin envío.', { conversationId: conversation.id, messageId: updated.id, action, revision: updated.draftRevision });
+    db.save();
+    res.json(updated);
+  } catch (error: any) { res.status(error instanceof DraftReviewError ? error.status : 500).json({ error: error.message }); }
 });
 
 // Add message to conversation

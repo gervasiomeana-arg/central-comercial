@@ -1,3 +1,4 @@
+import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
 import React, { useState } from 'react';
 import {
   MessageSquare,
@@ -43,6 +44,7 @@ interface ConversationsViewProps {
   }) => Promise<any>;
   onCreateConversation: (conv: Partial<Conversation>) => Promise<Conversation>;
   selectedAppFilter: string;
+  onReviewDraft?: (conversationId: string, messageId: string, input: DraftReviewInput) => Promise<void>;
 }
 
 export const ConversationsView: React.FC<ConversationsViewProps> = ({
@@ -54,6 +56,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   onAiSuggest,
   onCreateConversation,
   selectedAppFilter,
+  onReviewDraft,
 }) => {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     conversations[0]?.id || null
@@ -77,7 +80,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     return matchesApp && matchesClassification;
   });
 
-  const activeConv = conversations.find(c => c.id === selectedConvId) || filteredConversations[0] || null;
+  const activeConv = filteredConversations.find(c => c.id === selectedConvId) || filteredConversations[0] || null;
   const activeContact = activeConv ? contacts.find(c => c.id === activeConv.contactId) : null;
   const activeApp = activeConv ? applications.find(a => a.id === activeConv.appId) : null;
   const activeCampaign = activeConv?.campaignId ? campaigns.find(c => c.id === activeConv.campaignId) : null;
@@ -363,6 +366,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         </div>
 
+                        {onReviewDraft && msg.direction === 'outbound' && msg.channel === 'email' && msg.status === 'preparado' && <DraftReviewPanel key={`${msg.id}-${msg.draftRevision || 0}`} message={msg} recipient={activeContact?.email} onReview={input => onReviewDraft(activeConv.id, msg.id, input)}/>}
                         {/* Status tracking flag (crucial: zero fake confirmation) */}
                         {!isInbound && (
                           <div className="mt-1 flex items-center space-x-1 text-[10px]">

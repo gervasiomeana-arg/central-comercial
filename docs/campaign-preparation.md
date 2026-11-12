@@ -13,3 +13,17 @@ Variables: `{nombre}`, `{organizacion}`, `{cargo}`, `{pais}`, `{aplicacion}`, `{
 La última preparación muestra cantidad de borradores, bloqueos y exclusiones. Los borradores se contabilizan como pendientes, nunca como enviados. No se inicia WhatsApp Web ni se crean contactos en WhatsApp.
 
 Verificación: `npm run test:campaigns`, `npm run test:channels`, `npm run lint`, `npm run build`.
+
+## Revisión de notas
+
+En Conversaciones, cada borrador preparado por email permite editar, aprobar o descartar la nota. Una edición invalida la aprobación anterior. La revisión conserva fecha, operador, revisión numérica y destinatario aprobado; no genera evidencia de envío ni cambia el estado comercial del contacto. Las solicitudes con una revisión anterior se rechazan para evitar sobrescribir cambios recientes.
+
+La aprobación comprueba nuevamente que la aplicación y el contacto estén habilitados, que el correo sea válido y que la fuente tenga revisión. Descartar conserva la nota y la excluye del contador de pendientes. La preparación automática no regenera notas descartadas de la misma campaña. Aprobar todavía no envía el correo.
+
+## Catálogo de cuatro aplicaciones
+
+Se incorporan Open Voley, Visibility AI, NeuroPlaneta y Funeraria también en bases existentes. La migración versionada conserva IDs, contactos, conversaciones, cuentas, tarifas personalizadas y enlaces propios. Los precios antiguos de ejemplo conocidos se archivan sin borrar sus registros. Las nuevas instalaciones ya no contienen esos precios ficticios.
+
+Precios consultados el 12/11/2026: Open Voley DT ARS 30.000 / USD 20; Club Pro ARS 52.500 / USD 35; Federación ARS 148.500 / USD 99 por mes. Brasil tiene tabla independiente en USD con precio a consultar. Visibility: Diagnóstico USD 30 único; Monitor USD 50, Growth USD 100, PRO USD 200 y Agency USD 350 por mes. NeuroPlaneta: Familia USD 20 por mes y prueba de 2 días. Funeraria se registra sin tarifa de lanzamiento y conserva el estado en desarrollo.
+
+Cada plan importado incluye fuente, fecha y mercado. Open Voley y NeuroPlaneta fueron comprobados en la página publicada; Visibility fue contrastado con src/config/markets.ts porque la web publicada presenta acceso privado. Diagnóstico conserva el cobro único aprobado por el propietario. La respuesta sin Gemini también usa el catálogo verificado. No se contrata ningún servicio ni se crean cargos.

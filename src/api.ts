@@ -207,6 +207,8 @@ export const api = {
       body: JSON.stringify(params)
     }),
 
+  reviewDraft: (conversationId: string, messageId: string, input: { action: 'edit' | 'approve' | 'reject'; expectedRevision: number; content?: string }) => fetchJson(`/api/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/review`, { method: 'POST', body: JSON.stringify(input) }),
+
   // Conversations
   getConversations: () => fetchJson<Conversation[]>('/api/conversations'),
   getConversation: (id: string) => fetchJson<Conversation>(`/api/conversations/${id}`),
