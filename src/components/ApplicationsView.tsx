@@ -286,6 +286,7 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                   </div>
                 )}
 
+                {app.commercialNotes && <p className="mt-4 p-3 border border-slate-200 rounded-lg text-xs text-slate-600 leading-relaxed">{app.commercialNotes}</p>}
                 {/* Target Audience & Target Countries */}
                 <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
@@ -330,11 +331,11 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                     </span>
                   </div>
 
-                  {app.plans.length === 0 ? (
+                  {app.plans.filter(p => !p.archived).length === 0 ? (
                     <p className="text-xs text-slate-400 italic">No hay planes configurados todavía.</p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {app.plans.map(p => (
+                      {app.plans.filter(p => !p.archived).map(p => (
                         <div
                           key={p.id}
                           className={`p-2.5 rounded-lg border text-xs space-y-1 ${
@@ -360,6 +361,8 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                             </span>
                           </div>
 
+                          {p.market && <p className="text-slate-600">Mercado: {p.market}</p>}
+                          {p.sourceUrl && <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">Ver fuente del precio</a>}
                           <p className="text-[11px] text-slate-500 line-clamp-1">
                             {p.features.join(' · ')}
                           </p>
@@ -616,7 +619,7 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                   </button>
                 </div>
 
-                {editingApp.plans.map((plan, idx) => (
+                {editingApp.plans.map((plan, idx) => !plan.archived && (
                   <div key={plan.id || idx} className={`p-3 border rounded-lg space-y-2 ${
                     plan.verified ? 'bg-emerald-50/20 border-emerald-300' : 'bg-slate-50 border-slate-200'
                   }`}>

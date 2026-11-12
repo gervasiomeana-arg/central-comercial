@@ -1,3 +1,4 @@
+import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import fs from 'fs';
 import { prepareCampaign } from './campaign-preparation.js';
 import path from 'path';
@@ -44,221 +45,7 @@ export interface DatabaseSchema {
 }
 
 // Initial applications: Notice all unverified plans and FAQs are explicitly marked verified: false!
-const INITIAL_APPLICATIONS: Application[] = [
-  {
-    id: 'app-open-voley',
-    name: 'Open Voley',
-    slug: 'open-voley',
-    description: 'Plataforma de scouting táctico y análisis estadístico de voleibol para entrenadores, cuerpos técnicos, clubes y asociaciones.',
-    targetAudience: 'Entrenadores de voleibol profesional y formativo, analistas de rendimiento, directores deportivos de clubes, asociaciones y federaciones.',
-    countries: ['Brasil', 'Argentina', 'España', 'Italia', 'México', 'Colombia'],
-    languages: ['pt-BR', 'es', 'it', 'en'],
-    website: 'https://openvoley.com',
-    verifiedFeatures: [
-      'Scouting de voleibol para entrenadores, clubes y asociaciones (registrado en sitio oficial)'
-    ],
-    unverifiedFeatures: [
-      'Registro táctico en vivo punto por punto (pendiente de validación técnica)',
-      'Sincronización de video y clips por jugada (pendiente de validación técnica)'
-    ],
-    trialAvailable: true,
-    trialVerified: false, // NOT verified officially
-    trialDurationDays: null,
-    plans: [
-      {
-        id: 'ov-plan-club-basico',
-        name: 'Club Básico (Borrador inicial)',
-        price: 29,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['1 Equipo', 'Estadísticas esenciales'],
-        verified: false,
-        verificationNotes: 'Plan no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones.'
-      },
-      {
-        id: 'ov-plan-club-pro',
-        name: 'Club Pro (Borrador inicial)',
-        price: 69,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['Equipos ilimitados', 'Scouting táctico'],
-        verified: false,
-        verificationNotes: 'Plan no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones.'
-      },
-      {
-        id: 'ov-plan-federacion',
-        name: 'Federación / Asociación (Borrador inicial)',
-        price: 199,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['Múltiples clubes federados'],
-        verified: false,
-        verificationNotes: 'Plan no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones.'
-      }
-    ],
-    registerUrl: 'https://openvoley.com',
-    paymentUrl: 'Pendiente de configurar',
-    faqs: [
-      {
-        id: 'ov-faq-1',
-        question: '¿Se necesita conexión a internet en la cancha durante el partido?',
-        answer: 'Respuesta inicial propuesta en revisión...',
-        approved: false,
-        verified: false,
-        verificationNotes: 'No verificado oficialmente. Excluido de respuestas automáticas y de IA.'
-      },
-      {
-        id: 'ov-faq-2',
-        question: '¿En qué dispositivos se puede utilizar?',
-        answer: 'Respuesta inicial propuesta en revisión...',
-        approved: false,
-        verified: false,
-        verificationNotes: 'No verificado oficialmente. Excluido de respuestas automáticas y de IA.'
-      }
-    ],
-    promotionalMaterials: [],
-    status: 'lista',
-    campaignsAllowed: true,
-    internalNotes: 'Priorizar clubes de vóley de Brasil y federaciones. Precios oficiales deben cargarse y aprobarse por el administrador.',
-    createdAt: '2026-11-11T00:00:00.000Z',
-    updatedAt: '2026-11-11T00:00:00.000Z'
-  },
-  {
-    id: 'app-visibility-ai',
-    name: 'Visibility AI',
-    slug: 'visibility-ai',
-    description: 'Auditoría de sitios web, visibilidad digital y recomendaciones de mejora para empresas y agencias.',
-    targetAudience: 'Agencias de marketing digital, consultores SEO, directores de marketing de PYMES y e-commerce.',
-    countries: ['España', 'México', 'Colombia', 'Argentina', 'Chile', 'Estados Unidos'],
-    languages: ['es', 'en'],
-    website: 'Pendiente de configurar',
-    verifiedFeatures: [
-      'Auditoría de sitios web y visibilidad digital (alcance principal)'
-    ],
-    unverifiedFeatures: [
-      'Auditoría técnica de Core Web Vitals (pendiente de homologar)',
-      'Reportes con marca blanca (pendiente de homologar)'
-    ],
-    trialAvailable: false,
-    trialVerified: false,
-    trialDurationDays: null,
-    plans: [
-      {
-        id: 'vai-plan-starter',
-        name: 'Starter PYME (Borrador inicial)',
-        price: 49,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['Hasta 3 dominios'],
-        verified: false,
-        verificationNotes: 'Plan no verificado. Conservado para revisión administrativa; excluido de automatizaciones.'
-      },
-      {
-        id: 'vai-plan-agency',
-        name: 'Agency Pro (Borrador inicial)',
-        price: 149,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['Dominios ilimitados'],
-        verified: false,
-        verificationNotes: 'Plan no verificado. Conservado para revisión administrativa; excluido de automatizaciones.'
-      }
-    ],
-    registerUrl: 'Pendiente de configurar',
-    paymentUrl: 'Pendiente de configurar',
-    faqs: [
-      {
-        id: 'vai-faq-1',
-        question: '¿Cómo se ejecuta la auditoría del sitio web?',
-        answer: 'Respuesta inicial propuesta en revisión...',
-        approved: false,
-        verified: false,
-        verificationNotes: 'No verificado oficialmente. Excluido de respuestas automáticas.'
-      }
-    ],
-    promotionalMaterials: [],
-    status: 'lista',
-    campaignsAllowed: true,
-    internalNotes: 'Definir precios y enlace web oficial antes de activar campañas.',
-    createdAt: '2026-11-11T00:00:00.000Z',
-    updatedAt: '2026-11-11T00:00:00.000Z'
-  },
-  {
-    id: 'app-neuroplaneta',
-    name: 'NeuroPlaneta',
-    slug: 'neuroplaneta',
-    description: 'Actividades y juegos para niños, con acompañamiento de adultos y registro de uso. No presentarla como herramienta de diagnóstico ni tratamiento.',
-    targetAudience: 'Familias con niños en edad escolar, educadores y centros recreativos.',
-    countries: ['España', 'Argentina', 'México', 'Colombia', 'Chile'],
-    languages: ['es'],
-    website: 'Pendiente de configurar',
-    verifiedFeatures: [
-      'Actividades y juegos para niños con acompañamiento de adultos y registro de uso'
-    ],
-    unverifiedFeatures: [],
-    trialAvailable: false,
-    trialVerified: false,
-    trialDurationDays: null,
-    plans: [
-      {
-        id: 'np-plan-familia-mensual',
-        name: 'Plan Familia Mensual (Borrador inicial)',
-        price: 12,
-        currency: 'USD',
-        interval: 'mensual',
-        features: ['Perfiles familiares'],
-        verified: false,
-        verificationNotes: 'Plan no verificado por la dirección. Conservado para revisión; excluido de automatizaciones.'
-      }
-    ],
-    registerUrl: 'Pendiente de configurar',
-    paymentUrl: 'Pendiente de configurar',
-    faqs: [
-      {
-        id: 'np-faq-1',
-        question: '¿NeuroPlaneta diagnostica o trata alguna condición médica o psicológica?',
-        answer: 'NO. NeuroPlaneta es estrictamente una herramienta lúdica y educativa de entretenimiento acompañado. No constituye una herramienta de diagnóstico, tratamiento clínico, evaluación psicológica ni intervención médica de ningún tipo.',
-        approved: true, // Only the strict disclaimer is approved
-        verified: true,
-        verificationNotes: 'Aprobado formalmente: limitación legal y médica obligatoria.'
-      }
-    ],
-    promotionalMaterials: [],
-    status: 'lista',
-    campaignsAllowed: true,
-    medicalDisclaimer: 'ADVERTENCIA ESTRICTA: NeuroPlaneta no es ni debe presentarse como herramienta de diagnóstico ni tratamiento médico o psicológico.',
-    internalNotes: 'Nunca asociar con claims médicos ni diagnósticos en ninguna comunicación o mensaje de prospección.',
-    createdAt: '2026-11-11T00:00:00.000Z',
-    updatedAt: '2026-11-11T00:00:00.000Z'
-  },
-  {
-    id: 'app-funeraria',
-    name: 'Funeraria',
-    slug: 'funeraria',
-    description: 'Software para empresas funerarias, actualmente en desarrollo. Mantener sus campañas desactivadas hasta completar su información y autorizar su lanzamiento.',
-    targetAudience: 'Empresas de servicios funerarios, salas velatorias, cooperativas de previsión social funeraria.',
-    countries: ['Argentina', 'Uruguay', 'Chile', 'España'],
-    languages: ['es'],
-    website: 'Pendiente de configurar (En desarrollo)',
-    verifiedFeatures: [],
-    unverifiedFeatures: [
-      'Gestión de expedientes de defunción (en desarrollo)'
-    ],
-    trialAvailable: false,
-    trialVerified: false,
-    trialDurationDays: null,
-    plans: [],
-    registerUrl: 'Pendiente de configurar',
-    paymentUrl: 'Pendiente de configurar',
-    faqs: [],
-    promotionalMaterials: [],
-    status: 'en_desarrollo',
-    campaignsAllowed: false,
-    internalNotes: 'BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.',
-    createdAt: '2026-11-11T00:00:00.000Z',
-    updatedAt: '2026-11-11T00:00:00.000Z'
-  }
-];
+const INITIAL_APPLICATIONS: Application[] = commercialCatalog();
 
 const INITIAL_CAMPAIGNS: Campaign[] = [
   {
@@ -457,6 +244,8 @@ class DatabaseManager {
       }
     }
 
+    const catalog = mergeCommercialCatalog(schema.applications);
+    if (catalog.changed) { schema.applications = catalog.applications; changed = true; }
     return changed;
   }
 
@@ -930,7 +719,7 @@ class DatabaseManager {
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);
     campaign.stats.contactsCount = new Set(conversations.map(c => c.contactId)).size;
-    campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status)).length;
+    campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && m.reviewStatus !== 'rejected').length;
     if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de correo preparados para ${campaign.name}. Sin envíos.`, { campaignId: id });
     this.save();
     return campaign.lastPreparation;
@@ -1240,7 +1029,7 @@ class DatabaseManager {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
-          if (m.status === 'pendiente' || m.status === 'preparado') messagesPending++;
+          if ((m.status === 'pendiente' || m.status === 'preparado') && m.reviewStatus !== 'rejected') messagesPending++;
           else if (m.status === 'enviado') messagesSent++;
           else if (m.status === 'fallido') messagesFailed++;
           else if (m.status === 'resultado_desconocido') messagesUnknown++;

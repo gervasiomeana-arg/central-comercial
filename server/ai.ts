@@ -1,3 +1,4 @@
+import { verifiedPriceSummary } from './commercial-catalog.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import { db } from './db.js';
 import type { Application, MessageClassification } from '../src/types.js';
@@ -49,7 +50,6 @@ export async function analyzeAndSuggestResponse(
   }
 
   // Build the strict knowledge base ONLY from verified app details
-  const verifiedPlans = app.plans.filter(p => p.verified === true && p.price !== null);
   const approvedFaqs = app.faqs.filter(f => f.approved === true && f.verified === true);
   const trialText = (app.trialAvailable && app.trialVerified)
     ? `Disponible (${app.trialDurationDays ? `${app.trialDurationDays} días` : 'a convenir con asesor'})`
@@ -60,14 +60,13 @@ export async function analyzeAndSuggestResponse(
 Descripción Oficial: ${app.description}
 Sitio Web Oficial: ${app.website}
 Público Objetivo: ${app.targetAudience}
+Condiciones comerciales y mercados: ${app.commercialNotes || 'Respetar moneda y período de cada plan.'}
 Funciones Verificadas en Producción:
 ${app.verifiedFeatures.length > 0 ? app.verifiedFeatures.map(f => `- ${f}`).join('\n') : '- Alcance general de la aplicación'}
 
 Período de Prueba: ${trialText}
 Planes y Precios Oficiales:
-${verifiedPlans.length > 0
-  ? verifiedPlans.map(p => `- Plan ${p.name}: ${p.currency} ${p.price} / ${p.interval}. Características: ${p.features.join(', ')}`).join('\n')
-  : 'NO HAY PLANES DE PRECIO VERIFICADOS AÚN POR LA DIRECCIÓN. PROHIBIDO INVENTAR PRECIOS O TARIFAS. Indicar que el presupuesto es personalizado y se enviará por un asesor comercial.'}
+${verifiedPriceSummary(app) || 'No hay precios verificados. No inventar tarifas.'}
 
 Enlace de Registro: ${app.registerUrl}
 ${app.medicalDisclaimer ? `AVISO LEGAL OBLIGATORIO: ${app.medicalDisclaimer}` : ''}
@@ -92,14 +91,15 @@ ${approvedFaqs.length > 0
       classification = 'informa_pago';
       requiresIntervention = true;
       interventionReason = 'El prospecto informa un pago. Por política de seguridad, la verificación de pagos es estrictamente manual.';
-    } else if (lower.includes('precio') || lower.includes('costo') || lower.includes('cuanto') || lower.includes('cuánto') || lower.includes('valor')) {
+    } else if (lower.includes('precio') || lower.includes('costo') || lower.includes('cuanto') || lower.includes('cuánto') || lower.includes('valor') || lower.includes('preço') || lower.includes('preco') || lower.includes('price') || lower.includes('quanto')) {
       classification = 'consulta_precio';
     } else if (lower.includes('demo') || lower.includes('prueba') || lower.includes('probar')) {
       classification = 'solicita_demostracion';
     }
 
-    const firstFaq = app.faqs.find(f => f.approved);
-    const suggested = `Hola ${contactName || ''},\n\nGracias por tu mensaje sobre ${app.name}. ${firstFaq ? firstFaq.answer : `Podés conocer todos los detalles en nuestro sitio oficial: ${app.website}`}\n\n¿Te gustaría que coordinemos una llamada de demostración de 10 minutos?`;
+    const firstFaq = app.faqs.find(f => f.approved && f.verified);
+    const priceReply = classification === 'consulta_precio' ? `${verifiedPriceSummary(app) || 'El equipo comercial debe confirmar la tarifa.'}\n\n${app.commercialNotes || ''}` : '';
+    const suggested = `Hola ${contactName || ''},\n\nGracias por tu mensaje sobre ${app.name}. ${priceReply || (firstFaq ? firstFaq.answer : `Podés conocer todos los detalles en nuestro sitio oficial: ${app.website}`)}\n\n¿Te gustaría que coordinemos una llamada de demostración de 10 minutos?`;
 
     return {
       classification,
@@ -107,7 +107,7 @@ ${approvedFaqs.length > 0
       confidence: 0.7,
       requiresHumanIntervention: requiresIntervention,
       interventionReason,
-      sourceFaqsUsed: firstFaq ? [firstFaq.question] : []
+      sourceFaqsUsed: !priceReply && firstFaq ? [firstFaq.question] : []
     };
   }
 
@@ -237,7 +237,7 @@ Analizá el mensaje y devolvé tu clasificación y borrador de respuesta siguien
       classification = 'informa_pago';
       requiresHuman = true;
       reason = 'El prospecto informa un pago. Por política de seguridad, la verificación de pagos es estrictamente manual.';
-    } else if (lower.includes('precio') || lower.includes('costo') || lower.includes('cuanto') || lower.includes('cuánto') || lower.includes('valor')) {
+    } else if (lower.includes('precio') || lower.includes('costo') || lower.includes('cuanto') || lower.includes('cuánto') || lower.includes('valor') || lower.includes('preço') || lower.includes('preco') || lower.includes('price') || lower.includes('quanto')) {
       classification = 'consulta_precio';
     } else if (lower.includes('demo') || lower.includes('prueba') || lower.includes('probar')) {
       classification = 'solicita_demostracion';
@@ -264,3 +264,4 @@ Analizá el mensaje y devolvé tu clasificación y borrador de respuesta siguien
     };
   }
 }
+

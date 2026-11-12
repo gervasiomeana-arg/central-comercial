@@ -400,6 +400,7 @@ export default function App() {
                 applications={applications}
                 campaigns={campaigns}
                 onSendMessage={handleSendMessage}
+                onReviewDraft={async (conversationId, messageId, input) => { await api.reviewDraft(conversationId, messageId, input); await loadData(); }}
                 onAiSuggest={handleAiSuggest}
                 onCreateConversation={handleCreateConversation}
                 selectedAppFilter={selectedAppFilter}
