@@ -34,6 +34,7 @@ interface ConversationsViewProps {
   applications: Application[];
   campaigns: Campaign[];
   tasks?: CommercialTask[];
+  onOpenClient?: (contactId:string,appId:string)=>Promise<void>;
   onResolve?: (conversationId: string, note: string) => Promise<void>;
   onSendMessage: (
     convId: string,
@@ -62,6 +63,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   onReviewDraft,
   tasks = [],
   onResolve,
+  onOpenClient,
 }) => {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     conversations[0]?.id || null
@@ -70,6 +72,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [search, setSearch] = useState('');
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [openingClient,setOpeningClient] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [replyError, setReplyError] = useState('');
@@ -334,6 +337,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 {onResolve && <button className="cc-text-button" disabled={isResolving} onClick={handleResolve}>{isResolving?'Guardando…':'Marcar consulta revisada'}</button>}
                 <small>Marcarla revisada no confirma pagos ni acredita entrega de mensajes.</small>
               </section>}
+              {onOpenClient&&activeContact&&activeApp?.status==='lista'&&activeApp.campaignsAllowed&&<div className="cc-inbox-client-action"><div><strong>Ficha y cuenta corriente</strong><p>Conservá el historial del contacto y registrá el plan cuando acuerden la contratación.</p></div><button className="cc-text-button" disabled={openingClient} onClick={async()=>{setOpeningClient(true);setReplyError('');try{await onOpenClient(activeContact.id,activeConv.appId);}catch(error:any){setReplyError(error.message);}finally{setOpeningClient(false);}}}>{openingClient?'Abriendo…':activeContact.convertedToClientId?'Abrir ficha de cliente':'Registrar como cliente'}</button></div>}
               {/* Chat Messages Feed */}
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex-1 min-h-[300px] max-h-[380px] overflow-y-auto space-y-3">
                 {activeConv.messages.length === 0 ? (
