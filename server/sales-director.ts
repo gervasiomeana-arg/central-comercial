@@ -58,3 +58,38 @@ export function goalCampaigns(goal: MonthlySalesGoal, apps: Application[], exist
   }
   return result;
 }
+
+// Operational counts use recorded evidence. Prepared drafts and claims of payment
+// never become sent mail or paid customers in this view.
+export function operationalSummary(
+  app: Application, month: string,
+  contacts: import('../src/types.js').Contact[],
+  campaigns: Campaign[], conversations: import('../src/types.js').Conversation[],
+  payments: PaymentRecord[], tasks: import('../src/types.js').CommercialTask[]
+) {
+  const inMonth = (value?: string) => {
+    if (!value || !Number.isFinite(Date.parse(value))) return false;
+    return accountingDay(new Date(value)).slice(0, 7) === month;
+  };
+  const pool = contacts.filter(c => c.interestedAppIds?.includes(app.id) && !['cliente', 'descartado', 'baja_solicitada'].includes(c.status) && c.permission !== 'revocado' && c.source?.trim() && Number.isFinite(Date.parse(c.sourceReviewDate)));
+  const threads = conversations.filter(c => c.appId === app.id);
+  const attempted = threads.flatMap(c => c.messages.map(m => ({ ...m, contactId: c.contactId })));
+  const accepted = attempted.filter(m => m.direction === 'outbound' && ['aceptado_proveedor', 'entrega_confirmada', 'enviado'].includes(m.status) && m.serviceConfirmationId && inMonth(m.acceptedAt || m.sentAt));
+  const received = threads.filter(c => c.messages.some(m => m.direction === 'inbound' && m.providerMessageId && inMonth(m.createdAt)));
+  const questions = threads.filter(c => c.requiresHumanIntervention && c.messages.some(m => m.direction === 'inbound')).map(c => {
+    const task = tasks.find(t => t.status === 'pendiente' && t.relatedType === 'conversacion' && t.relatedId === c.id);
+    const contact = contacts.find(item => item.id === c.contactId);
+    return { id: c.id, organization: contact?.orgName || 'Contacto registrado', reason: task?.description || c.adminNote || 'Revisar la consulta recibida antes de responder.' };
+  });
+  return {
+    contactsAvailable: pool.length,
+    prepared: attempted.filter(m => m.direction === 'outbound' && m.status === 'preparado' && m.reviewStatus !== 'rejected' && inMonth(m.createdAt)).length,
+    acceptedContacts: new Set(accepted.map(m => m.contactId)).size,
+    responses: new Set(received.map(c => c.contactId)).size,
+    interested: contacts.filter(c => c.interestedAppIds?.includes(app.id) && c.status === 'interesado').length,
+    uncertain: attempted.filter(m => m.direction === 'outbound' && m.status === 'resultado_desconocido' && inMonth(m.attemptedAt || m.createdAt)).length,
+    pendingPayments: payments.filter(p => p.appId === app.id && p.status === 'pendiente_confirmacion_manual').length,
+    questions,
+    campaigns: campaigns.filter(c => c.appId === app.id && c.goalMonth === month).map(c => ({ id: c.id, name: c.name, country: c.country, status: c.status, language: c.language, lastPreparedAt: c.lastPreparation?.at, researchedAt: c.lastResearchAt }))
+  };
+}

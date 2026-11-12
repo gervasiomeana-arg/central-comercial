@@ -3,7 +3,7 @@ import { Target, ArrowUpRight } from 'lucide-react';
 import { api } from '../api.js';
 import type { MonthlySalesGoal } from '../types.js';
 
-export function SalesGoalPanel() {
+export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate: (tab: string, appId: string) => void; selectedApp?: string }) {
   const [report,setReport] = useState<any>(null), [goal,setGoal] = useState<MonthlySalesGoal|null>(null), [editing,setEditing] = useState(false), [error,setError] = useState(''), [busy,setBusy] = useState(false);
   const load = async () => { try { const r = await api.getSalesGoal(); setReport(r); if(!editing) setGoal(r.goal); } catch(e:any){setError(e.message);} };
   useEffect(()=>{ void load(); const timer=setInterval(()=>void load(),30000); return()=>clearInterval(timer); },[editing]);
@@ -12,7 +12,8 @@ export function SalesGoalPanel() {
     <div className="cc-panel-heading"><div><p className="cc-eyebrow">DIRECCIÓN COMERCIAL · {report?.goal.month || 'MES ACTUAL'}</p><h2><Target size={21}/> Objetivo del mes</h2></div><button className="cc-text-button" onClick={()=>setEditing(!editing)}>{editing?'Cerrar':'Editar objetivo'} <ArrowUpRight size={15}/></button></div>
     {error&&<p role="alert">{error}</p>}
     {report&&<><div className="cc-goal-progress"><strong>{report.achieved}<span> / {report.goal.targetClients}</span></strong><div><b>clientes nuevos con primer pago confirmado</b><p>Faltan {report.remaining} · {report.daysRemaining} días en el mes</p></div></div><progress aria-label="Avance del objetivo mensual" max={Math.max(1,report.goal.targetClients)} value={report.achieved}/>
-    <div className="cc-goal-strategies">{report.apps.map((app:any)=><article key={app.id}><b>{app.name}</b><span>{app.ready?app.audience:'En desarrollo · fuera de campañas'}</span>{app.ready&&<small>{app.clients} primeros pagos en esta app · {app.reason}</small>}</article>)}</div>
+    <div className="cc-goal-strategies">{report.apps.filter((app:any)=>selectedApp==='all'||app.id===selectedApp).map((app:any)=><AppOperations key={app.id} app={app} report={report} onNavigate={onNavigate}/>)}</div>
+    <p className="cc-goal-evidence">Actividad del mes seleccionado. Contactos disponibles: cartera actual. Un correo aceptado por el proveedor no acredita entrega ni lectura. Las consultas contabilizadas tienen un identificador de correo registrado.</p>
     <p className="cc-goal-state">{report.paused?'Automatizaciones pausadas.':!report.goal.enabled?'Objetivo desactivado.':report.worker.send&&report.worker.read?'Correo conectado para enviar y recibir.':'Ejecutor de correo pendiente de conexión.'} {report.research.blocked?'Búsqueda detenida para revisión.':report.research.lastSuccess?'Búsqueda pública con consultas registradas.':'Primera búsqueda pública pendiente.'} WhatsApp Web sigue pendiente.</p></>}
     {editing&&goal&&<form className="cc-goal-form" onSubmit={save}>
       <label>Mes<input type="month" required value={goal.month} onChange={async e=>{const month=e.target.value;if(!month)return;try{const r=await api.getSalesGoal(month);setGoal(r.goal);}catch(e:any){setError(e.message);}}}/></label>
@@ -24,4 +25,34 @@ export function SalesGoalPanel() {
       <button className="cc-button cc-button-primary" disabled={busy}>{busy?'Guardando…':'Guardar objetivo y plan comercial'}</button>
     </form>}
   </section>;
+}
+
+function AppOperations({ app, report, onNavigate }: { app: any; report: any; onNavigate: (tab: string, appId: string) => void }) {
+  const ops = app.operations;
+  if (!ops) return null;
+  let next = 'El planificador prepara campañas y notas dentro de los límites del objetivo.', tab = 'campaigns';
+  if (!app.ready) { next = 'Se incorporará a las campañas cuando esté lista para vender.'; tab = 'applications'; }
+  else if (report.paused) next = 'La operación está pausada desde el control general.';
+  else if (!report.goal.enabled || report.goal.targetClients < 1) next = 'Activá un objetivo mensual para poner en marcha su plan comercial.';
+  else if (ops.pendingPayments) { next = 'Hay pagos pendientes de tu comprobación. Todavía no suman a la meta.'; tab = 'clients'; }
+  else if (ops.questions.length) { next = 'Hay consultas que necesitan tu respuesta antes de continuar.'; tab = 'conversations'; }
+  else if (ops.uncertain) { next = 'Revisá los resultados de envío inciertos; no se reenviarán automáticamente.'; tab = 'conversations'; }
+  else if (!report.remaining) next = 'Meta conjunta alcanzada. Se detiene la prospección y se conserva la atención de respuestas.';
+  else if (!ops.contactsAvailable) { next = report.research.blocked ? 'La búsqueda necesita revisión. Podés incorporar contactos con su fuente pública.' : !report.goal.discoverContacts ? 'La búsqueda está desactivada. Podés activarla o incorporar contactos con su fuente.' : report.research.lastError ? 'La última búsqueda tuvo un error de conexión. Consultá el registro de actividad.' : 'Próximo paso: investigar organizaciones que coincidan con este público.'; tab = report.research.lastError ? 'system' : 'contacts'; }
+  else if (ops.prepared && !report.worker.send) { next = 'Las notas esperan la conexión del ejecutor a tu correo, en tu computadora.'; tab = 'conversations'; }
+  else if (!report.goal.sendEmail) next = 'El envío por correo está desactivado en el objetivo.';
+  else if (ops.acceptedContacts && !ops.responses) next = 'Los correos aceptados esperan respuesta. La búsqueda puede sumar nuevos prospectos dentro del cupo.';
+  return <article className="cc-app-operations">
+    <div className="cc-app-operations-title"><b>{app.name}</b><span className={'cc-status-tag '+(app.ready?'is-ready':'is-pending')}>{app.ready?'En el plan':'En desarrollo'}</span></div>
+    <span>{app.ready ? app.audience : 'Fuera de campañas comerciales'}</span>
+    {app.ready && <><small>{app.reason}</small>
+      <dl className="cc-operation-counts">{[{label:'Contactos disponibles',value:ops.contactsAvailable},{label:'Notas preparadas',value:ops.prepared},{label:'Contactos con envío aceptado',value:ops.acceptedContacts},{label:'Contactos que respondieron',value:ops.responses},{label:'Primeros pagos en esta app',value:app.clients}].map(item=><div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}</dl>
+      <details className="cc-operation-details"><summary>Campañas y consultas ({ops.campaigns.length} / {ops.questions.length})</summary>
+        {ops.campaigns.length ? ops.campaigns.map((campaign:any)=><p key={campaign.id}><b>{campaign.country} · {campaign.language}</b><br/>{campaign.status==='activa'?'Campaña activa':campaign.status==='lista'?'Campaña preparada':campaign.status==='pausada'?'Campaña pausada':campaign.status==='finalizada'?'Campaña finalizada':campaign.status==='borrador'?'Borrador':'Requiere configuración'}</p>) : <p>El planificador todavía no creó campañas para este mes.</p>}
+        {ops.questions.map((question:any)=><p key={question.id}><b>{question.organization}</b><br/>{question.reason}</p>)}
+      </details>
+    </>}
+    <p className="cc-operation-next">{next}</p>
+    <button className="cc-text-button" onClick={()=>onNavigate(tab,app.id)}>Ver {tab==='clients'?'cuenta corriente':tab==='conversations'?'conversaciones':tab==='contacts'?'contactos':tab==='system'?'actividad':tab==='applications'?'aplicación':'campañas'} <ArrowUpRight size={14}/></button>
+  </article>;
 }

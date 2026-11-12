@@ -1,4 +1,4 @@
-import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook } from './sales-director.js';
+import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import fs from 'fs';
@@ -668,7 +668,9 @@ class DatabaseManager {
   public getSalesGoalReport(month = accountingDay().slice(0, 7)) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Mes no válido.');
     const goal = this.getMonthlyGoal(month);
-    return { ...goalProgress(goal, this.data.applications, this.data.payments, this.data.clients), worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length }, paused: this.data.scheduler.automationsPaused };
+    const progress = goalProgress(goal, this.data.applications, this.data.payments, this.data.clients);
+    const apps = progress.apps.map(app => ({ ...app, operations: operationalSummary(this.getApplicationById(app.id)!, month, this.data.contacts, this.data.campaigns, this.data.conversations, this.data.payments, this.data.tasks) }));
+    return { ...progress, apps, worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length }, paused: this.data.scheduler.automationsPaused };
   }
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
