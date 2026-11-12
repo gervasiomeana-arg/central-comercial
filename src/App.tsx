@@ -66,6 +66,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   // Modals
+  const [focusedClientId,setFocusedClientId] = useState<string|null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
 
   // Fetch all initial data
@@ -405,6 +406,7 @@ export default function App() {
                 applications={applications}
                 campaigns={campaigns}
                 tasks={tasks}
+                onOpenClient={async (contactId,appId)=>{const client=await api.convertContactToClient(contactId);await loadData();setFocusedClientId(client.id);setSelectedAppFilter(appId);setCurrentTab('clients');}}
                 onResolve={async (id,note)=>{await api.resolveConversation(id,note);await loadData();}}
                 onSendMessage={handleSendMessage}
                 onReviewDraft={async (conversationId, messageId, input) => { await api.reviewDraft(conversationId, messageId, input); await loadData(); }}
@@ -416,6 +418,8 @@ export default function App() {
 
             {currentTab === 'clients' && (
               <ClientsView
+                contacts={contacts}
+                focusedClientId={focusedClientId}
                 clients={clients}
                 subscriptions={subscriptions}
                 payments={payments}

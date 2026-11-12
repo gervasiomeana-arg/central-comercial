@@ -1,3 +1,5 @@
+import { ClientSetupPanel } from './ClientSetupPanel.js';
+import { clientCatalogPlans } from '../catalog-plans.js';
 import { AccountLedgerPanel } from './AccountLedgerPanel.js';
 import { accountingDay, addBillingMonths } from '../ledger.js';
 import React, { useState } from 'react';
@@ -22,11 +24,14 @@ import type {
   ClientSubscription,
   PaymentRecord,
   Application,
-  AccountCharge
+  AccountCharge,
+  Contact
 } from '../types.js';
 
 interface ClientsViewProps {
   clients: Client[];
+  contacts?: Contact[];
+  focusedClientId?: string | null;
   accountCharges?: AccountCharge[];
   onReconcileLedger?: () => Promise<void>;
   onVoidCharge?: (id: string, reason: string) => Promise<void>;
@@ -42,6 +47,8 @@ interface ClientsViewProps {
 
 export const ClientsView: React.FC<ClientsViewProps> = ({
   clients,
+  contacts = [],
+  focusedClientId,
   accountCharges = [], onReconcileLedger, onVoidCharge, onAssignPayment,
   subscriptions,
   payments,
@@ -51,7 +58,8 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
   onReviewPayment,
   selectedAppFilter,
 }) => {
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(clients[0]?.id || null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(focusedClientId || clients[0]?.id || null);
+  React.useEffect(()=>{if(focusedClientId)setSelectedClientId(focusedClientId);},[focusedClientId]);
   const [activeTab, setActiveTab] = useState<'cta_corriente' | 'suscripciones' | 'todos_los_cobros'>('cta_corriente');
 
   // New Subscription Modal
@@ -97,13 +105,24 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
   const [auditorNote, setAuditorNote] = useState('');
   const [auditorName, setAuditorName] = useState('Administrador Comercial');
 
-  const displayedClients = selectedAppFilter === 'all' ? clients : clients.filter(c => subscriptions.some(s => s.clientId === c.id && s.appId === selectedAppFilter));
+  const displayedClients = selectedAppFilter === 'all' ? clients : clients.filter(c => subscriptions.some(s => s.clientId === c.id && s.appId === selectedAppFilter) || payments.some(p=>p.clientId===c.id&&p.appId===selectedAppFilter) || contacts.some(contact=>contact.id===c.contactId&&contact.interestedAppIds?.includes(selectedAppFilter)));
   const selectedClient = displayedClients.find(c => c.id === selectedClientId) || displayedClients[0] || null;
+
+  const openPlan = (appId:string) => {
+    if(!selectedClient)return;
+    setSubClientId(selectedClient.id);setSubAppId(appId);setSubPlanId('');setSubPlanName('');setSubAmount(0);setSubInterval('mensual');setSubStatus('activa');setSubStartDate(accountingDay());setSubLedgerEnabled(true);setIsSubModalOpen(true);
+  };
+  const openPayment = (appId:string,sub?:ClientSubscription) => {
+    if(!selectedClient)return;
+    setPayClientId(selectedClient.id);setPayAppId(appId);setPaySubscriptionId(sub?.id||'');setPayCurrency(sub?.currency||'USD');setPayAmount(sub?.agreedAmount||0);setPayDate(accountingDay());setPayRef('');setIsPaymentModalOpen(true);
+  };
 
   // Subscriptions for selected client
   const clientSubscriptions = selectedClient
     ? subscriptions.filter(s => s.clientId === selectedClient.id && (selectedAppFilter === 'all' || s.appId === selectedAppFilter))
     : [];
+
+  const preferredAppId = selectedAppFilter !== 'all' ? selectedAppFilter : clientSubscriptions[0]?.appId || applications.find(app => contacts.some(c=>c.id===selectedClient?.contactId&&c.interestedAppIds?.includes(app.id)) && app.status==='lista')?.id || applications.find(app=>app.status==='lista')?.id || '';
 
   // Payments for selected client
   const clientPayments = selectedClient
@@ -203,8 +222,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                if (selectedClient) setSubClientId(selectedClient.id);
-                setIsSubModalOpen(true);
+                if(selectedClient)openPlan(preferredAppId);
               }}
               className="px-3.5 py-1.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs"
             >
@@ -214,8 +232,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
 
             <button
               onClick={() => {
-                if (selectedClient) setPayClientId(selectedClient.id);
-                setIsPaymentModalOpen(true);
+                if(selectedClient) { const sub=clientSubscriptions[0];openPayment(sub?.appId||preferredAppId,sub); }
               }}
               className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-xs"
             >
@@ -335,6 +352,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                     </div>
                   </div>
 
+                  <ClientSetupPanel client={selectedClient} contacts={contacts} applications={applications} subscriptions={subscriptions} payments={payments} selectedApp={selectedAppFilter} onPlan={openPlan} onPayment={openPayment}/>
                   {/* Multi-app Subscriptions section */}
                   <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
@@ -343,8 +361,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                       </span>
                       <button
                         onClick={() => {
-                          setSubClientId(selectedClient.id);
-                          setIsSubModalOpen(true);
+                          openPlan(preferredAppId);
                         }}
                         className="text-xs font-bold text-blue-600 hover:text-blue-800"
                       >
@@ -598,7 +615,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Cliente *</label>
                 <select
                   value={subClientId}
-                  onChange={e => setSubClientId(e.target.value)}
+                  onChange={e => {setSubClientId(e.target.value);setSubPlanId('');setSubPlanName('');setSubAmount(0);}}
                   className="w-full border rounded p-2"
                 >
                   {clients.map(c => (
@@ -624,7 +641,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 const plan = applications.find(a => a.id === subAppId)?.plans.find(p => p.id === e.target.value);
                 setSubPlanId(e.target.value);
                 if (plan && plan.price !== null) { setSubPlanName(plan.name); setSubAmount(plan.price); setSubCurrency(plan.currency); if (plan.interval !== 'por_definir') setSubInterval(plan.interval); }
-              }}><option value="">Importe acordado con el cliente</option>{applications.find(a => a.id === subAppId)?.plans.filter(p => p.verified && !p.archived && p.price !== null).map(p => <option key={p.id} value={p.id}>{p.name} · {p.currency} {p.price} / {p.interval}</option>)}</select></label>
+              }}><option value="">Importe acordado expresamente con el cliente</option>{clientCatalogPlans(applications.find(a => a.id === subAppId),clients.find(c=>c.id===subClientId)).map(p => <option key={p.id} value={p.id}>{p.name} · {p.currency} {p.price} / {p.interval}</option>)}</select></label>
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Nombre del Plan *</label>
                 <input
