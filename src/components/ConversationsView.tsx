@@ -1,5 +1,5 @@
 import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MessageSquare,
   Sparkles,
@@ -24,7 +24,8 @@ import type {
   Contact,
   Application,
   Campaign,
-  MessageClassification
+  MessageClassification,
+  CommercialTask
 } from '../types.js';
 
 interface ConversationsViewProps {
@@ -32,6 +33,8 @@ interface ConversationsViewProps {
   contacts: Contact[];
   applications: Application[];
   campaigns: Campaign[];
+  tasks?: CommercialTask[];
+  onResolve?: (conversationId: string, note: string) => Promise<void>;
   onSendMessage: (
     convId: string,
     msg: { content: string; direction: 'inbound' | 'outbound'; channel: string; status: string; serviceConfirmationId?: string }
@@ -57,11 +60,19 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   onCreateConversation,
   selectedAppFilter,
   onReviewDraft,
+  tasks = [],
+  onResolve,
 }) => {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     conversations[0]?.id || null
   );
-  const [replyText, setReplyText] = useState('');
+  const [replyDrafts, setReplyDrafts] = useState<Record<string,string>>({});
+  const [search, setSearch] = useState('');
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [replyError, setReplyError] = useState('');
   const [filterClassification, setFilterClassification] = useState<string>('all');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<any | null>(null);
@@ -77,13 +88,22 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
       selectedAppFilter === 'all' || conv.appId === selectedAppFilter;
     const matchesClassification =
       filterClassification === 'all' || conv.classification === filterClassification;
-    return matchesApp && matchesClassification;
-  });
+    const contact = contacts.find(c => c.id === conv.contactId);
+    const app = applications.find(a => a.id === conv.appId);
+    const matchesSearch = !search.trim() || `${contact?.orgName || ''} ${contact?.contactPerson || ''} ${app?.name || ''}`.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es'));
+    const needsAttention = conv.requiresHumanIntervention && conv.messages.some(m => m.direction === 'inbound');
+    return matchesApp && matchesClassification && matchesSearch && (!attentionOnly || needsAttention);
+  }).sort((a,b) => Number(b.requiresHumanIntervention && b.messages.some(m=>m.direction==='inbound')) - Number(a.requiresHumanIntervention && a.messages.some(m=>m.direction==='inbound')) || b.lastMessageAt.localeCompare(a.lastMessageAt));
 
   const activeConv = filteredConversations.find(c => c.id === selectedConvId) || filteredConversations[0] || null;
   const activeContact = activeConv ? contacts.find(c => c.id === activeConv.contactId) : null;
   const activeApp = activeConv ? applications.find(a => a.id === activeConv.appId) : null;
   const activeCampaign = activeConv?.campaignId ? campaigns.find(c => c.id === activeConv.campaignId) : null;
+  const activeId = activeConv?.id;
+  const replyText = activeId ? replyDrafts[activeId] || '' : '';
+  const setReplyText = (value:string) => { if(activeId) setReplyDrafts(previous=>({...previous,[activeId]:value})); };
+  const activeTasks = tasks.filter(t=>t.relatedType==='conversacion' && t.relatedId===activeId && t.status==='pendiente');
+  useEffect(()=>{setAiSuggestion(null);setFeedback('');setReplyError('');},[activeId]);
 
   // Handle requesting AI response suggestion
   const handleRequestAiSuggestion = async () => {
@@ -112,7 +132,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         conversationHistory: historyFormatted
       });
 
-      setAiSuggestion(suggestion);
+      setAiSuggestion({...suggestion, conversationId:activeConv.id});
     } catch (err: any) {
       alert(`Error al consultar Asistente IA: ${err.message}`);
     } finally {
@@ -121,34 +141,28 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   };
 
   const handleApplyAiSuggestion = () => {
-    if (aiSuggestion?.suggestedResponse) {
+    if (aiSuggestion?.suggestedResponse && aiSuggestion.conversationId === activeConv?.id) {
       setReplyText(aiSuggestion.suggestedResponse);
     }
   };
 
   const handleSendManual = async () => {
-    if (!activeConv || !replyText.trim()) return;
-
-    // By policy: if there is no real connector confirmed, outbound is stored as pending / manual staging
-    await onSendMessage(activeConv.id, {
-      content: replyText,
-      direction: 'outbound',
-      channel: activeConv.channel,
-      status: 'pendiente' // Never falsify delivery without provider verification
-    });
-
-    setReplyText('');
-    setAiSuggestion(null);
+    if (!activeConv || !replyText.trim() || isSending) return;
+    const id = activeConv.id, content = replyText.trim();
+    setIsSending(true);setReplyError('');setFeedback('');
+    try {
+      await onSendMessage(id, { content, direction:'outbound', channel:activeConv.channel, status:'pendiente' });
+      setReplyDrafts(previous=>({...previous,[id]:previous[id]?.trim()===content?'':previous[id]}));
+      setAiSuggestion(null);setFeedback('Respuesta guardada en cola. La aceptación del correo se mostrará cuando el ejecutor confirme el envío.');
+    } catch(error:any) { setReplyError(error.message || 'No se pudo guardar. El texto sigue en el editor.'); }
+    finally { setIsSending(false); }
   };
-
-  const handleSimulateInboundMessage = async (incomingText: string) => {
-    if (!activeConv) return;
-    await onSendMessage(activeConv.id, {
-      content: incomingText,
-      direction: 'inbound',
-      channel: activeConv.channel,
-      status: 'enviado'
-    });
+  const handleResolve = async () => {
+    if(!activeConv || !onResolve || isResolving)return;
+    setIsResolving(true);setReplyError('');
+    try { await onResolve(activeConv.id, 'Consulta revisada y marcada por el propietario desde Conversaciones.'); setFeedback('Consulta marcada como revisada. No se registró ningún pago ni envío.'); }
+    catch(error:any) { setReplyError(error.message); }
+    finally {setIsResolving(false);}
   };
 
   const handleCreateNewConversation = async () => {
@@ -190,7 +204,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
               <span>Conversaciones</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Atención exclusiva de prospectos comerciales. Asistente IA restringido estrictamente a las FAQ oficiales aprobadas.
+              Consultas, respuestas y decisiones comerciales de tus aplicaciones.
             </p>
           </div>
 
@@ -203,36 +217,15 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
           </button>
         </div>
 
-        {/* Classification Filter Bar */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-slate-500 font-semibold mr-1">Filtrar por intención:</span>
-          {[
-            { id: 'all', label: 'Todas' },
-            { id: 'interesado', label: 'Interesado' },
-            { id: 'solicita_informacion', label: 'Info' },
-            { id: 'solicita_demostracion', label: 'Demo' },
-            { id: 'consulta_precio', label: 'Precio' },
-            { id: 'quiere_suscribirse', label: 'Suscripción' },
-            { id: 'informa_pago', label: 'Informa pago' },
-            { id: 'requiere_intervencion', label: 'Intervención' },
-            { id: 'no_interesado', label: 'No interesado' },
-            { id: 'solicita_baja', label: 'Baja' }
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilterClassification(f.id)}
-              className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors ${
-                filterClassification === f.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="cc-inbox-filters">
+          <label>Buscar organización<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, persona o aplicación"/></label>
+          <label>Tipo de consulta<select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)}>{[{id:'all',label:'Todas'},{id:'interesado',label:'Interesados'},{id:'solicita_informacion',label:'Información'},{id:'solicita_demostracion',label:'Demostración'},{id:'consulta_precio',label:'Precios'},{id:'quiere_suscribirse',label:'Suscripción'},{id:'informa_pago',label:'Informa pago'},{id:'requiere_intervencion',label:'Requiere tu respuesta'},{id:'no_interesado',label:'Sin interés'},{id:'solicita_baja',label:'Bajas'}].map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+          <label className="cc-inbox-attention-filter"><input type="checkbox" checked={attentionOnly} onChange={e=>setAttentionOnly(e.target.checked)}/>Necesitan mi respuesta</label>
         </div>
       </div>
 
+      {replyError && <p className="cc-inbox-feedback is-error" role="alert">{replyError}</p>}
+      {feedback && <p className="cc-inbox-feedback" role="status">{feedback}</p>}
       {/* Main Inbox: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[580px]">
         {/* Left column: Conversations list (4 cols) */}
@@ -335,6 +328,12 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 </div>
               </div>
 
+              {activeConv.requiresHumanIntervention && activeConv.messages.some(m=>m.direction==='inbound') && <section className="cc-inbox-owner-card">
+                <div><p className="cc-eyebrow">NECESITA TU CRITERIO</p><h2>Una consulta para vos</h2></div>
+                <p>{activeTasks[0]?.description || activeConv.adminNote || 'Revisá el último mensaje y prepará una respuesta para este interesado.'}</p>
+                {onResolve && <button className="cc-text-button" disabled={isResolving} onClick={handleResolve}>{isResolving?'Guardando…':'Marcar consulta revisada'}</button>}
+                <small>Marcarla revisada no confirma pagos ni acredita entrega de mensajes.</small>
+              </section>}
               {/* Chat Messages Feed */}
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex-1 min-h-[300px] max-h-[380px] overflow-y-auto space-y-3">
                 {activeConv.messages.length === 0 ? (
@@ -373,9 +372,9 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                             {msg.status === 'enviado' ? (
                               <span className="text-emerald-700 flex items-center space-x-0.5">
                                 <CheckCircle2 className="w-3 h-3" />
-                                <span>Enviado ({msg.serviceConfirmationId || 'Confirmado por servicio'})</span>
+                                <span>{msg.serviceConfirmationId ? `Envío registrado (${msg.serviceConfirmationId})` : 'Registro manual · sin comprobación del proveedor'}</span>
                               </span>
-                            ) : msg.status === 'pendiente' ? (
+                            ) : msg.status === 'aceptado_proveedor' ? (<span className="text-emerald-700">Aceptado por el correo · entrega no confirmada</span>) : msg.status === 'entrega_confirmada' ? (<span className="text-emerald-700">Entrega confirmada por el proveedor</span>) : msg.status === 'envio_intentado' ? (<span className="text-amber-700">Envío en curso · esperando confirmación</span>) : msg.status === 'resultado_desconocido' ? (<span className="text-amber-700">Resultado incierto · revisar Enviados antes de reenviar</span>) : msg.status === 'fallido' ? (<span className="text-rose-700">Falló el envío: {msg.serviceError || 'revisar actividad'}</span>) : msg.status === 'preparado' ? (<span className="text-slate-500">Nota preparada · aún no enviada</span>) : msg.status === 'pendiente' ? (
                               <span className="text-amber-700 flex items-center space-x-0.5">
                                 <Clock className="w-3 h-3" />
                                 <span>Borrador en cola (Pendiente de envío con credenciales)</span>
@@ -415,7 +414,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 </div>
 
                 {/* AI Output / Guardrail Warnings */}
-                {aiSuggestion && (
+                {aiSuggestion && aiSuggestion.conversationId === activeConv.id && (
                   <div className="p-3 bg-white border border-indigo-200 rounded-lg space-y-2 text-xs">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-bold text-slate-700">
@@ -469,16 +468,16 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center space-x-1.5 text-slate-400 text-[11px]">
                     <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Se registrará como mensaje en cola sin confirmar entrega falsa</span>
+                    <span>Se guarda en cola; el ejecutor confirmará la aceptación del correo.</span>
                   </div>
 
                   <button
                     onClick={handleSendManual}
-                    disabled={!replyText.trim()}
+                    disabled={!replyText.trim() || isSending}
                     className="px-4 py-2 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 transition-colors flex items-center space-x-1.5 disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Preparar envío comercial</span>
+                    <span>{isSending?'Guardando…':'Guardar respuesta en cola'}</span>
                   </button>
                 </div>
               </div>

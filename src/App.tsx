@@ -404,6 +404,8 @@ export default function App() {
                 contacts={contacts}
                 applications={applications}
                 campaigns={campaigns}
+                tasks={tasks}
+                onResolve={async (id,note)=>{await api.resolveConversation(id,note);await loadData();}}
                 onSendMessage={handleSendMessage}
                 onReviewDraft={async (conversationId, messageId, input) => { await api.reviewDraft(conversationId, messageId, input); await loadData(); }}
                 onAiSuggest={handleAiSuggest}

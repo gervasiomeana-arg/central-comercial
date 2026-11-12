@@ -218,6 +218,7 @@ export const api = {
   assignPayment: (id: string, subscriptionId: string) => fetchJson(`/api/payments/${encodeURIComponent(id)}/assign-subscription`, { method: 'POST', body: JSON.stringify({ subscriptionId }) }),
 
   // Conversations
+  resolveConversation: (id:string,note:string) => fetchJson(`/api/conversations/${encodeURIComponent(id)}/resolve`, {method:'POST',body:JSON.stringify({note})}),
   getConversations: () => fetchJson<Conversation[]>('/api/conversations'),
   getConversation: (id: string) => fetchJson<Conversation>(`/api/conversations/${id}`),
   createConversation: (conv: Partial<Conversation>) => fetchJson<Conversation>('/api/conversations', {
