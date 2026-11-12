@@ -143,7 +143,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   const stagesList = [
-    { id: 'buscar', label: '1. Buscar', desc: 'Identificación de prospectos', status: pipelineStatus?.autonomousContactSearch.status === 'conectado' ? 'activo' : 'pendiente' },
+    { id: 'buscar', label: '1. Buscar', desc: 'Identificación de prospectos', status: 'pendiente' },
     { id: 'verificar', label: '2. Verificar', desc: 'Validación de datos y duplicados', status: 'activo' },
     { id: 'preparar', label: '3. Preparar', desc: 'Redacción con datos aprobados', status: 'activo' },
     { id: 'enviar', label: '4. Enviar', desc: 'Despacho por canal verificado', status: pipelineStatus?.outboundMessaging.status === 'conectado' ? 'activo' : 'pendiente' },
@@ -188,10 +188,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               onClick={onOpenEmailSandbox}
               className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-colors flex items-center space-x-1.5 shadow-xs"
-              title="Probar el recorrido completo de 7 etapas con una dirección de email propia sin riesgo"
+              title="Abrir pruebas reales de envío al propietario"
             >
               <Mail className="w-4 h-4" />
-              <span>Validar Recorrido por Email (Sandbox)</span>
+              <span>Pruebas reales de email y WhatsApp</span>
             </button>
 
             <button
@@ -702,3 +702,4 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
+

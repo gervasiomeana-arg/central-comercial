@@ -1008,6 +1008,7 @@ class DatabaseManager {
             category: 'general',
             relatedType: 'conversacion',
             relatedId: conv.id,
+            dueDate: null,
             status: 'pendiente',
             createdAt: new Date().toISOString()
           });
@@ -1023,7 +1024,7 @@ class DatabaseManager {
           lower.includes('reunión') ||
           lower.includes('llamada')
         ) {
-          if (contact.status === 'nuevo' || contact.status === 'contactado') {
+          if (contact.status === 'prospecto' || contact.status === 'contactado') {
             contact.status = 'interesado';
           }
           conv.classification = 'interesado';
@@ -1281,7 +1282,7 @@ class DatabaseManager {
       }
       const interestedCount = contacts.filter(c => c.status === 'interesado').length;
       const trialCount = contacts.filter(c => c.status === 'en_prueba').length + this.data.subscriptions.filter(s => s.appId === app.id && s.status === 'en_prueba').length;
-      const clientsCount = this.data.clients.filter(cl => cl.appId === app.id).length + this.data.subscriptions.filter(s => s.appId === app.id && s.status === 'activa').length;
+      const clientsCount = new Set(this.data.subscriptions.filter(s => s.appId === app.id && s.status === 'activa').map(s => s.clientId)).size;
 
       return {
         appId: app.id,
@@ -1328,13 +1329,13 @@ class DatabaseManager {
         const app = this.data.applications.find(a => a.id === p.appId);
         return {
           id: p.id,
-          clientName: p.clientName || client?.name || 'Cliente registrado',
+          clientName: p.clientName || client?.orgName || 'Cliente registrado',
           appName: app?.name || p.appId,
           amount: p.amount,
           currency: p.currency,
-          channel: p.channel,
+          channel: p.channel || p.method,
           createdAt: p.createdAt,
-          reference: p.reference
+          reference: p.reference || p.referenceNumber
         };
       });
 
@@ -1432,3 +1433,4 @@ class DatabaseManager {
 }
 
 export const db = new DatabaseManager();
+

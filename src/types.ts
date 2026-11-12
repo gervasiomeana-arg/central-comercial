@@ -226,6 +226,10 @@ export interface ClientSubscription {
 export type PaymentStatus = 'pendiente_confirmacion_manual' | 'confirmado' | 'rechazado';
 
 export interface PaymentRecord {
+  // Compatibility with existing stored records created by earlier versions.
+  reference?: string;
+  clientName?: string;
+  channel?: string;
   id: string;
   clientId: string;
   subscriptionId?: string;
@@ -474,3 +478,4 @@ export interface ExecutiveSummary {
     }[];
   };
 }
+
