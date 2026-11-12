@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 import type {
   Application,
   MonthlySalesGoal,
+  AutonomousRun,
+  StartAutonomousInput,
   AccountCharge,
   Contact,
   Campaign,
@@ -39,6 +41,7 @@ export interface DatabaseSchema {
   applications: Application[];
   accountCharges: AccountCharge[];
   monthlySalesGoals: MonthlySalesGoal[];
+  autonomousRun?: AutonomousRun;
   commercialEmailWorker?: { id: string; at: number; send: boolean; read: boolean; sender: string };
   researchState: { month: string; day: string; requests: number; visited: string[]; blocked?: boolean; lastError?: string; lastSuccess?: string };
   contacts: Contact[];
@@ -270,6 +273,7 @@ class DatabaseManager {
           accountCharges: parsed.accountCharges || [],
           monthlySalesGoals: parsed.monthlySalesGoals || [defaultGoal('2026-11')],
           commercialEmailWorker: parsed.commercialEmailWorker,
+          autonomousRun: parsed.autonomousRun,
           researchState: parsed.researchState || { month: '', day: '', requests: 0, visited: [] },
           contacts: parsed.contacts || [],
           campaigns: parsed.campaigns || INITIAL_CAMPAIGNS,
@@ -703,6 +707,70 @@ class DatabaseManager {
     const worker = this.data.commercialEmailWorker;
     const online = Boolean(worker && Date.now() - worker.at < 90000);
     return { online, send: online && Boolean(worker?.send), read: online && Boolean(worker?.read), sender: online ? worker?.sender : undefined };
+  }
+
+  public campaignInActiveRun(id: string) {
+    return !this.data.autonomousRun || this.data.autonomousRun.campaignId === id;
+  }
+  public getAutonomousRun() { return this.data.autonomousRun; }
+  public startAutonomousRun(input: StartAutonomousInput) {
+    const app = this.getApplicationById(input.appId);
+    if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Elegí una aplicación lista para vender.');
+    const country = typeof input.country === 'string' ? input.country.trim() : '';
+    if (!country || country.length > 60 || !Number.isInteger(input.maxContacts) || input.maxContacts < 1 || input.maxContacts > 20) throw new Error('Indicá un país y un máximo total de 1 a 20 contactos.');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowStart || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowEnd || '') || input.sendWindowStart >= input.sendWindowEnd) throw new Error('Revisá el horario de envío.');
+    const day = accountingDay(), month = day.slice(0,7);
+    const goal = { ...this.getMonthlyGoal(month), targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:20, updatedAt:new Date().toISOString() };
+    validateGoal(goal);
+    if(goal.targetClients<1)throw new Error('El objetivo mensual debe ser de al menos un cliente.');
+    const template = goalCampaigns(goal, [app], [])[0];
+    if (!template) throw new Error('Esta aplicación todavía no tiene una estrategia comercial definida.');
+    const campaignId = `autonomous-${month}-${app.id}-${country.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`;
+    const campaign = this.getCampaignById(campaignId) || { ...template, id:campaignId, name:`Piloto autónomo · ${app.name} · ${country}`, createdAt:new Date().toISOString() };
+    Object.assign(campaign, { maxContacts:input.maxContacts, dailyLimit:input.maxContacts, status:'activa', autoPrepare:true, autoSendEmail:true, sendWindowStart:input.sendWindowStart, sendWindowEnd:input.sendWindowEnd, updatedAt:new Date().toISOString() });
+    if(!this.getCampaignById(campaignId)) this.data.campaigns.push(campaign);
+    const existingGoal = this.data.monthlySalesGoals.findIndex(g=>g.month===month);
+    if(existingGoal<0)this.data.monthlySalesGoals.push(goal);else this.data.monthlySalesGoals[existingGoal]=goal;
+    this.data.autonomousRun = {id:campaignId,campaignId,appId:app.id,country,maxContacts:input.maxContacts,startedAt:new Date().toISOString()};
+    this.data.scheduler.automationsPaused = false;
+    this.addLog('info','campañas',`Inicio autónomo: ${app.name}, ${country}, hasta ${input.maxContacts} contactos en total.`,{campaignId});
+    this.save(); return this.getAutonomousRunReport();
+  }
+  public getAutonomousRunReport() {
+    const run = this.data.autonomousRun, worker = this.getCommercialEmailStatus();
+    if(!run)return {run:null,paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers:[]};
+    const campaign=this.getCampaignById(run.campaignId), app=this.getApplicationById(run.appId);
+    const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);
+    const messages=threads.flatMap(c=>c.messages);
+    const contacted=new Set(threads.map(c=>c.contactId));
+    const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&c.email&&c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
+    const prepared=messages.filter(m=>m.direction==='outbound'&&m.status==='preparado'&&m.reviewStatus!=='rejected').length;
+    const accepted=messages.filter(m=>m.direction==='outbound'&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
+    const received=messages.filter(m=>m.direction==='inbound'&&m.providerMessageId).length;
+    const answered=messages.filter(m=>m.direction==='outbound'&&m.replyToProviderId&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
+    const clients=this.data.clients.filter(c=>contacted.has(c.contactId || ''));
+    const paid=clients.filter(c=>this.data.payments.some(p=>p.clientId===c.id&&p.appId===run.appId&&p.status==='confirmado'&&p.reviewedAt&&p.amount>0));
+    const blockers:string[]=[];
+    if(this.data.scheduler.automationsPaused)blockers.push('La operación está pausada.');
+    if(app?.status!=='lista'||!app?.campaignsAllowed)blockers.push('La aplicación no está habilitada para vender.');
+    if(!worker.send)blockers.push('Envío bloqueado: el ejecutor de correo no está conectado.');
+    if(!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
+    if(this.data.researchState.day===accountingDay() && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
+    if(this.data.researchState.lastError)blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
+    if(campaign?.lastPreparation?.blockedReason)blockers.push(`Preparación: ${campaign.lastPreparation.blockedReason}`);
+    const unknown=messages.filter(m=>m.status==='resultado_desconocido').length;
+    if(unknown)blockers.push(`${unknown} resultado(s) de envío incierto(s), sin reintento automático.`);
+    const stages=[
+      {name:'Buscar y verificar contactos',count:contacts.length,state:contacts.length?'con_resultados':this.data.researchState.lastError?'bloqueado':'pendiente'},
+      {name:'Preparar notas',count:prepared,state:prepared||accepted?'con_resultados':'pendiente'},
+      {name:'Enviar por email',count:accepted,state:accepted?'con_resultados':worker.send?'pendiente':'bloqueado'},
+      {name:'Recibir consultas',count:received,state:received?'con_resultados':worker.read?'pendiente':'bloqueado'},
+      {name:'Responder consultas',count:answered,state:answered?'con_resultados':'pendiente'},
+      {name:'Crear ficha de cliente',count:clients.length,state:clients.length?'con_resultados':'pendiente'},
+      {name:'Registrar cuenta corriente',count:this.data.subscriptions.filter(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled).length,state:this.data.subscriptions.some(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled)?'con_resultados':'pendiente'},
+      {name:'Confirmar primer pago',count:paid.length,state:paid.length?'con_resultados':'revision_manual'}
+    ];
+    return {run,appName:app?.name,campaignName:campaign?.name,paused:this.data.scheduler.automationsPaused,worker,stages,blockers,lastCycleAt:this.data.scheduler.lastRunAt,contactsInCampaign:contacted.size,humanQuestions:threads.filter(c=>c.requiresHumanIntervention&&c.messages.some(m=>m.direction==='inbound')).length};
   }
 
   // --- Campaigns ---

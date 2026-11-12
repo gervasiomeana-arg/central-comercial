@@ -27,7 +27,8 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const alreadyToday = previous.filter(c => {
     try { return localDay(new Date(c.createdAt), campaign.timezone) === day; } catch { return false; }
   }).length;
-  const remaining = Math.max(0, campaign.dailyLimit - alreadyToday);
+  if(campaign.maxContacts !== undefined && (!Number.isInteger(campaign.maxContacts)||campaign.maxContacts<1||campaign.maxContacts>500))return result('El máximo total de contactos no es válido.');
+  const remaining = Math.max(0, Math.min(campaign.dailyLimit - alreadyToday, campaign.maxContacts === undefined ? Infinity : campaign.maxContacts - new Set(previous.map(c=>c.contactId)).size));
   const usedIds = new Set(previous.map(c => c.contactId));
   const contactMap = new Map(contacts.map(c => [c.id, c]));
   const usedEmails = new Set(previous.map(c => contactMap.get(c.contactId)?.email?.trim().toLowerCase()).filter(Boolean));

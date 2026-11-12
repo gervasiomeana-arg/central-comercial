@@ -13,7 +13,7 @@ export async function researchGoalProspects() {
     if (state.month !== goal.month) Object.assign(state, { month: goal.month, day, requests: 0, visited: [], blocked: false, lastError: undefined });
     if (state.day !== day) Object.assign(state, { day, requests: 0 });
     if (state.blocked || state.requests >= goal.dailyResearchLimit) return;
-    const campaigns = db.getCampaigns().filter(c => c.goalMonth === goal.month && goal.countries.includes(c.country) && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(c.status) && c.researchQueries?.length && db.getApplicationById(c.appId)?.status === 'lista');
+    const campaigns = db.getCampaigns().filter(c => db.campaignInActiveRun(c.id) && (c.maxContacts === undefined || db.getConversations().filter(conv=>conv.campaignId===c.id).length<c.maxContacts) && c.goalMonth === goal.month && goal.countries.includes(c.country) && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(c.status) && c.researchQueries?.length && db.getApplicationById(c.appId)?.status === 'lista');
     const cap = Math.max(3, Math.ceil(goal.dailyResearchLimit / Math.max(1, campaigns.length)));
     const campaign = campaigns.filter(c => c.researchDay !== day || (c.researchCount || 0) < cap).sort((a, b) => (a.lastResearchAt || '').localeCompare(b.lastResearchAt || ''))[0];
     if (!campaign) return;
