@@ -388,6 +388,7 @@ export default function App() {
                 applications={applications}
                 connectors={connectors}
                 onSaveCampaign={handleSaveCampaign}
+                onPrepareCampaign={async (id) => { const result = await api.prepareCampaign(id); await loadData(); return result; }}
                 selectedAppFilter={selectedAppFilter}
               />
             )}

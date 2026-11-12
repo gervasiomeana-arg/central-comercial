@@ -610,6 +610,12 @@ adminRouter.post('/campaigns', (req, res) => {
   }
 });
 
+adminRouter.post('/campaigns/:id/prepare', (req, res) => {
+  if (!db.getCampaignById(req.params.id)) return res.status(404).json({ error: 'Campaña no encontrada' });
+  try { res.json(db.prepareCampaignDrafts(req.params.id)); }
+  catch (error: any) { res.status(400).json({ error: error.message }); }
+});
+
 adminRouter.put('/campaigns/:id', (req, res) => {
   try {
     const body: Campaign = req.body;

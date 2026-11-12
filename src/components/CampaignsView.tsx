@@ -25,6 +25,7 @@ interface CampaignsViewProps {
   connectors: ConnectorInfo[];
   onSaveCampaign: (campaign: Campaign) => Promise<void>;
   selectedAppFilter: string;
+  onPrepareCampaign?: (id: string) => Promise<NonNullable<Campaign['lastPreparation']>>;
 }
 
 export const CampaignsView: React.FC<CampaignsViewProps> = ({
@@ -33,11 +34,14 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
   connectors,
   onSaveCampaign,
   selectedAppFilter,
+  onPrepareCampaign,
 }) => {
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [activeTabModal, setActiveTabModal] = useState<'general' | 'mensaje' | 'horarios' | 'seguimientos'>('general');
   const [saving, setSaving] = useState(false);
+  const [preparing, setPreparing] = useState<string | null>(null);
+  const [preparationNotice, setPreparationNotice] = useState('');
 
   const displayedCampaigns = selectedAppFilter === 'all'
     ? campaigns
@@ -54,7 +58,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
       language: 'pt-BR',
       segment: 'Clubes y federaciones',
       channels: ['email'],
-      messageTemplate: 'Olá {nombre},\n\nGostaria de apresentar nossa plataforma para a equipe do {organizacion}.\n\nDisponibilizamos teste gratuito.\n\nPodemos agendar uma demonstração?',
+      messageTemplate: 'Olá {nombre},\n\nGostaria de apresentar nossa plataforma para a equipe do {organizacion}.\n\nConheça os serviços em nosso site oficial.\n\nPodemos agendar uma demonstração?',
       followUpTemplates: [
         'Olá {nombre}, tudo bem? Queria verificar se você pôde analisar a mensagem anterior.'
       ],
@@ -113,7 +117,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
             <span>Campañas</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Definición de objetivos, ventanas horarias por huso horario del destinatario, plantillas de mensajes y bloqueos de seguridad.
+            Prepará notas personalizadas y revisá el avance de cada campaña.
           </p>
         </div>
 
@@ -126,6 +130,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
         </button>
       </div>
 
+      {preparationNotice && <div role="status" className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm">{preparationNotice}</div>}
       {/* Campaigns list cards */}
       <div className="space-y-4">
         {displayedCampaigns.map(camp => {
@@ -171,6 +176,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                   </div>
 
                   <p className="text-xs text-slate-600 leading-relaxed">{camp.objective}</p>
+                  {camp.autoPrepare && <p className="text-xs text-blue-700">Preparación automática de correos habilitada{camp.status === 'borrador' ? ' · Cambiá a Lista para iniciarla.' : '.'}</p>}
 
                   {/* Blocking Reason Callout */}
                   {isBlocked && (
@@ -235,7 +241,15 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                     <span className="font-bold text-indigo-700">{camp.stats.responsesReceived}</span>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <p>Borradores pendientes: <strong>{camp.stats.messagesPending}</strong></p>
+                    {camp.lastPreparation && <div className="text-slate-600 space-y-1"><p>Última preparación: {new Date(camp.lastPreparation.at).toLocaleString('es-AR')}</p><p>{camp.lastPreparation.created} nuevos borradores.</p>{camp.lastPreparation.blockedReason && <p>{camp.lastPreparation.blockedReason}</p>}<details><summary>Ver exclusiones</summary>{Object.entries(camp.lastPreparation.skipped).map(([reason, count]) => <p key={reason}>{reason}: {count}</p>)}</details></div>}
+                    {onPrepareCampaign && <button disabled={preparing !== null || ['pausada', 'finalizada'].includes(camp.status)} className="w-full py-2 border border-blue-200 rounded-lg text-blue-800 bg-blue-50" onClick={async () => {
+                      setPreparing(camp.id); setPreparationNotice('');
+                      try { const result = await onPrepareCampaign(camp.id); setPreparationNotice(result.blockedReason || `${result.created} correos preparados. Revisalos en Conversaciones. No se realizó ningún envío.`); }
+                      catch (error: any) { setPreparationNotice(error.message || 'No se pudo preparar la campaña.'); }
+                      finally { setPreparing(null); }
+                    }}>{preparing === camp.id ? 'Preparando…' : 'Preparar correos'}</button>}
                     <button
                       onClick={() => handleOpenEdit(camp)}
                       className="w-full py-1.5 px-3 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 hover:bg-slate-100 transition-colors flex items-center justify-center space-x-1.5 shadow-2xs"
@@ -382,7 +396,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">Segmento</label>
+                      <label className="font-bold text-slate-700 block mb-1">Tipo de organización (vacío: todos)</label>
                       <input
                         type="text"
                         value={editingCampaign.segment}
@@ -401,7 +415,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                     >
                       <option value="borrador">Borrador</option>
                       <option value="lista">Lista para revisión</option>
-                      <option value="activa">Activa (Ejecutar envíos en ventana)</option>
+                      <option value="activa">Activa</option>
                       <option value="pausada">Pausada</option>
                       <option value="finalizada">Finalizada</option>
                       <option value="bloqueada_por_configuracion">Bloqueada por configuración</option>
@@ -409,6 +423,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                   </div>
 
                   <div>
+                    <label className="flex gap-3 items-start mb-4 p-3 bg-blue-50 rounded-lg"><input type="checkbox" checked={editingCampaign.autoPrepare === true} onChange={e => setEditingCampaign({ ...editingCampaign, autoPrepare: e.target.checked })}/><span>Preparar correos automáticamente<br/><small>Usa esta plantilla y los contactos autorizados del país, idioma y segmento elegidos. Funciona en estado Lista o Activa, respeta el límite diario y no envía mensajes. WhatsApp permanece pendiente.</small></span></label>
                     <label className="font-bold text-slate-700 block mb-1">Modo de Envío</label>
                     <select
                       value={editingCampaign.mode}
@@ -417,7 +432,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                     >
                       <option value="revision_previa">Revisión previa (Generar borrador y esperar aprobación manual)</option>
                       <option value="manual">Manual (100% asistido por operador)</option>
-                      <option value="automatico">Automático (Envíos autónomos en horario permitido)</option>
+                      <option value="automatico">Automático (el envío requiere un canal conectado)</option>
                     </select>
                   </div>
                 </div>
