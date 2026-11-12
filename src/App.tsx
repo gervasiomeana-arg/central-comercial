@@ -307,7 +307,7 @@ export default function App() {
   const pendingTasksCount = tasks.filter(t => t.status === 'pendiente').length;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div className="cc-shell">
       {/* Global Header */}
       <Header
         currentTab={currentTab}
@@ -329,7 +329,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="cc-main">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -342,6 +342,8 @@ export default function App() {
                 onOpenGuidedCampaign={() => setCurrentTab('campaigns')}
                 onOpenEmailSandbox={() => setCurrentTab('system')}
                 metrics={metrics}
+                campaigns={campaigns}
+                contacts={contacts}
                 applications={applications}
                 tasks={tasks}
                 pipelineStatus={pipelineStatus}
@@ -450,14 +452,7 @@ export default function App() {
       />
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>CENTRAL COMERCIAL — Sistema Privado de Captación y Gestión de Clientes</span>
-          <span className="font-mono text-[11px] text-slate-400">
-            Node.js + React · Open Voley · Visibility AI · NeuroPlaneta · Funeraria
-          </span>
-        </div>
-      </footer>
+      <footer className="cc-footer"><span>Central Comercial<span className="cc-heading-dot">.</span></span><span>Un espacio para hacer crecer tus ideas.</span></footer>
     </div>
   );
 }
