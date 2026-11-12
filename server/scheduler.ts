@@ -1,3 +1,4 @@
+import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
 
 class CommercialScheduler {
@@ -46,6 +47,8 @@ class CommercialScheduler {
       }
 
       db.processLedger();
+      db.processSalesDirector();
+      await researchGoalProspects();
 
       // Check tasks due
       const now = new Date();
@@ -91,6 +94,8 @@ class CommercialScheduler {
       }
 
       for (const campaign of campaigns) {
+        const goal = db.getSalesGoalReport();
+        if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
         if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
           try { db.prepareCampaignDrafts(campaign.id); }
           catch (error) { db.addLog('error', 'campañas', `No se pudo preparar la campaña ${campaign.name}`, { error: String(error) }); }

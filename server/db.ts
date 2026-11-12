@@ -1,3 +1,4 @@
+import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import fs from 'fs';
@@ -6,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type {
   Application,
+  MonthlySalesGoal,
   AccountCharge,
   Contact,
   Campaign,
@@ -36,6 +38,9 @@ export interface DatabaseSchema {
   scheduler: SchedulerState;
   applications: Application[];
   accountCharges: AccountCharge[];
+  monthlySalesGoals: MonthlySalesGoal[];
+  commercialEmailWorker?: { id: string; at: number; send: boolean; read: boolean; sender: string };
+  researchState: { month: string; day: string; requests: number; visited: string[]; blocked?: boolean; lastError?: string; lastSuccess?: string };
   contacts: Contact[];
   campaigns: Campaign[];
   conversations: Conversation[];
@@ -263,6 +268,9 @@ class DatabaseManager {
           scheduler: parsed.scheduler || INITIAL_SCHEDULER,
           applications: parsed.applications || INITIAL_APPLICATIONS,
           accountCharges: parsed.accountCharges || [],
+          monthlySalesGoals: parsed.monthlySalesGoals || [defaultGoal('2026-11')],
+          commercialEmailWorker: parsed.commercialEmailWorker,
+          researchState: parsed.researchState || { month: '', day: '', requests: 0, visited: [] },
           contacts: parsed.contacts || [],
           campaigns: parsed.campaigns || INITIAL_CAMPAIGNS,
           conversations: parsed.conversations || [],
@@ -293,6 +301,8 @@ class DatabaseManager {
       scheduler: INITIAL_SCHEDULER,
       applications: INITIAL_APPLICATIONS,
       accountCharges: [],
+      monthlySalesGoals: [defaultGoal('2026-11')],
+      researchState: { month: '', day: '', requests: 0, visited: [] },
       contacts: [],
       campaigns: INITIAL_CAMPAIGNS,
       conversations: [],
@@ -415,7 +425,8 @@ class DatabaseManager {
     const emailConn = this.data.connectors.find(c => c.type === 'email_smtp');
     const whatsappConn = this.data.connectors.find(c => c.type === 'whatsapp_cloud');
 
-    const outboundConnected = emailConn?.status === 'conectado' || whatsappConn?.status === 'conectado';
+    const mailWorker = this.getCommercialEmailStatus();
+    const outboundConnected = mailWorker.send || emailConn?.status === 'conectado' || whatsappConn?.status === 'conectado';
     const webhookConn = this.data.connectors.find(c => c.type === 'webhook');
 
     return {
@@ -425,9 +436,9 @@ class DatabaseManager {
         lastTick: this.data.scheduler.lastRunAt
       },
       autonomousContactSearch: {
-        status: 'pendiente_conexion',
-        description: 'Búsqueda autónoma de prospectos por scraping o directorios.',
-        details: 'No implementada en esta etapa. Requiere conectar scrapers o APIs de búsqueda externa.'
+        status: this.data.researchState.blocked ? 'error' : this.data.researchState.lastSuccess ? 'conectado' : 'pendiente_conexion',
+        description: 'Consulta de páginas públicas y verificación de contactos institucionales.',
+        details: this.data.researchState.lastError || (this.data.researchState.lastSuccess ? 'Última consulta real: ' + this.data.researchState.lastSuccess : 'Esperando la primera consulta del objetivo mensual.')
       },
       outboundMessaging: {
         status: outboundConnected ? 'conectado' : 'pendiente_conexion',
@@ -437,9 +448,9 @@ class DatabaseManager {
           : 'Bloqueado: Servidores SMTP o WhatsApp Cloud API pendientes de conexión real.'
       },
       inboundResponseListening: {
-        status: webhookConn?.status === 'conectado' ? 'conectado' : 'pendiente_conexion',
+        status: mailWorker.read || webhookConn?.status === 'conectado' ? 'conectado' : 'pendiente_conexion',
         description: 'Recepción y lectura autónoma de respuestas de prospectos.',
-        details: webhookConn?.status === 'conectado'
+        details: mailWorker.read ? 'Ejecutor de correo conectado al buzón para leer respuestas vinculadas.' : webhookConn?.status === 'conectado'
           ? 'Webhook activo recibiendo eventos.'
           : 'Pendiente de conexión de webhook público o polling de buzón.'
       }
@@ -653,6 +664,45 @@ class DatabaseManager {
     return removed;
   }
 
+  public getMonthlyGoal(month = accountingDay().slice(0, 7)) { return this.data.monthlySalesGoals.find(g => g.month === month) || defaultGoal(month); }
+  public getSalesGoalReport(month = accountingDay().slice(0, 7)) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Mes no válido.');
+    const goal = this.getMonthlyGoal(month);
+    return { ...goalProgress(goal, this.data.applications, this.data.payments, this.data.clients), worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length }, paused: this.data.scheduler.automationsPaused };
+  }
+  public saveMonthlyGoal(input: MonthlySalesGoal) {
+    validateGoal(input);
+    const goal: MonthlySalesGoal = { month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
+    const index = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
+    if (index < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[index] = goal;
+    this.addLog('info', 'campañas', `Objetivo ${goal.month}: ${goal.targetClients} clientes nuevos con primer pago confirmado.`, { enabled: goal.enabled });
+    for (const campaign of this.data.campaigns.filter(c => c.goalMonth === goal.month)) {
+      campaign.autoSendEmail = goal.sendEmail;
+      const app = this.getApplicationById(campaign.appId);
+      if (app) { const strategy = playbook(app); campaign.researchQueries = strategy.segments.map(segment => `${segment} ${campaign.country}`); }
+      campaign.dailyLimit = Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, this.data.applications.filter(a => a.status === 'lista' && a.campaignsAllowed).length)));
+    }
+    this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
+  }
+  public processSalesDirector() {
+    const report = this.getSalesGoalReport();
+    if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
+    const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
+    if (created.length) { this.data.campaigns.push(...created); this.addLog('info', 'campañas', `${created.length} campañas creadas para el objetivo ${report.goal.month}.`); this.save(); }
+  }
+  public getResearchState() { return this.data.researchState; }
+  public commercialEmailHeartbeat(id: string, send: boolean, read: boolean, sender: string) {
+    const previous = this.data.commercialEmailWorker;
+    if (previous && Date.now() - previous.at < 90000 && previous.id !== id) throw new Error('Ya hay otro ejecutor comercial de correo activo.');
+    if (typeof id !== 'string' || id.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sender || '')) throw new Error('Identidad del ejecutor no válida.');
+    this.data.commercialEmailWorker = { id, at: Date.now(), send, read, sender }; this.save();
+  }
+  public getCommercialEmailStatus() {
+    const worker = this.data.commercialEmailWorker;
+    const online = Boolean(worker && Date.now() - worker.at < 90000);
+    return { online, send: online && Boolean(worker?.send), read: online && Boolean(worker?.read), sender: online ? worker?.sender : undefined };
+  }
+
   // --- Campaigns ---
   public getCampaigns(): Campaign[] {
     return this.data.campaigns;
@@ -771,7 +821,7 @@ class DatabaseManager {
       contact.history.push({
         id: `hist-${Date.now()}`,
         timestamp: newMsg.createdAt,
-        type: newMsg.direction === 'outbound' ? 'mensaje_enviado' : 'mensaje_recibido',
+        type: newMsg.direction === 'outbound' ? (['enviado','aceptado_proveedor','entrega_confirmada'].includes(newMsg.status) ? 'mensaje_enviado' : 'nota') : 'mensaje_recibido',
         description: `${newMsg.direction === 'outbound' ? 'Mensaje saliente' : 'Mensaje recibido'} (${newMsg.channel}) - Estado: ${newMsg.status}`,
         author: newMsg.direction === 'outbound' ? 'Sistema / Agente' : (contact.contactPerson || contact.orgName)
       });
@@ -840,6 +890,7 @@ class DatabaseManager {
         }
 
         // Update campaign stats if linked
+        conv.requiresHumanIntervention = conv.classification === 'requiere_intervencion' || this.data.tasks.some(t => t.relatedId === conv.id && t.status === 'pendiente');
         if (conv.campaignId) {
           const camp = this.getCampaignById(conv.campaignId);
           if (camp && camp.stats) {
@@ -1099,7 +1150,7 @@ class DatabaseManager {
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
           if ((m.status === 'pendiente' || m.status === 'preparado') && m.reviewStatus !== 'rejected') messagesPending++;
-          else if (m.status === 'enviado') messagesSent++;
+          else if (m.status === 'enviado' || (m.status === 'aceptado_proveedor' && m.acceptedAt && m.serviceConfirmationId)) messagesSent++;
           else if (m.status === 'fallido') messagesFailed++;
           else if (m.status === 'resultado_desconocido') messagesUnknown++;
         } else if (m.direction === 'inbound') {

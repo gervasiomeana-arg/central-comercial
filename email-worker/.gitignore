@@ -1,0 +1,4 @@
+.env
+node_modules/
+email-state.json
+email-state.tmp

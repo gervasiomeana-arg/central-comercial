@@ -77,6 +77,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
+  saveSalesGoal: (goal: import('./types.js').MonthlySalesGoal) => fetchJson<any>('/api/sales-goals', {method:'PUT', body:JSON.stringify(goal)}),
   getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),
   startRealChannelTests: (channels: string[]) => fetchJson<any>('/api/channel-tests', {
     method: 'POST', body: JSON.stringify({ channels })

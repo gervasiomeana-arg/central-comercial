@@ -1,3 +1,4 @@
+import { registerCommercialEmailRoutes } from './server/commercial-email.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -26,6 +27,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const channelTests = new ChannelTestQueue(path.join(__dirname, 'data/channel_test_jobs.json'));
 registerWorkerTestRoutes(app, channelTests);
+registerCommercialEmailRoutes(app);
 
 // Start background task runner
 scheduler.start(30000);
@@ -203,6 +205,9 @@ adminRouter.post('/channel-tests', (req, res) => {
 });
 
 // Automation Pipeline Status: explicitly separating each stage (Requirement 3)
+adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalReport(typeof req.query.month === 'string' ? req.query.month : undefined)); } catch(error:any) { res.status(400).json({error:error.message}); } });
+adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
+
 adminRouter.get('/automation/pipeline', (req, res) => {
   res.json(db.getAutomationPipelineStatus());
 });
@@ -735,12 +740,16 @@ adminRouter.post('/conversations/:id/messages', (req, res) => {
       finalStatus = 'resultado_desconocido';
     }
 
+    const thread = db.getConversationById(req.params.id);
+    const replyTo = thread?.messages.filter(m => m.direction === 'inbound' && m.providerMessageId).at(-1)?.providerMessageId;
+    const queueEmail = direction !== 'inbound' && (channel || 'email') === 'email' && replyTo && ['pendiente', 'preparado', undefined].includes(status);
     const newMsg = db.addMessageToConversation(req.params.id, {
       conversationId: req.params.id,
       direction: direction || 'outbound',
       channel: channel || 'email',
       content,
-      status: finalStatus || 'pendiente',
+      status: queueEmail ? 'preparado' : finalStatus || 'pendiente',
+      ...(queueEmail ? { replyToProviderId:replyTo, reviewStatus:'approved' as const, reviewedAt:new Date().toISOString(), reviewedBy:'Operador Central Comercial', approvedRecipient:db.getContactById(thread!.contactId)?.email.toLowerCase() } : {}),
       serviceConfirmationId
     });
 
