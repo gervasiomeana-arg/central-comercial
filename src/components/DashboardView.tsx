@@ -45,7 +45,7 @@ export function DashboardView(props: DashboardViewProps) {
       <div className="cc-kpi-title"><span>{kpi.label}</span><kpi.icon size={17} strokeWidth={1.5}/></div><strong className="cc-kpi-value">{kpi.value.toLocaleString('es-AR')}</strong><span className="cc-kpi-detail">{kpi.detail}</span>
     </article>)}</section>
 
-    <SalesGoalPanel/>
+    <SalesGoalPanel selectedApp={selectedAppFilter} onNavigate={(tab,appId)=>{props.setSelectedAppFilter(appId);props.onNavigateTab(tab);}}/>
     <div className="cc-dashboard-columns">
       <section className="cc-panel cc-portfolio">
         <div className="cc-panel-heading"><div><p className="cc-eyebrow">PORTAFOLIO</p><h2>Tus aplicaciones</h2></div><button className="cc-text-button" onClick={() => props.onNavigateTab('applications')}>Ver todas <ArrowUpRight size={15}/></button></div>
