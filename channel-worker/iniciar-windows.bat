@@ -7,11 +7,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist .env (
-  copy .env.example .env >nul
-  echo Complete la conexion privada y la autorizacion de Gmail. Guarde el archivo y cierre el editor.
-  start /wait notepad .env
-)
 if not exist node_modules (
   call npm install --no-audit --no-fund
   if errorlevel 1 (
@@ -19,6 +14,11 @@ if not exist node_modules (
     pause
     exit /b 1
   )
+)
+node configurar.mjs
+if errorlevel 1 (
+  pause
+  exit /b 1
 )
 node worker.mjs
 pause
