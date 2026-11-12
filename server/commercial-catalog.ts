@@ -1,6 +1,6 @@
 import type { Application, PlanItem } from '../src/types.js';
 
-export const COMMERCIAL_CATALOG_VERSION = '2026-11-12.1';
+export const COMMERCIAL_CATALOG_VERSION = '2026-11-12.2';
 const at = '2026-11-12T18:00:00.000Z';
 const openSource = 'https://openvoley.com';
 const visibilitySource = 'https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts';
@@ -37,7 +37,21 @@ export function commercialCatalog(): Application[] {
 }
 
 const key = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
-const oldSeedIds = new Set(['ov-plan-club-basico', 'ov-plan-club-pro', 'ov-plan-federacion', 'vai-plan-starter', 'vai-plan-agency', 'np-plan-familia-mensual']);
+const oldSeeds: Record<string, { price: number; names: string[] }> = {
+  'ov-plan-club-basico': { price: 29, names: ['Club Básico'] },
+  'ov-plan-club-pro': { price: 69, names: ['Club Pro'] },
+  'ov-plan-federacion': { price: 199, names: ['Federación / Asociación'] },
+  'vai-plan-starter': { price: 49, names: ['Starter PYME'] },
+  'vai-plan-agency': { price: 149, names: ['Agency Pro'] },
+  'np-plan-familia-mensual': { price: 12, names: ['Plan Familia Mensual'] },
+  'np-plan-familia-anual': { price: 99, names: ['Plan Familia Anual'] }
+};
+function isLegacyExample(plan: PlanItem) {
+  if (plan.verified || plan.currency !== 'USD') return false;
+  const seed = oldSeeds[plan.id];
+  if (seed && plan.price === seed.price) return true;
+  return Object.values(oldSeeds).some(seed => plan.price === seed.price && seed.names.some(name => key(plan.name.replace(' (Borrador inicial)', '')) === key(name)));
+}
 export function mergeCommercialCatalog(existing: Application[]): { applications: Application[]; changed: boolean } {
   const applications = structuredClone(existing);
   let changed = false;
@@ -48,13 +62,13 @@ export function mergeCommercialCatalog(existing: Application[]): { applications:
     // Preserve IDs, relationships, custom records and historical prices. Archive known seed examples.
     found.plans ||= [];
     for (const previous of found.plans) {
-      if (oldSeedIds.has(previous.id) && previous.verified !== true && previous.name.includes('(Borrador inicial)')) { previous.archived = true; previous.verificationNotes = 'Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.'; }
+      if (isLegacyExample(previous)) { previous.archived = true; previous.verificationNotes = 'Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.'; }
     }
     for (const published of official.plans) if (!found.plans.some(p => p.id === published.id)) found.plans.push(published);
     for (const field of ['website', 'registerUrl', 'paymentUrl'] as const) if (!found[field] || found[field].startsWith('Pendiente')) found[field] = official[field];
     if (!found.targetAudience) found.targetAudience = official.targetAudience;
     found.verifiedFeatures = [...new Set([...(found.verifiedFeatures || []), ...official.verifiedFeatures])];
-    if (official.trialVerified) { found.trialAvailable = official.trialAvailable; found.trialVerified = true; found.trialDurationDays = official.trialDurationDays; }
+    if (official.trialVerified && !found.trialVerified) { found.trialAvailable = official.trialAvailable; found.trialVerified = true; found.trialDurationDays = official.trialDurationDays; }
     found.commercialNotes = official.commercialNotes;
     found.commercialCatalogVersion = COMMERCIAL_CATALOG_VERSION;
     found.updatedAt = at; changed = true;
