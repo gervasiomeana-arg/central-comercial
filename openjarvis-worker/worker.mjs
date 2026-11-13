@@ -4,7 +4,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { inspectJarvis, generateStrategy, localJarvisURL } from './client.mjs';
+import { inspectJarvis, generateStrategy, answerQuestion, localJarvisURL } from './client.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cached = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp', 'correo-path.txt') : '';
@@ -27,12 +27,15 @@ fs.mkdirSync(path.dirname(stateFile), { recursive: true });
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { workerId: randomUUID(), pending: null };
 function save() { fs.writeFileSync(stateFile + '.tmp', JSON.stringify(state), { mode: 0o600 }); fs.renameSync(stateFile + '.tmp', stateFile); }
 save();
-async function api(action, payload = {}) {
-  const response = await fetch(new URL('/api/openjarvis/worker/' + action, central), {
+async function api(action, payload = {}, area = 'openjarvis') {
+  const response = await fetch(new URL('/api/' + area + '/worker/' + action, central), {
     method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({ workerId: state.workerId, ...payload }), signal: AbortSignal.timeout(15000)
   });
-  if (!response.ok) throw new Error(`Central Comercial rechazó la operación ${action} (HTTP ${response.status}).`);
+  if (!response.ok) {
+    const error = new Error(`Central Comercial rechazó la operación ${action} (HTTP ${response.status}).`);
+    error.status = response.status; throw error;
+  }
   return response.json();
 }
 let ready = false, processing = false, checking = false;
@@ -41,13 +44,20 @@ async function pulse() {
   checking = true;
   try {
     try { await inspectJarvis(base, model, jarvisKey); ready = true; } catch { ready = false; }
-    await api('heartbeat', { ready, model: ready ? model : '' });
+    await api('heartbeat', { ready, model: ready ? model : '', assistant: true });
   } catch (e) { console.error(e.message); }
   finally { checking = false; }
 }
 async function flush() {
   if (!state.pending) return;
-  await api('complete', state.pending);
+  try { await api('complete', state.pending, state.pending.area || 'openjarvis'); }
+  catch (error) {
+    if (error.status !== 409) throw error;
+    // A lease may have expired while the PC was offline. Retain a local receipt,
+    // release the outbox and never execute the old inference again.
+    state.lastRejected = { id: state.pending.id, area: state.pending.area || 'openjarvis', at: Date.now() };
+    console.error('El servidor no aceptó un resultado anterior. Revisar la tarea en Central; no se regenera.');
+  }
   state.pending = null; save();
 }
 async function tick() {
@@ -56,16 +66,24 @@ async function tick() {
   try {
     await flush();
     if (!ready) return;
-    const { job } = await api('claim');
+    const assistantClaim = await api('claim', {}, 'assistant');
+    const area = assistantClaim.job ? 'assistant' : 'openjarvis';
+    const { job } = assistantClaim.job ? assistantClaim : await api('claim');
     if (!job) return;
     // An interrupted local inference is reported as failed, not automatically regenerated.
-    state.pending = { id: job.id, lease: job.lease, failed: true }; save();
+    state.pending = { id: job.id, lease: job.lease, area, failed: true }; save();
     try {
-      const strategy = await generateStrategy(base, job.model, job.context, jarvisKey);
-      state.pending = { id: job.id, lease: job.lease, strategy }; save();
+      if (area === 'assistant') {
+        const answer = await answerQuestion(base, job.model, job, jarvisKey);
+        state.pending = { id: job.id, lease: job.lease, area, answer };
+      } else {
+        const strategy = await generateStrategy(base, job.model, job.context, jarvisKey);
+        state.pending = { id: job.id, lease: job.lease, area, strategy };
+      }
+      save();
     } catch {
-      state.pending = { id: job.id, lease: job.lease, failed: true }; save();
-      console.error('El modelo no devolvió una estrategia válida. No se repite automáticamente.');
+      state.pending = { id: job.id, lease: job.lease, area, failed: true }; save();
+      console.error('El modelo no devolvió una respuesta válida. No se repite automáticamente.');
     }
     await flush();
     console.log('Resultado guardado en Central Comercial. No se enviaron mensajes.');
@@ -74,7 +92,7 @@ async function tick() {
 }
 console.log('CENTRAL COMERCIAL — Puente OpenJarvis');
 console.log(`Equipo: ${Math.round(os.totalmem() / 1024 ** 3)} GB RAM; ${os.cpus()[0]?.model || 'procesador sin identificar'}.`);
-console.log('Solo planificación local. No envía promociones ni registra pagos.');
+console.log('Planificación y consultas locales. No envía promociones ni registra pagos.');
 await pulse();
 console.log(ready ? 'OpenJarvis y modelo disponibles. Prepará una estrategia en Conexiones.' : 'Pendiente: iniciar OpenJarvis con el modelo elegido. Consulte README.md.');
 setInterval(() => void pulse(), 20000);

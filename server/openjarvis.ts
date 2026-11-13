@@ -27,7 +27,7 @@ export function validateStrategy(input: unknown): JarvisStrategy {
 
 export class JarvisQueue {
   private plans: StoredPlan[];
-  private worker?: { id: string; at: number; ready: boolean; model: string; detail: string };
+  private worker?: { id: string; at: number; ready: boolean; model: string; detail: string; assistant: boolean };
   constructor(private file: string, private now = () => Date.now()) {
     this.plans = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
     if (!Array.isArray(this.plans)) throw new Error('Registro OpenJarvis inválido; conservar el archivo para revisión.');
@@ -51,21 +51,22 @@ export class JarvisQueue {
     }
     if (changed) this.save();
   }
-  heartbeat(id: unknown, ready: unknown, model: unknown) {
+  heartbeat(id: unknown, ready: unknown, model: unknown, assistant = false) {
     if (!text(id, 100) || typeof ready !== 'boolean' || typeof model !== 'string' || model.length > 160 || (ready && !model.trim())) {
       throw new Error('Estado del puente OpenJarvis inválido.');
     }
     if (this.worker && this.worker.id !== id && this.now() - this.worker.at < 90000) throw new Error('Ya hay un puente OpenJarvis conectado.');
-    this.worker = { id: id as string, at: this.now(), ready, model,
+    this.worker = { id: id as string, at: this.now(), ready, model, assistant: assistant === true,
       detail: ready ? 'Modelo disponible en el servidor local de OpenJarvis.' : 'Puente conectado; OpenJarvis o su modelo local todavía no están disponibles.' };
   }
   status(): Omit<JarvisStatus, 'configured'> {
     this.expire();
     const online = Boolean(this.worker && this.now() - this.worker.at < 90000);
-    return { online, ready: online && Boolean(this.worker?.ready), model: online ? this.worker!.model : '',
+    return { online, ready: online && Boolean(this.worker?.ready), assistantReady: online && Boolean(this.worker?.ready && this.worker?.assistant), model: online ? this.worker!.model : '',
       detail: online ? this.worker!.detail : 'Pendiente de iniciar el puente y OpenJarvis en tu computadora.',
       plans: this.plans.slice(-30).reverse().map(({ workerId, leaseHash, ...plan }) => plan) };
   }
+  assistantWorkerReady(id: string) { return this.status().assistantReady === true && this.worker?.id === id; }
   enqueue(context: JarvisContext) {
     this.expire();
     // Reuse identical requests, including completed ones, for a day: no repeated model spending.
@@ -119,7 +120,7 @@ export function registerJarvisWorkerRoutes(app: Express, queue: JarvisQueue) {
     try {
       const { workerId } = req.body || {};
       if (!text(workerId, 100)) throw new Error('Identificador de puente inválido.');
-      if (req.params.action === 'heartbeat') { queue.heartbeat(workerId, req.body.ready, req.body.model); return res.json({ ok: true }); }
+      if (req.params.action === 'heartbeat') { queue.heartbeat(workerId, req.body.ready, req.body.model, req.body.assistant === true); return res.json({ ok: true }); }
       if (req.params.action === 'claim') return res.json({ job: queue.claim(workerId) });
       if (req.params.action === 'complete') { queue.complete(req.body.id, workerId, req.body.lease, req.body); return res.json({ ok: true }); }
       return res.status(404).json({ error: 'Acción desconocida.' });

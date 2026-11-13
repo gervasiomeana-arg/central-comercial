@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command } from 'lucide-react';
+import { LayoutDashboard, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command, AudioLines } from 'lucide-react';
 
 interface HeaderProps {
   currentTab: string; setCurrentTab: (tab: string) => void;
@@ -16,6 +16,7 @@ export function Header(props: HeaderProps) {
   const [open, setOpen] = useState(false);
   const items = [
     { id: 'dashboard', label: 'Resumen', icon: LayoutDashboard },
+    { id: 'assistant', label: 'Hablar con Central', icon: AudioLines },
     { id: 'applications', label: 'Aplicaciones', icon: Layers },
     { id: 'contacts', label: 'Contactos', icon: Users },
     { id: 'campaigns', label: 'Campañas', icon: Send },

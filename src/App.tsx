@@ -7,6 +7,7 @@ import { CampaignsView } from './components/CampaignsView.js';
 import { ConversationsView } from './components/ConversationsView.js';
 import { ClientsView } from './components/ClientsView.js';
 import { ConnectorsAndSystemView } from './components/ConnectorsAndSystemView.js';
+import { AssistantView } from './components/AssistantView.js';
 import { TasksModal } from './components/TasksModal.js';
 import { AuthModal } from './components/AuthModal.js';
 import { api } from './api.js';
@@ -435,6 +436,8 @@ export default function App() {
                 selectedAppFilter={selectedAppFilter}
               />
             )}
+
+            {currentTab === 'assistant' && <AssistantView selectedAppFilter={selectedAppFilter} applications={applications} />}
 
             {currentTab === 'system' && (
               <ConnectorsAndSystemView
