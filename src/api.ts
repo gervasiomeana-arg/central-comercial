@@ -77,6 +77,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getJarvisStatus: () => fetchJson<import('./openjarvis-types.js').JarvisStatus>('/api/openjarvis'),
+  prepareJarvisPlan: (appId: string, country: string) => fetchJson<{ id: string }>('/api/openjarvis/plans', { method: 'POST', body: JSON.stringify({ appId, country }) }),
   getAutonomousRun:()=>fetchJson<any>('/api/automation/run'),
   startAutonomousRun:(input:import('./types.js').StartAutonomousInput)=>fetchJson<any>('/api/automation/start',{method:'POST',body:JSON.stringify(input)}),
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),

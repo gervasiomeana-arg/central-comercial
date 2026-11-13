@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RealChannelTests } from './RealChannelTests.js';
+import { OpenJarvisPanel } from './OpenJarvisPanel.js';
 import {
   Settings,
   Server,
@@ -75,6 +76,7 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
 
   return (
     <div className="space-y-6">
+      <OpenJarvisPanel />
       <RealChannelTests />
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
