@@ -1,7 +1,7 @@
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import net from 'node:net';
-import type { Application, Contact } from '../src/types.js';
+import type { Application, Contact, ResearchEvidence } from '../src/types.js';
 import { playbook, normalize } from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 
@@ -42,31 +42,69 @@ export async function fetchPublicText(value: string, redirects = 0): Promise<{ u
     request.on('close', () => clearTimeout(timer));
   });
 }
-const decode = (value: string) => value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+const decode = (value: string) => value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&(?:amp|quot|apos|lt|gt|commat);|&#(?:x[0-9a-f]+|\d+);/gi, entity => {
+  const named:Record<string,string>={'&amp;':'&','&quot;':'"','&apos;':"'",'&lt;':'<','&gt;':'>','&commat;':'@'};
+  if(named[entity.toLowerCase()])return named[entity.toLowerCase()];
+  const hex=entity.toLowerCase().startsWith('&#x'), code=parseInt(entity.slice(hex?3:2,-1),hex?16:10);
+  return code>0&&code<=0x10ffff?String.fromCodePoint(code):entity;
+});
+const hostKey=(value:string)=>new URL(value).hostname.toLowerCase().replace(/^www\./,'');
 const excluded = /(^|\.)(bing|microsoft|google|facebook|instagram|linkedin|youtube|wikipedia|twitter|x)\.(com|org)$/i;
 export function searchLinks(xml: string) {
   return [...new Set([...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].flatMap(item => {
-    const link = item[1].match(/<link>([\s\S]*?)<\/link>/i)?.[1];
+    const link = item[1].match(/<link(?:\s[^>]*)?>([\s\S]*?)<\/link>/i)?.[1];
     try { const url = publicUrl(decode(link || '').trim()); return excluded.test(url.hostname) ? [] : [url.href]; } catch { return []; }
   }))].slice(0, 10);
 }
 export function contactLinks(html: string, base: string) {
-  const origin = new URL(base).origin;
-  return [...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].flatMap(match => {
-    try { const url = publicUrl(new URL(decode(match[1]), base).href); return url.origin === origin && /contact|contato|contacto/i.test(url.pathname) ? [url.href] : []; } catch { return []; }
-  }).slice(0, 2);
+  return [...new Set([...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].flatMap(match => {
+    try { const url = publicUrl(new URL(decode(match[1]), base).href); return hostKey(url.href) === hostKey(base) && /contact|contato|contacto|institucional|quienes|quem-somos|about/i.test(url.pathname) ? [url.href] : []; } catch { return []; }
+  }))].sort((a,b)=>Number(/contact/i.test(b))-Number(/contact/i.test(a))).slice(0, 3);
 }
-export function extractContact(html: string, url: string, app: Application, country: string, now = new Date()): Contact | null {
-  const clean = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  const text = decode(clean.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
-  if (!playbook(app).terms.some(term => normalize(text).includes(normalize(term)))) return null;
-  const phoneMatch = clean.match(/(?:wa\.me\/|api\.whatsapp\.com\/send\?[^"'<>]*?phone=)(\+?\d{8,15})/i);
-  const phone = phoneMatch?.[1].replace(/\D/g, '') || '';
-  const prefixes: Record<string, string> = { argentina: '54', uruguay: '598', chile: '56', brasil: '55', paraguay: '595', colombia: '57', mexico: '52', espana: '34' };
-  if (!normalize(text).includes(normalize(country)) && !(prefixes[normalize(country)] && phone.startsWith(prefixes[normalize(country)]))) return null;
-  const emails = [...new Set((decode(clean).match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).map(e => e.toLowerCase()))].filter(e => e.length < 200 && !/example\.|ejemplo\.|noreply@|no-reply@|\.(png|jpg|webp|svg|css|js)$/.test(e));
-  const email = emails.sort((a, b) => Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b)) - Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0] || '';
-  if (!email && !phone) return null;
-  const title = decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() || new URL(url).hostname).slice(0, 160);
-  return { id: `contact-${randomUUID()}`, orgName: title, contactPerson: '', role: 'Contacto institucional público', orgType: playbook(app).audience, country, language: normalize(country) === 'brasil' ? 'pt-BR' : 'es', timezone: 'America/Argentina/Buenos_Aires', website: new URL(url).origin, email, phone, source: url, sourceReviewDate: now.toISOString(), interestedAppIds: [app.id], assignedTo: 'Central Comercial', notes: 'Dato extraído de una página pública de la organización. No implica consentimiento del destinatario. WhatsApp solo se registra como contacto; no se conecta ni se envía.', history: [], preferredChannel: email ? 'email' : 'whatsapp', permission: 'desconocido', outreachBasis: 'public_business_contact', status: 'prospecto', nextFollowUpDate: null, createdAt: now.toISOString(), updatedAt: now.toISOString() };
+const countries:Record<string,{prefix:string;iso:string;aliases:string[]}>= {
+  argentina:{prefix:'54',iso:'AR',aliases:['argentina']},uruguay:{prefix:'598',iso:'UY',aliases:['uruguay']},chile:{prefix:'56',iso:'CL',aliases:['chile']},brasil:{prefix:'55',iso:'BR',aliases:['brasil','brazil']},paraguay:{prefix:'595',iso:'PY',aliases:['paraguay']},colombia:{prefix:'57',iso:'CO',aliases:['colombia']},mexico:{prefix:'52',iso:'MX',aliases:['mexico']},espana:{prefix:'34',iso:'ES',aliases:['espana','spain']}
+};
+const word=(text:string,term:string)=>new RegExp(`\\b${normalize(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(normalize(text));
+function organizationData(html:string) {
+  const found:{countries:string[];emails:string[]}={countries:[],emails:[]};
+  const visit=(value:any,depth=0)=>{
+    if(depth>4||!value||typeof value!=='object')return;
+    if(Array.isArray(value)){value.slice(0,40).forEach(v=>visit(v,depth+1));return;}
+    const type=String(value['@type']||'');
+    if(/Organization|LocalBusiness|School|SportsClub|SportsActivityLocation|EducationalOrganization/i.test(type)) {
+      const address=Array.isArray(value.address)?value.address:[value.address];
+      for(const item of address){const country=item?.addressCountry;const name=typeof country==='string'?country:country?.name||country?.identifier;if(typeof name==='string')found.countries.push(name);}
+      for(const email of [value.email].flat())if(typeof email==='string')found.emails.push(email.replace(/^mailto:/i,''));
+    }
+    if(value['@graph'])visit(value['@graph'],depth+1);
+  };
+  for(const match of [...html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].slice(0,10)) {
+    if(match[1].length>200000)continue;
+    try{visit(JSON.parse(match[1]));}catch{/* Invalid structured data is not evidence. */}
+  }
+  return found;
+}
+export function reviewContactPage(html: string, url: string, app: Application, country: string, now=new Date(), context?:ResearchEvidence) {
+  const clean=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
+  const text=decode(clean.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ');
+  const inherited=context&&context.appId===app.id&&normalize(context.country)===normalize(country)&&hostKey(context.url)===hostKey(url)?context:undefined;
+  const structured=organizationData(html), rule=countries[normalize(country)];
+  const phone=clean.match(/(?:wa\.me\/|api\.whatsapp\.com\/send\?[^"'<>]*?phone=)(\+?\d{8,15})/i)?.[1].replace(/\D/g,'')||'';
+  const telephone=clean.match(/href\s*=\s*["']tel:\s*(\+[^"']+)["']/i)?.[1].replace(/\D/g,'')||'';
+  const title=decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||new URL(url).hostname).slice(0,160);
+  const evidence:ResearchEvidence={url,appId:app.id,country,title,topicVerified:Boolean(inherited?.topicVerified||playbook(app).terms.some(term=>word(text,term))),countryVerified:Boolean(inherited?.countryVerified||(rule?.aliases||[country]).some(alias=>word(text,alias))||(rule&&(phone.startsWith(rule.prefix)||telephone.startsWith(rule.prefix)))||structured.countries.some(name=>normalize(name)===normalize(country)||Boolean(rule&&name.toUpperCase()===rule.iso)))};
+  if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
+  if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
+  const emails:string[]=decode(clean).match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
+  for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
+  emails.push(...structured.emails);
+  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(e=>e.length<200&&/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)&&!/example\.|ejemplo\.|noreply@|no-reply@|\.(png|jpg|webp|svg|css|js)$/.test(e));
+  const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
+  if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
+  const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
+  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:normalize(country)==='brasil'?'pt-BR':'es',timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Dato publicado por la organización; no implica consentimiento del destinatario. WhatsApp solo se registra, sin enviar.${additional}`,history:[],preferredChannel:email?'email':'whatsapp',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  return {contact,evidence,reason:email?'Email público verificado':'Solo WhatsApp público; no habilita envío por email'};
+}
+export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {
+  return reviewContactPage(html,url,app,country,now,context).contact;
 }

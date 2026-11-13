@@ -1,4 +1,4 @@
-import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary } from './sales-director.js';
+import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import fs from 'fs';
@@ -10,6 +10,7 @@ import type {
   MonthlySalesGoal,
   AutonomousRun,
   StartAutonomousInput,
+  ResearchState,
   AccountCharge,
   Contact,
   Campaign,
@@ -43,7 +44,7 @@ export interface DatabaseSchema {
   monthlySalesGoals: MonthlySalesGoal[];
   autonomousRun?: AutonomousRun;
   commercialEmailWorker?: { id: string; at: number; send: boolean; read: boolean; sender: string };
-  researchState: { month: string; day: string; requests: number; visited: string[]; blocked?: boolean; lastError?: string; lastSuccess?: string };
+  researchState: ResearchState;
   contacts: Contact[];
   campaigns: Campaign[];
   conversations: Conversation[];
@@ -442,7 +443,7 @@ class DatabaseManager {
       autonomousContactSearch: {
         status: this.data.researchState.blocked ? 'error' : this.data.researchState.lastSuccess ? 'conectado' : 'pendiente_conexion',
         description: 'Consulta de páginas públicas y verificación de contactos institucionales.',
-        details: this.data.researchState.lastError || (this.data.researchState.lastSuccess ? 'Última consulta real: ' + this.data.researchState.lastSuccess : 'Esperando la primera consulta del objetivo mensual.')
+        details: this.data.researchState.detail || this.data.researchState.lastError || (this.data.researchState.lastSuccess ? 'Última consulta real: ' + this.data.researchState.lastSuccess : 'Esperando la primera consulta del objetivo mensual.')
       },
       outboundMessaging: {
         status: outboundConnected ? 'conectado' : 'pendiente_conexion',
@@ -685,7 +686,7 @@ class DatabaseManager {
     for (const campaign of this.data.campaigns.filter(c => c.goalMonth === goal.month)) {
       campaign.autoSendEmail = goal.sendEmail;
       const app = this.getApplicationById(campaign.appId);
-      if (app) { const strategy = playbook(app); campaign.researchQueries = strategy.segments.map(segment => `${segment} ${campaign.country}`); }
+      if (app) { const strategy = playbook(app); campaign.researchQueries = researchQueriesFor(app,campaign.country); campaign.researchQueryVersion=2; }
       campaign.dailyLimit = Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, this.data.applications.filter(a => a.status === 'lista' && a.campaignsAllowed).length)));
     }
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
@@ -756,12 +757,12 @@ class DatabaseManager {
     if(!worker.send)blockers.push('Envío bloqueado: el ejecutor de correo no está conectado.');
     if(!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
     if(this.data.researchState.day===accountingDay() && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
-    if(this.data.researchState.lastError)blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
+    if(this.data.researchState.lastError && this.data.researchState.lastError!=='Cupo diario de investigación alcanzado.')blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
     if(campaign?.lastPreparation?.blockedReason)blockers.push(`Preparación: ${campaign.lastPreparation.blockedReason}`);
     const unknown=messages.filter(m=>m.status==='resultado_desconocido').length;
     if(unknown)blockers.push(`${unknown} resultado(s) de envío incierto(s), sin reintento automático.`);
     const stages=[
-      {name:'Buscar y verificar contactos',count:contacts.length,state:contacts.length?'con_resultados':this.data.researchState.lastError?'bloqueado':'pendiente'},
+      {name:'Buscar y verificar contactos',count:contacts.length,state:contacts.length?'con_resultados':this.data.researchState.status==='quota'?'cupo':this.data.researchState.blocked||this.data.researchState.status==='error'?'bloqueado':'pendiente'},
       {name:'Preparar notas',count:prepared,state:prepared||accepted?'con_resultados':'pendiente'},
       {name:'Enviar por email',count:accepted,state:accepted?'con_resultados':worker.send?'pendiente':'bloqueado'},
       {name:'Recibir consultas',count:received,state:received?'con_resultados':worker.read?'pendiente':'bloqueado'},
@@ -770,7 +771,7 @@ class DatabaseManager {
       {name:'Registrar cuenta corriente',count:this.data.subscriptions.filter(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled).length,state:this.data.subscriptions.some(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled)?'con_resultados':'pendiente'},
       {name:'Confirmar primer pago',count:paid.length,state:paid.length?'con_resultados':'revision_manual'}
     ];
-    return {run,appName:app?.name,campaignName:campaign?.name,paused:this.data.scheduler.automationsPaused,worker,stages,blockers,lastCycleAt:this.data.scheduler.lastRunAt,contactsInCampaign:contacted.size,humanQuestions:threads.filter(c=>c.requiresHumanIntervention&&c.messages.some(m=>m.direction==='inbound')).length};
+    return {research:{status:this.data.researchState.status,detail:this.data.researchState.detail,outcome:campaign?.researchLastOutcome,pendingPages:campaign?.researchQueue?.length||0},run,appName:app?.name,campaignName:campaign?.name,paused:this.data.scheduler.automationsPaused,worker,stages,blockers,lastCycleAt:this.data.scheduler.lastRunAt,contactsInCampaign:contacted.size,humanQuestions:threads.filter(c=>c.requiresHumanIntervention&&c.messages.some(m=>m.direction==='inbound')).length};
   }
 
   // --- Campaigns ---

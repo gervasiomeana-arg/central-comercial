@@ -124,6 +124,17 @@ export type CampaignStatus =
 
 export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 
+export interface ResearchEvidence {
+  url: string; title: string; appId: string; country: string;
+  topicVerified: boolean; countryVerified: boolean;
+}
+export interface ResearchCandidate { url: string; context?: ResearchEvidence; returnTo?: string; attempts?: number; retryAt?: number; }
+export interface ResearchOutcome { at: string; query: string; created: number; reused: number; checked: number; reasons: Record<string,number>; }
+export interface ResearchState {
+  month: string; day: string; requests: number; visited: string[];
+  blocked?: boolean; lastError?: string; lastSuccess?: string;
+  status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
+}
 export interface Campaign {
   maxContacts?: number;
   goalMonth?: string;
@@ -134,6 +145,13 @@ export interface Campaign {
   lastResearchAt?: string;
   researchCount?: number;
   researchDay?: string;
+  researchQueryVersion?: number;
+  researchQueryIndex?: number;
+  researchQueriesToday?: number;
+  researchQueue?: ResearchCandidate[];
+  researchSeenUrls?: string[];
+  researchLastOutcome?: ResearchOutcome;
+  researchNextAttemptAt?: number;
   autoPrepare?: boolean;
   lastPreparation?: { at: string; created: number; skipped: Record<string, number>; blockedReason?: string };
   id: string;
