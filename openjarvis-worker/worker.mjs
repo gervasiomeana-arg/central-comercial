@@ -45,6 +45,7 @@ async function pulse() {
   try {
     try { await inspectJarvis(base, model, jarvisKey); ready = true; } catch { ready = false; }
     await api('heartbeat', { ready, model: ready ? model : '', assistant: true });
+    if(ready)process.send?.({type:'healthy'});
   } catch (e) { console.error(e.message); }
   finally { checking = false; }
 }
@@ -91,6 +92,7 @@ async function tick() {
   finally { processing = false; }
 }
 console.log('CENTRAL COMERCIAL — Puente OpenJarvis');
+if(process.send)process.on('disconnect',()=>process.exit(75));
 console.log(`Equipo: ${Math.round(os.totalmem() / 1024 ** 3)} GB RAM; ${os.cpus()[0]?.model || 'procesador sin identificar'}.`);
 console.log('Planificación y consultas locales. No envía promociones ni registra pagos.');
 await pulse();

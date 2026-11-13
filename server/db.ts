@@ -1,6 +1,7 @@
 import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
+import { DATA_DIR } from './data-directory.js';
 import fs from 'fs';
 import { prepareCampaign } from './campaign-preparation.js';
 import path from 'path';
@@ -31,7 +32,6 @@ import type {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.resolve(__dirname, '../data');
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'central_comercial_db.json');
 
@@ -297,7 +297,7 @@ class DatabaseManager {
         return schema;
       }
     } catch (err) {
-      console.error('Error al leer base de datos, inicializando con valores protegidos:', err);
+      throw new Error('No se pudo leer la base comercial. Se conservó el archivo y se detuvo el arranque para evitar reemplazar datos por ejemplos. Revisar los respaldos.', { cause: err });
     }
 
     const initial: DatabaseSchema = {
@@ -411,16 +411,14 @@ class DatabaseManager {
       // ignore
     }
 
-    const hasPostgres = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'));
-
     return {
       storageType: 'local_json_db',
       filePath: DB_FILE,
       fileSizeBytes: sizeBytes,
       backupCount,
       lastBackupAt: this.lastBackupTime,
-      environmentDurabilityNotice: 'Almacenamiento activo: Archivo JSON local con respaldos automáticos por escritura (data/central_comercial_db.json). AVISO DE DURABILIDAD EN CLOUD: En alojamientos de contenedores efímeros (como Google Cloud Run sin volumen montado), los datos del disco local pueden restablecerse tras un nuevo despliegue o reinicio del contenedor. La durabilidad permanente entre despliegues requiere verificar la existencia de un disco persistente montado o configurar una base de datos externa permanente PostgreSQL.',
-      postgresConfigured: hasPostgres,
+      environmentDurabilityNotice: 'Almacenamiento activo: JSON local con respaldos por escritura. CENTRAL_DATA_DIR permite ubicar la base y las colas en una carpeta absoluta de un disco persistente montado. Escribir una ruta no convierte un contenedor efímero en almacenamiento duradero. El inicio único conserva además copias locales de los registros mientras la PC está conectada; restaurar copias antiguas requiere revisión para no retroceder registros o repetir envíos. La variable DATABASE_URL por sí sola no conecta PostgreSQL en esta versión.',
+      postgresConfigured: false,
       postgresUriFormat: 'postgresql://USUARIO:PASSWORD@HOST:PUERTO/NOMBRE_BD?sslmode=require'
     };
   }

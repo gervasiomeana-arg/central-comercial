@@ -4,6 +4,9 @@ import { api } from '../api.js';
 import type { LocalRuntimeState } from '../runtime-types.js';
 
 const issueLabels: Record<string, string> = {
+  email_auth: 'Gmail requiere revisar su autorización antes de reconectar.',
+  whatsapp_auth: 'WhatsApp requiere volver a vincular el dispositivo o revisar la cuenta.',
+  backup_failed: 'No se pudo actualizar la copia local de los registros.',
   email_missing: 'Falta localizar el ejecutor de correo ya configurado.',
   whatsapp_missing: 'Falta localizar el ejecutor de WhatsApp vinculado.',
   browser_missing: 'Falta la ruta guardada de Chrome o Edge para WhatsApp.',
@@ -33,7 +36,8 @@ export function LocalRuntimePanel() {
     <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{connections[item.id] ? 'Conexión confirmada por el ejecutor' : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
     <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>
     {runtime?.issues.length ? <ul className="space-y-2 text-sm text-amber-200">{runtime.issues.map(issue => <li key={issue}>{issueLabels[issue] || 'Revisá la ventana de Central Comercial.'}</li>)}</ul> : null}
+    {runtime?.backupAt && <p className="text-xs text-slate-400">Última copia guardada en tu computadora: {new Date(runtime.backupAt).toLocaleString('es-AR')}. La restauración de copias anteriores requiere revisión para evitar retroceder registros.</p>}
     {error && <p role="alert" className="text-sm text-amber-200">No se pudo actualizar el estado: {error}</p>}
-    <details className="border-t border-white/10 pt-4 text-sm text-slate-300"><summary className="cursor-pointer font-medium text-white">Cómo usar el inicio único</summary><p className="mt-3 leading-relaxed">En el proyecto actualizado, abrí <strong>INICIAR_CENTRAL_COMERCIAL.bat</strong>. Cerrá primero las ventanas de los iniciadores anteriores para no duplicar procesos. Reutiliza las conexiones guardadas; no necesitás claves nuevas.</p><p className="mt-2 leading-relaxed">OpenJarvis y el modelo requieren instalación inicial en esa PC. El iniciador no descarga modelos ni desactiva protecciones de Windows. Mantener esta página abierta no sustituye al proceso local.</p></details>
+    <details className="border-t border-white/10 pt-4 text-sm text-slate-300"><summary className="cursor-pointer font-medium text-white">Cómo usar el inicio único</summary><p className="mt-3 leading-relaxed">En el proyecto actualizado, abrí <strong>INICIAR_CENTRAL_COMERCIAL.bat</strong>. Cerrá primero las ventanas de los iniciadores anteriores para no duplicar procesos. Reutiliza las conexiones guardadas; no necesitás claves nuevas.</p><p className="mt-2 leading-relaxed">Para arrancar después de iniciar sesión en Windows, usá una vez <strong>ACTIVAR_INICIO_AUTOMATICO.bat</strong> en tu PC dedicada. Los cortes temporales se reintentan; una autorización revocada requiere tu intervención. Podés desactivar el inicio automático con el archivo correspondiente.</p><p className="mt-2 leading-relaxed">OpenJarvis y el modelo requieren instalación inicial en esa PC. Mantener esta página abierta no sustituye al proceso local. El sistema no puede trabajar mientras la computadora está apagada.</p></details>
   </section>;
 }

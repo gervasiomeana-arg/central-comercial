@@ -4,10 +4,11 @@ import { parseEnv } from 'node:util';
 
 export function findConfig(root, env = process.env) {
   const candidates = [env.CENTRAL_CONFIG_FILE, path.join(root, '.env'),
+    env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'CentralComercial', 'runtime', 'config-path.txt'),
     env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp', 'correo-path.txt')];
   for (let candidate of candidates.filter(Boolean)) {
     if (!fs.existsSync(candidate)) continue;
-    if (candidate.endsWith('correo-path.txt')) candidate = fs.readFileSync(candidate, 'utf8').trim();
+    if (candidate.endsWith('correo-path.txt') || candidate.endsWith('config-path.txt')) candidate = fs.readFileSync(candidate, 'utf8').trim();
     if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
     const values = parseEnv(fs.readFileSync(candidate, 'utf8'));
     if ((values.CHANNEL_TEST_WORKER_KEY || '').length < 32) continue;
