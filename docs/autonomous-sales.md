@@ -31,3 +31,14 @@ Para operar de forma continua deben permanecer activos el servidor, el ejecutor,
 La publicación web estaba bloqueada por Google con el mensaje `Suspicious activity detected. Request blocked for project gen-lang-client-0958943545`. Los cambios del repositorio no acreditan publicación. Se requiere resolver ese bloqueo antes de presentar esta versión como disponible en la URL pública. WhatsApp Web sigue expresamente postergado: solo se recopilan contactos públicos, sin iniciar sesión ni enviar mensajes.
 
 Validación: `npm run lint`, `npm run build`, `npm run test:sales`, `npm run test:campaigns`, `npm run test:ledger`, `npm run test:channels`. Las pruebas comerciales usan una base temporal aislada, sin mensajes a destinatarios reales y sin modificar la base de producción.
+
+
+## Corrección de investigación (noviembre de 2026)
+
+La investigación conserva una cola por campaña y consulta una página por ciclo. Prioriza las páginas de contacto de una organización antes de consumir el cupo en otros dominios. Las páginas pendientes sobreviven a reinicios y al cambio de día. Las consultas avanzan con un cursor y se limitan a tres por campaña/día, en lugar de repetir la misma consulta en cada ciclo.
+
+La actividad y el país pueden contrastarse entre la portada y la página de contacto del mismo sitio. Se conservan solo indicadores de evidencia y sus URL, no copias completas de páginas. Los emails siempre se extraen de contenido publicado; también se leen enlaces mailto codificados y datos estructurados de organizaciones. No se convierten teléfonos normales en WhatsApp ni se atribuyen permisos de consentimiento.
+
+Los fallos de una página quedan diferenciados de fallos del buscador y de límites diarios. Una página inaccesible por un error transitorio admite un único reintento después de seis horas; no se reintentan accesos bloqueados. Agotar el cupo conserva la cola y se informa como espera, sin presentarlo como fallo de conexión. El registro detalla páginas revisadas, contactos nuevos/existentes y motivos de descarte. No se borra el historial comercial ni se restablecen cuotas para forzar nuevos intentos.
+
+Esta revisión se controla estáticamente. No equivale a una verificación del rendimiento comercial ni acredita nuevos contactos, entregas o ventas.
