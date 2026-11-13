@@ -1,5 +1,6 @@
 import { registerCommercialEmailRoutes } from './server/commercial-email.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
+import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -31,6 +32,8 @@ registerWorkerTestRoutes(app, channelTests);
 registerCommercialEmailRoutes(app);
 const jarvis = new JarvisQueue(path.join(__dirname, 'data/openjarvis_plans.json'));
 registerJarvisWorkerRoutes(app, jarvis);
+const assistant = new AssistantQueue(path.join(__dirname, 'data/assistant_history.json'), jarvis);
+registerAssistantWorkerRoutes(app, assistant);
 
 // Start background task runner
 scheduler.start(30000);
@@ -189,6 +192,18 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+
+adminRouter.get('/assistant', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store'); res.json(assistant.status());
+});
+adminRouter.post('/assistant/messages', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const appId = typeof req.body?.appId === 'string' ? req.body.appId : 'all';
+    const report = currentAssistantReport(appId);
+    res.json({ id: assistant.ask(req.body?.question, report, req.body?.kind), ...assistant.status() });
+  } catch (error: any) { res.status(409).json({ error: error.message }); }
+});
 
 adminRouter.get('/openjarvis', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

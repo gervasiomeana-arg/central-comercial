@@ -46,7 +46,17 @@ La aplicación publicada no puede acceder al `localhost` de tu PC. Por eso el pu
 
 ## Alcance pendiente
 
-Esta entrega conecta la planificación. Aplicar automáticamente estrategias a campañas, investigar fuentes con el agente y atender consultas mediante OpenJarvis son etapas posteriores. Los envíos, límites, solicitudes de baja y confirmaciones de pago siguen en el circuito existente; este puente no los reemplaza ni promete autonomía completa.
+Esta entrega conecta la planificación y las consultas del propietario. Aplicar automáticamente estrategias a campañas, investigar fuentes con el agente y atender consultas de clientes mediante OpenJarvis son etapas posteriores. Los envíos, límites, solicitudes de baja y confirmaciones de pago siguen en el circuito existente; este puente no los reemplaza ni promete autonomía completa.
+
+## Hablar, escribir y escuchar informes
+
+El menú **Hablar con Central** permite escribir o dictar una consulta y revisar el texto antes de enviarlo. **Informe actual** devuelve un informe escrito de los registros reales, incluso si OpenJarvis no está conectado. **Escuchar** lee la respuesta en voz alta; **Detener lectura** la interrumpe. La lectura automática de nuevas respuestas es opcional y comienza desactivada. Cada respuesta se puede descargar como texto.
+
+El dictado utiliza Web Speech API cuando el navegador la admite y solicita el permiso de micrófono al iniciar. El navegador puede procesar audio con su proveedor: no se promete dictado sin conexión ni transcripción local. Central Comercial no recibe ni guarda grabaciones. El dictado se detiene automáticamente; el texto nunca se envía por el solo hecho de hablar. Las voces dependen del sistema; se prefieren las voces españolas del equipo.
+
+Las consultas generales requieren este puente actualizado. El heartbeat anuncia la capacidad de conversación para no presentar un puente antiguo como compatible. Al modelo solo llega la consulta de texto y un informe agregado fechado; no se entregan identidades de clientes, correos, conversaciones comerciales ni credenciales. Las respuestas del modelo se muestran como **recomendaciones**, separadas de los informes deterministas. Las solicitudes de ejecutar acciones reciben una aclaración: este chat no cobra, activa campañas ni envía promociones.
+
+Se conservan las consultas y las respuestas por escrito en `data/assistant_history.json`, con acceso administrativo igual al resto del panel. Incluir ese archivo y `data/openjarvis_plans.json` en el respaldo del servidor. El informe es acumulado, con meta mensual conjunta y filtro por aplicación; no se presenta como actividad del día. La cola del asistente limita las consultas al modelo a veinte diarias, sin llamadas a Gemini.
 
 Contrato consultado: https://open-jarvis.github.io/OpenJarvis/deployment/api-server/
 Licencia del proyecto externo: Apache-2.0. Esta integración usa su API; no incluye una copia de su código.

@@ -21,6 +21,7 @@ export interface JarvisPlan {
   error?: string;
 }
 export interface JarvisStatus {
+  assistantReady?: boolean;
   configured: boolean;
   online: boolean;
   ready: boolean;

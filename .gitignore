@@ -14,4 +14,5 @@ channel-worker/.wwebjs_cache/
 data/channel_test_jobs.json*
 data/openjarvis_plans.json*
 openjarvis-worker/private-state/
+data/assistant_history.json*
 
