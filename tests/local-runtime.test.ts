@@ -4,7 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { LocalRuntime } from '../server/local-runtime.js';
-import { findConfig, selectedModel, jarvisEnvironment } from '../desktop/config.mjs';
+import { findConfig, findJarvis, selectedModel, jarvisEnvironment } from '../desktop/config.mjs';
 
 test('estado unificado vence, rechaza otro equipo y no expone el identificador privado', () => {
   let now = 1000;
@@ -40,4 +40,13 @@ test('selección de modelo es explícita y no introduce direcciones de proveedor
   assert.equal(selectedModel(16, ''), 'qwen3.5:4b');
   assert.equal(selectedModel(16, 'qwen3.5:2b'), 'qwen3.5:2b');
   assert.throws(() => selectedModel(16, 'https://paid.example/model'), /inválido/);
+});
+
+test('encuentra la carpeta src del instalador oficial de Windows sin depender del PATH', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-jarvis-location-'));
+  try {
+    const target = path.join(dir, 'OpenJarvis', 'src', '.venv', 'Scripts', 'jarvis.exe');
+    fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, 'placeholder');
+    assert.equal(findJarvis({ LOCALAPPDATA: dir, PATH: '' }), target);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

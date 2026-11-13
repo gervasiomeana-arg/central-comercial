@@ -1,0 +1,27 @@
+CENTRAL COMERCIAL — PAQUETE ÚNICO PARA LA COMPUTADORA DEDICADA
+
+Usarlo solamente cuando vuelvas a tu propia computadora, donde ya vinculaste
+el correo y tu WhatsApp personal. En la computadora actual no instales nada.
+
+1. Extraer esta carpeta completa. No mezclarla con las carpetas del correo
+   ni de WhatsApp; no hay que reemplazar sus archivos.
+2. Abrir PREPARAR_CENTRAL_COMERCIAL.bat. Revisa memoria, conexión y motor.
+   Si ofrece instalar OpenJarvis, hacerlo solo en la computadora dedicada.
+   La instalación oficial puede requerir descargas grandes y herramientas
+   de compilación. No se ha ejecutado ni verificado en tu PC todavía.
+3. Terminada la preparación, cerrar los iniciadores antiguos de correo,
+   WhatsApp y OpenJarvis. Abrir INICIAR_CENTRAL_COMERCIAL.bat.
+4. Mantener esa ventana abierta. Trabajar desde la página de Central Comercial.
+   En Conexiones se muestra qué componente está realmente conectado.
+
+No se incluyen contraseñas ni sesiones. El paquete reutiliza las conexiones
+que ya guardaste. No hace falta pedir otra clave por chat.
+
+Es necesaria la versión actualizada de Central Comercial publicada.
+El paquete por sí mismo no crea campañas ni confirma pagos. Las tareas que
+ya autorizaste conservan sus reglas y pueden procesarse al iniciar.
+
+Si Windows bloquea un archivo o la preparación informa un requisito faltante,
+conservar el mensaje. No desactivar las protecciones de Windows.
+
+Lectura detallada: desktop/README.md.
