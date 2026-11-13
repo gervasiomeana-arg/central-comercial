@@ -2,6 +2,8 @@ import { registerCommercialEmailRoutes } from './server/commercial-email.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
+import { DATA_DIR } from './server/data-directory.js';
+import { registerCheckpointRoute } from './server/checkpoint.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -28,15 +30,16 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const channelTests = new ChannelTestQueue(path.join(__dirname, 'data/channel_test_jobs.json'));
+const channelTests = new ChannelTestQueue(path.join(DATA_DIR, 'channel_test_jobs.json'));
 registerWorkerTestRoutes(app, channelTests);
 registerCommercialEmailRoutes(app);
-const jarvis = new JarvisQueue(path.join(__dirname, 'data/openjarvis_plans.json'));
+const jarvis = new JarvisQueue(path.join(DATA_DIR, 'openjarvis_plans.json'));
 registerJarvisWorkerRoutes(app, jarvis);
-const assistant = new AssistantQueue(path.join(__dirname, 'data/assistant_history.json'), jarvis);
+const assistant = new AssistantQueue(path.join(DATA_DIR, 'assistant_history.json'), jarvis);
 registerAssistantWorkerRoutes(app, assistant);
 const localRuntime = new LocalRuntime();
 registerLocalRuntimeRoutes(app, localRuntime);
+registerCheckpointRoute(app);
 
 // Start background task runner
 scheduler.start(30000);

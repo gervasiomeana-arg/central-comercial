@@ -10,5 +10,5 @@ if errorlevel 1 (
 echo Cierre primero los iniciadores anteriores de correo, WhatsApp y OpenJarvis.
 echo Este iniciador reutiliza las conexiones guardadas. No solicita contrasenas.
 pause
-node desktop\start.mjs
+node desktop\watchdog.mjs
 pause

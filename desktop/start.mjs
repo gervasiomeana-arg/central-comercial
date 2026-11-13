@@ -6,12 +6,14 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
+import { retryDelay, upgradeWorker } from './recovery.mjs';
+import { saveCheckpoint } from './checkpoint.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
 fs.mkdirSync(runtimeDir, { recursive: true });
 const config = findConfig(root);
-if (!config) throw new Error('No se encontró la conexión ya guardada del correo. Inicie desde la computadora vinculada o indique CENTRAL_CONFIG_FILE. No ingrese claves en el chat.');
+if (!config) { console.error('No se encontró la conexión ya guardada del correo. Inicie desde la computadora vinculada. No ingrese claves en el chat.'); process.exit(78); }
 const lock = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
 await new Promise((resolve, reject) => { lock.once('error', () => reject(new Error('Ya hay un iniciador de Central Comercial abierto o el puerto local está ocupado. No se inició otro.'))); lock.listen(37379, '127.0.0.1', resolve); });
 const idFile = path.join(runtimeDir, 'id');
@@ -21,25 +23,44 @@ const startedAt = Date.now(), ramGB = Math.round(os.totalmem() / 1024 ** 3);
 let model = selectedModel(ramGB, process.env.OPENJARVIS_MODEL);
 const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missing' };
 const issues = new Set(), children = new Set();
-let stopping = false;
+let stopping = false, timer, backupTimer, reporting = false, backingUp = false, backupAt;
+const retryTimers = new Set(), restartCounts = new Map();
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
-  const child = spawn(command, args, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  if(stopping)return null;
+  const at = Date.now();
+  const effectiveArgs=command===process.execPath?args:[path.join(root,'desktop','managed-native.mjs'),command,...args];
+  const child = spawn(process.execPath, effectiveArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], ...options });
   children.add(child);
   if (['email', 'whatsapp', 'intelligence'].includes(name)) components[name] = 'running';
   // Keep output only in this window. In particular, QR codes are never sent to the app.
   child.stdout?.on('data', data => process.stdout.write(data));
   child.stderr?.on('data', data => process.stderr.write(data));
-  child.on('error', () => { children.delete(child); if (name in components) components[name] = 'stopped'; issues.add('component_stopped'); log(name, 'No pudo iniciarse el componente. Revisar la instalación.'); });
-  child.on('exit', code => { children.delete(child); if (name in components) components[name] = 'stopped'; if (!stopping) { issues.add('component_stopped'); log(name, `Proceso detenido (${code ?? 'sin código'}). No se reinicia automáticamente.`); } });
+  child.on('message', message => {
+    if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
+    if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
+  });
+  let ended = false;
+  const onExit = code => {
+    if (ended) return; ended = true; children.delete(child);
+    if (name in components) components[name] = 'stopped';
+    if (stopping) return;
+    issues.add('component_stopped');
+    if (code === 78) { log(name, 'Se necesita revisar la autorización. No se reintenta hasta corregirla.'); return; }
+    const count = Date.now() - at > 600000 ? 1 : (restartCounts.get(name) || 0) + 1; restartCounts.set(name, count);
+    const wait = retryDelay(count); log(name, `Recuperación automática en ${Math.round(wait / 1000)} segundos. Se conserva el registro de trabajos.`);
+    const timer = setTimeout(() => { retryTimers.delete(timer); if (!stopping) launch(name, command, args, options); }, wait); retryTimers.add(timer);
+  };
+  child.on('error', () => onExit(1)); child.on('exit', onExit);
   return child;
 }
 console.log('CENTRAL COMERCIAL — Inicio único');
 console.log('Correo, WhatsApp y motor local se coordinan desde esta ventana.');
 console.log('Este inicio no crea campañas, no confirma pagos y no repite tareas anteriores.');
 console.log('Las campañas ya autorizadas conservan sus reglas y límites.');
+process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
 const emailWorker = path.join(config.directory, 'worker.mjs');
-if (fs.existsSync(emailWorker) && fs.existsSync(path.join(config.directory, 'node_modules'))) launch('email', process.execPath, [emailWorker], { cwd: config.directory });
+if (fs.existsSync(emailWorker) && fs.existsSync(path.join(config.directory, 'node_modules'))) { upgradeWorker(path.join(root, 'email-worker', 'journal.mjs'), path.join(config.directory,'journal.mjs')); upgradeWorker(path.join(root, 'email-worker', 'worker.mjs'), emailWorker); launch('email', process.execPath, [emailWorker], { cwd: config.directory }); }
 else { issues.add('email_missing'); log('email', 'No se encontró el ejecutor configurado. No se cambió su configuración.'); }
 
 const waDir = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp');
@@ -47,7 +68,7 @@ const waFile = waDir && path.join(waDir, 'worker.mjs');
 const browserFile = waDir && path.join(waDir, 'browser-path.txt');
 const browser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : process.env.CHROME_PATH;
 if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser && fs.existsSync(browser)) launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } });
+  if (browser && fs.existsSync(browser)) { upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
 } else { issues.add('whatsapp_missing'); log('whatsapp', 'No se encontró el ejecutor de WhatsApp previamente vinculado.'); }
 
@@ -83,21 +104,24 @@ else {
     }
   } catch (error) { issues.add(error.code === 'EADDRINUSE' ? 'jarvis_port_busy' : 'model_missing'); log('intelligence', 'El motor local no pudo prepararse. Revisá Ollama y el modelo instalado.'); }
 }
-let reporting = false;
+async function backup(){if(backingUp||stopping)return;backingUp=true;try{backupAt=await saveCheckpoint(config,runtimeDir);issues.delete('backup_failed');}catch{issues.add('backup_failed');console.log('Copia local pendiente de actualizar. Se conserva la última copia válida.');}finally{backingUp=false;}}
+await backup();backupTimer=setInterval(()=>void backup(),60000);
 async function heartbeat() {
   if (reporting) return; reporting = true;
   try {
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
-      body: JSON.stringify({ workerId, startedAt, ramGB, model, components, issues: [...issues] }), signal: AbortSignal.timeout(12000) });
+      body: JSON.stringify({ workerId, startedAt, ramGB, model, components, issues: [...issues], backupAt }), signal: AbortSignal.timeout(12000) });
     if (!response.ok) log('central', `Estado de la computadora pendiente de registrar (HTTP ${response.status}).`);
   } catch { log('central', 'Conexión pendiente; no se puede confirmar el estado desde la app.'); }
   finally { reporting = false; }
 }
-await heartbeat(); const timer = setInterval(() => void heartbeat(), 20000);
+await heartbeat(); timer = setInterval(() => void heartbeat(), 20000);
 if (process.platform === 'win32') spawn('rundll32.exe', ['url.dll,FileProtocolHandler', config.url.href], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
 async function stop() {
-  if (stopping) return; stopping = true; clearInterval(timer);
+  if (stopping) return; stopping = true; clearInterval(timer);clearInterval(backupTimer);
+  fs.writeFileSync(path.join(runtimeDir, 'manual-stop'), String(Date.now()));
+  for (const retry of retryTimers) clearTimeout(retry);
   for (const child of children) {
     if (process.platform === 'win32' && child.pid) {
       // Target only descendants launched by this supervisor, including its browser.
@@ -108,4 +132,3 @@ async function stop() {
   for (const key of Object.keys(components)) components[key] = 'stopped';
   await heartbeat(); lock.close(); process.exit(0);
 }
-process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());

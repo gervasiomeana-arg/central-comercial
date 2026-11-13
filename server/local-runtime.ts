@@ -7,17 +7,18 @@ export class LocalRuntime {
   constructor(private now = () => Date.now()) {}
   heartbeat(input: any) {
     const states = ['running', 'missing', 'stopped'];
-    const issues = ['email_missing', 'whatsapp_missing', 'browser_missing', 'jarvis_missing', 'model_missing', 'low_memory', 'component_stopped', 'jarvis_port_busy'];
+    const issues = ['email_missing', 'whatsapp_missing', 'browser_missing', 'jarvis_missing', 'model_missing', 'low_memory', 'component_stopped', 'jarvis_port_busy', 'email_auth', 'whatsapp_auth', 'backup_failed'];
     if (!input || typeof input.workerId !== 'string' || !input.workerId || input.workerId.length > 100 ||
       typeof input.startedAt !== 'number' || !Number.isFinite(input.startedAt) ||
       !Number.isInteger(input.ramGB) || input.ramGB < 1 || input.ramGB > 4096 ||
       typeof input.model !== 'string' || input.model.length > 160 ||
+      (input.backupAt !== undefined && (typeof input.backupAt !== 'number' || !Number.isFinite(input.backupAt) || input.backupAt < 0)) ||
       !input.components || ['email', 'whatsapp', 'intelligence'].some(k => !states.includes(input.components[k])) ||
-      !Array.isArray(input.issues) || input.issues.length > 8 || input.issues.some((i: unknown) => typeof i !== 'string' || !issues.includes(i))) {
+      !Array.isArray(input.issues) || input.issues.length > 12 || input.issues.some((i: unknown) => typeof i !== 'string' || !issues.includes(i))) {
       throw new Error('Estado de la computadora inválido.');
     }
     if (this.current && this.now() - this.current.at < 90000 && this.current.id !== input.workerId) throw new Error('Ya hay otra computadora de Central Comercial conectada.');
-    this.current = { id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model,
+    this.current = { id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
       components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)] };
   }
   status(): LocalRuntimeState {
