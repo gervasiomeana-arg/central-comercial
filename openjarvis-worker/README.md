@@ -48,7 +48,7 @@ La aplicación publicada no puede acceder al `localhost` de tu PC. Por eso el pu
 
 ## Alcance pendiente
 
-Esta entrega conecta la planificación y las consultas del propietario. Aplicar automáticamente estrategias a campañas, investigar fuentes con el agente y atender consultas de clientes mediante OpenJarvis son etapas posteriores. Los envíos, límites, solicitudes de baja y confirmaciones de pago siguen en el circuito existente; este puente no los reemplaza ni promete autonomía completa.
+Esta entrega conecta la planificación y las consultas del propietario. En una campaña activada con inteligencia local, el ciclo solicita la estrategia, valida país y actividad y aplica sus búsquedas a la investigación. Las consultas comerciales simples usan reglas y catálogo verificados; los casos no cubiertos se derivan al propietario. El modelo no confirma pagos ni ejecuta instrucciones arbitrarias. Los proveedores y los permisos de Gmail/WhatsApp pueden requerir intervención real.
 
 ## Hablar, escribir y escuchar informes
 

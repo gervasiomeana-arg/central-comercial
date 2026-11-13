@@ -11,8 +11,12 @@ el correo y tu WhatsApp personal. En la computadora actual no instales nada.
    de compilación. No se ha ejecutado ni verificado en tu PC todavía.
 3. Terminada la preparación, cerrar los iniciadores antiguos de correo,
    WhatsApp y OpenJarvis. Abrir INICIAR_CENTRAL_COMERCIAL.bat.
+   La primera vez traslada los registros de la publicación a la PC y pausa
+   esa instancia publicada, para que no haya dos motores enviando mensajes.
+   Si no puede verificar el traslado, no crea una base vacía.
 4. Mantener esa ventana abierta. Trabajar desde la página de Central Comercial.
    En Conexiones se muestra qué componente está realmente conectado.
+   La página de trabajo se abre en http://127.0.0.1:39300, en tu propia PC.
 5. Para que arranque al iniciar sesión en Windows, ejecutar una vez
    ACTIVAR_INICIO_AUTOMATICO.bat, solamente en la PC dedicada.
    DESACTIVAR_INICIO_AUTOMATICO.bat permite quitar esa configuración.
@@ -29,6 +33,13 @@ que ya guardaste. No hace falta pedir otra clave por chat.
 Es necesaria la versión actualizada de Central Comercial publicada.
 El paquete por sí mismo no crea campañas ni confirma pagos. Las tareas que
 ya autorizaste conservan sus reglas y pueden procesarse al iniciar.
+Para iniciar una campaña nueva, usar Iniciar Central Comercial y elegir
+aplicación, país, objetivo, límite, horario y canales. OpenJarvis prepara y
+aplica consultas validadas; email o WhatsApp envían bajo esos parámetros.
+WhatsApp solo envía a contactos con autorización y evidencia registradas.
+Los números encontrados en Internet no se habilitan automáticamente.
+Las consultas simples se responden con el catálogo verificado; dudas,
+negociaciones, comprobantes y planes por confirmar se derivan al propietario.
 
 Si Windows bloquea un archivo o la preparación informa un requisito faltante,
 conservar el mensaje. No desactivar las protecciones de Windows.

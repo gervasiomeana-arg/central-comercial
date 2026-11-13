@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
 import { retryDelay, upgradeWorker } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
+import { prepareLocalRecords } from './local-app.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -59,8 +60,15 @@ console.log('Correo, WhatsApp y motor local se coordinan desde esta ventana.');
 console.log('Este inicio no crea campañas, no confirma pagos y no repite tareas anteriores.');
 console.log('Las campañas ya autorizadas conservan sus reglas y límites.');
 process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
+const records=await prepareLocalRecords(root,runtimeDir,config);
+config.url=new URL('http://127.0.0.1:39300');
+launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,PORT:'39300'}});
+let backendReady=false;
+for(let attempt=0;attempt<30;attempt++){try{const status=await fetch(new URL('/api/status',config.url),{signal:AbortSignal.timeout(1000)}).then(r=>r.json());if(status.appName==='Central Comercial'&&status.localMode){backendReady=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,1000));}
+if(!backendReady)throw new Error('El servidor local no inició. Se conservan los registros para el próximo intento.');
+function profileDirectory(){return path.join(runtimeDir,'intelligence');}
 const emailWorker = path.join(config.directory, 'worker.mjs');
-if (fs.existsSync(emailWorker) && fs.existsSync(path.join(config.directory, 'node_modules'))) { upgradeWorker(path.join(root, 'email-worker', 'journal.mjs'), path.join(config.directory,'journal.mjs')); upgradeWorker(path.join(root, 'email-worker', 'worker.mjs'), emailWorker); launch('email', process.execPath, [emailWorker], { cwd: config.directory }); }
+if (fs.existsSync(emailWorker) && fs.existsSync(path.join(config.directory, 'node_modules'))) { upgradeWorker(path.join(root, 'email-worker', 'journal.mjs'), path.join(config.directory,'journal.mjs')); upgradeWorker(path.join(root, 'email-worker', 'worker.mjs'), emailWorker); launch('email', process.execPath, [emailWorker], { cwd: config.directory,env:{...process.env,CENTRAL_URL:config.url.href} }); }
 else { issues.add('email_missing'); log('email', 'No se encontró el ejecutor configurado. No se cambió su configuración.'); }
 
 const waDir = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp');
@@ -68,7 +76,7 @@ const waFile = waDir && path.join(waDir, 'worker.mjs');
 const browserFile = waDir && path.join(waDir, 'browser-path.txt');
 const browser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : process.env.CHROME_PATH;
 if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser && fs.existsSync(browser)) { upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
+  if (browser && fs.existsSync(browser)) { upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
 } else { issues.add('whatsapp_missing'); log('whatsapp', 'No se encontró el ejecutor de WhatsApp previamente vinculado.'); }
 
@@ -100,7 +108,7 @@ else {
       const probe = http.createServer();
       await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(8765, '127.0.0.1', () => probe.close(resolve)); });
       launch('intelligence', jarvis, ['serve', '--host', '127.0.0.1', '--port', '8765', '--engine', 'ollama', '--model', model, '--agent', 'simple'], { cwd: runtimeDir, env: jarvisEnvironment(profile) });
-      launch('bridge', process.execPath, [path.join(root, 'openjarvis-worker', 'worker.mjs'), config.file], { env: { ...jarvisEnvironment(profile), CENTRAL_CONFIG_FILE: config.file, OPENJARVIS_MODEL: model, OPENJARVIS_URL: 'http://127.0.0.1:8765' } });
+      launch('bridge', process.execPath, [path.join(root, 'openjarvis-worker', 'worker.mjs'), config.file], { env: { ...jarvisEnvironment(profile), CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, OPENJARVIS_MODEL: model, OPENJARVIS_URL: 'http://127.0.0.1:8765' } });
     }
   } catch (error) { issues.add(error.code === 'EADDRINUSE' ? 'jarvis_port_busy' : 'model_missing'); log('intelligence', 'El motor local no pudo prepararse. Revisá Ollama y el modelo instalado.'); }
 }

@@ -67,6 +67,7 @@ export class JarvisQueue {
       plans: this.plans.slice(-30).reverse().map(({ workerId, leaseHash, ...plan }) => plan) };
   }
   assistantWorkerReady(id: string) { return this.status().assistantReady === true && this.worker?.id === id; }
+  completed(id:string){const p=this.plans.find(p=>p.id===id);if(p?.state!=='completed'||!p.strategy)return null;return {id:p.id,context:p.context,strategy:p.strategy};}
   enqueue(context: JarvisContext) {
     this.expire();
     // Reuse identical requests, including completed ones, for a day: no repeated model spending.

@@ -87,6 +87,7 @@ export interface ContactHistoryItem {
 }
 
 export interface Contact {
+  whatsappConsent?:{granted:boolean;at:string;evidence:string};
   outreachBasis?: 'public_business_contact';
   id: string;
   orgName: string;
@@ -136,6 +137,12 @@ export interface ResearchState {
   status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
 }
 export interface Campaign {
+  autoSendWhatsApp?:boolean;
+  intelligenceEnabled?:boolean;
+  intelligencePlanId?:string;
+  intelligenceRequestId?:string;
+  intelligenceError?:string;
+  intelligenceNextAttemptAt?:number;
   maxContacts?: number;
   goalMonth?: string;
   autoSendEmail?: boolean;
@@ -212,6 +219,7 @@ export type MessageStatus =
   | 'enviado';
 
 export interface Message {
+  providerChatId?:string;
   providerMessageId?: string;
   replyToProviderId?: string;
   emailSubject?: string;
@@ -550,6 +558,7 @@ export interface AutonomousRun {
   maxContacts: number; startedAt: string;
 }
 export interface StartAutonomousInput {
+  channels?:('email'|'whatsapp')[];useLocalIntelligence?:boolean;
   appId: string; country: string; maxContacts: number;
   targetClients: number; sendWindowStart: string; sendWindowEnd: string;
 }

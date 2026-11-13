@@ -36,6 +36,8 @@ const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'central_comercial_db.json');
 
 export interface DatabaseSchema {
+  localMigration?:{at:string};
+  localMigrationPending?:{paused:boolean};
   version: number;
   updatedAt: string;
   scheduler: SchedulerState;
@@ -268,6 +270,8 @@ class DatabaseManager {
         const parsed = JSON.parse(raw);
         const schema: DatabaseSchema = {
           version: parsed.version || 1,
+          localMigration:parsed.localMigration,
+          localMigrationPending:parsed.localMigrationPending,
           updatedAt: parsed.updatedAt || new Date().toISOString(),
           scheduler: parsed.scheduler || INITIAL_SCHEDULER,
           applications: parsed.applications || INITIAL_APPLICATIONS,
@@ -684,7 +688,7 @@ class DatabaseManager {
     for (const campaign of this.data.campaigns.filter(c => c.goalMonth === goal.month)) {
       campaign.autoSendEmail = goal.sendEmail;
       const app = this.getApplicationById(campaign.appId);
-      if (app) { const strategy = playbook(app); campaign.researchQueries = researchQueriesFor(app,campaign.country); campaign.researchQueryVersion=2; }
+      if (app&&!campaign.intelligencePlanId) { campaign.researchQueries = researchQueriesFor(app,campaign.country); campaign.researchQueryVersion=2; }
       campaign.dailyLimit = Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, this.data.applications.filter(a => a.status === 'lista' && a.campaignsAllowed).length)));
     }
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
@@ -713,6 +717,7 @@ class DatabaseManager {
   }
   public getAutonomousRun() { return this.data.autonomousRun; }
   public startAutonomousRun(input: StartAutonomousInput) {
+    const channels=input.channels||['email'];if(!channels.length||channels.some(c=>!['email','whatsapp'].includes(c)))throw new Error('Elegí email o WhatsApp.');
     const app = this.getApplicationById(input.appId);
     if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Elegí una aplicación lista para vender.');
     const country = typeof input.country === 'string' ? input.country.trim() : '';
@@ -726,7 +731,7 @@ class DatabaseManager {
     if (!template) throw new Error('Esta aplicación todavía no tiene una estrategia comercial definida.');
     const campaignId = `autonomous-${month}-${app.id}-${country.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`;
     const campaign = this.getCampaignById(campaignId) || { ...template, id:campaignId, name:`Piloto autónomo · ${app.name} · ${country}`, createdAt:new Date().toISOString() };
-    Object.assign(campaign, { maxContacts:input.maxContacts, dailyLimit:input.maxContacts, status:'activa', autoPrepare:true, autoSendEmail:true, sendWindowStart:input.sendWindowStart, sendWindowEnd:input.sendWindowEnd, updatedAt:new Date().toISOString() });
+    Object.assign(campaign, { channels,intelligenceEnabled:input.useLocalIntelligence!==false,maxContacts:input.maxContacts, dailyLimit:input.maxContacts, status:'activa', autoPrepare:true, autoSendEmail:channels.includes('email'),autoSendWhatsApp:channels.includes('whatsapp'), sendWindowStart:input.sendWindowStart, sendWindowEnd:input.sendWindowEnd, updatedAt:new Date().toISOString() });
     if(!this.getCampaignById(campaignId)) this.data.campaigns.push(campaign);
     const existingGoal = this.data.monthlySalesGoals.findIndex(g=>g.month===month);
     if(existingGoal<0)this.data.monthlySalesGoals.push(goal);else this.data.monthlySalesGoals[existingGoal]=goal;
@@ -735,7 +740,7 @@ class DatabaseManager {
     this.addLog('info','campañas',`Inicio autónomo: ${app.name}, ${country}, hasta ${input.maxContacts} contactos en total.`,{campaignId});
     this.save(); return this.getAutonomousRunReport();
   }
-  public getAutonomousRunReport() {
+  public getAutonomousRunReport(whatsappReady=false) {
     const run = this.data.autonomousRun, worker = this.getCommercialEmailStatus();
     if(!run)return {run:null,paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers:[]};
     const campaign=this.getCampaignById(run.campaignId), app=this.getApplicationById(run.appId);
@@ -752,8 +757,10 @@ class DatabaseManager {
     const blockers:string[]=[];
     if(this.data.scheduler.automationsPaused)blockers.push('La operación está pausada.');
     if(app?.status!=='lista'||!app?.campaignsAllowed)blockers.push('La aplicación no está habilitada para vender.');
-    if(!worker.send)blockers.push('Envío bloqueado: el ejecutor de correo no está conectado.');
-    if(!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
+    if(campaign?.channels.includes('email')&&!worker.send)blockers.push('Envío bloqueado: el ejecutor de correo no está conectado.');
+    if(campaign?.channels.includes('email')&&!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
+    if(campaign?.channels.includes('whatsapp')&&!whatsappReady)blockers.push('WhatsApp pendiente de vincular.');
+    if(campaign?.intelligenceEnabled&&!campaign.intelligencePlanId)blockers.push(campaign.intelligenceError||'Esperando una estrategia válida de OpenJarvis.');
     if(this.data.researchState.day===accountingDay() && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
     if(this.data.researchState.lastError && this.data.researchState.lastError!=='Cupo diario de investigación alcanzado.')blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
     if(campaign?.lastPreparation?.blockedReason)blockers.push(`Preparación: ${campaign.lastPreparation.blockedReason}`);
@@ -762,14 +769,14 @@ class DatabaseManager {
     const stages=[
       {name:'Buscar y verificar contactos',count:contacts.length,state:contacts.length?'con_resultados':this.data.researchState.status==='quota'?'cupo':this.data.researchState.blocked||this.data.researchState.status==='error'?'bloqueado':'pendiente'},
       {name:'Preparar notas',count:prepared,state:prepared||accepted?'con_resultados':'pendiente'},
-      {name:'Enviar por email',count:accepted,state:accepted?'con_resultados':worker.send?'pendiente':'bloqueado'},
-      {name:'Recibir consultas',count:received,state:received?'con_resultados':worker.read?'pendiente':'bloqueado'},
+      {name:'Enviar por canales elegidos',count:accepted,state:accepted?'con_resultados':worker.send||whatsappReady?'pendiente':'bloqueado'},
+      {name:'Recibir consultas',count:received,state:received?'con_resultados':worker.read||whatsappReady?'pendiente':'bloqueado'},
       {name:'Responder consultas',count:answered,state:answered?'con_resultados':'pendiente'},
       {name:'Crear ficha de cliente',count:clients.length,state:clients.length?'con_resultados':'pendiente'},
       {name:'Registrar cuenta corriente',count:this.data.subscriptions.filter(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled).length,state:this.data.subscriptions.some(s=>clients.some(c=>c.id===s.clientId)&&s.appId===run.appId&&s.ledgerEnabled)?'con_resultados':'pendiente'},
       {name:'Confirmar primer pago',count:paid.length,state:paid.length?'con_resultados':'revision_manual'}
     ];
-    return {research:{status:this.data.researchState.status,detail:this.data.researchState.detail,outcome:campaign?.researchLastOutcome,pendingPages:campaign?.researchQueue?.length||0},run,appName:app?.name,campaignName:campaign?.name,paused:this.data.scheduler.automationsPaused,worker,stages,blockers,lastCycleAt:this.data.scheduler.lastRunAt,contactsInCampaign:contacted.size,humanQuestions:threads.filter(c=>c.requiresHumanIntervention&&c.messages.some(m=>m.direction==='inbound')).length};
+    return {channels:campaign?.channels,research:{status:this.data.researchState.status,detail:this.data.researchState.detail,outcome:campaign?.researchLastOutcome,pendingPages:campaign?.researchQueue?.length||0},run,appName:app?.name,campaignName:campaign?.name,paused:this.data.scheduler.automationsPaused,worker,stages,blockers,lastCycleAt:this.data.scheduler.lastRunAt,contactsInCampaign:contacted.size,humanQuestions:threads.filter(c=>c.requiresHumanIntervention&&c.messages.some(m=>m.direction==='inbound')).length};
   }
 
   // --- Campaigns ---

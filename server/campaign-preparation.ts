@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation } from '../src/types.js';
+import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
 
 const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const localDay = (date: Date, timezone: string) => new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -12,7 +13,8 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const skip = (reason: string) => { skipped[reason] = (skipped[reason] || 0) + 1; };
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) return result('La aplicación no está habilitada para campañas.');
   if (['pausada', 'finalizada'].includes(campaign.status)) return result('La campaña está pausada o finalizada.');
-  if (!campaign.channels?.includes('email')) return result('Esta etapa prepara únicamente correos. WhatsApp permanece pendiente.');
+  if (!campaign.channels?.some(c=>c==='email'||c==='whatsapp')) return result('Elegí email o WhatsApp.');
+  if(campaign.intelligenceEnabled&&!campaign.intelligencePlanId)return result('Esperando una estrategia válida de OpenJarvis.');
   if (!campaign.country?.trim() || !campaign.language?.trim()) return result('Definí un país y un idioma para seleccionar destinatarios.');
   if (!campaign.messageTemplate?.trim()) return result('Falta escribir la nota de promoción.');
   const allowed = new Set(['nombre', 'organizacion', 'cargo', 'pais', 'aplicacion', 'web']);
@@ -31,7 +33,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const remaining = Math.max(0, Math.min(campaign.dailyLimit - alreadyToday, campaign.maxContacts === undefined ? Infinity : campaign.maxContacts - new Set(previous.map(c=>c.contactId)).size));
   const usedIds = new Set(previous.map(c => c.contactId));
   const contactMap = new Map(contacts.map(c => [c.id, c]));
-  const usedEmails = new Set(previous.map(c => contactMap.get(c.contactId)?.email?.trim().toLowerCase()).filter(Boolean));
+  const usedEmails = new Set(previous.map(c => c.channel==='whatsapp'?whatsappPhone(contactMap.get(c.contactId)?.phone||''):contactMap.get(c.contactId)?.email?.trim().toLowerCase()).filter(Boolean));
   for (const contact of contacts) {
     const countries = campaign.country.split(',').map(normalized);
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
@@ -39,15 +41,17 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     if (!(contact.permission === 'autorizado' || (contact.permission === 'desconocido' && campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact')) || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) { skip('Fuente sin revisar'); continue; }
-    const email = contact.email?.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skip('Correo no válido'); continue; }
+    const channel=campaign.channels.includes('whatsapp')&&whatsappAuthorized(contact,now)&&(contact.preferredChannel==='whatsapp'||!campaign.channels.includes('email')||!contact.email)?'whatsapp':'email';
+    if(channel==='email'&&!campaign.channels.includes('email')){skip('WhatsApp sin autorización registrada');continue;}
+    const email = channel==='whatsapp'?whatsappPhone(contact.phone):contact.email?.trim().toLowerCase();
+    if (!email || channel==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skip('Destinatario no válido'); continue; }
     if (usedIds.has(contact.id) || usedEmails.has(email)) { skip('Ya preparado en esta campaña'); continue; }
     if (conversations.some(c => c.contactId === contact.id && c.appId === app.id && c.messages.some(m => m.direction === 'inbound'))) { skip('Ya respondió: revisar conversación'); continue; }
     if (drafts.length >= remaining) { skip('Límite diario alcanzado'); continue; }
     const values: Record<string, string> = { nombre: contact.contactPerson || contact.orgName, organizacion: contact.orgName, cargo: contact.role || '', pais: contact.country, aplicacion: app.name, web: app.website || '' };
     const id = `conv-${randomUUID()}`;
     const timestamp = now.toISOString();
-    drafts.push({ id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel: 'email', classification: 'sin_clasificar', requiresHumanIntervention: true, createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: `msg-${randomUUID()}`, conversationId: id, direction: 'outbound', channel: 'email', content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp }] });
+    drafts.push({ id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel, classification: 'sin_clasificar', requiresHumanIntervention: campaign.mode!=='automatico', createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: `msg-${randomUUID()}`, conversationId: id, direction: 'outbound', channel, content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp }] });
     usedIds.add(contact.id); usedEmails.add(email);
   }
   return result();

@@ -10,7 +10,7 @@ const host=(url:string)=>new URL(url).hostname.toLowerCase().replace(/^www\./,''
 const candidateKey=(candidate:ResearchCandidate)=>`${candidate.url}|${candidate.context?.topicVerified?'topic':''}|${candidate.context?.countryVerified?'country':''}`;
 const reason=(outcome:ResearchOutcome,label:string)=>{outcome.reasons[label]=(outcome.reasons[label]||0)+1;};
 
-export async function researchGoalProspects() {
+export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetchPublicText) {
   if(running)return;
   running=true;
   try {
@@ -25,6 +25,7 @@ export async function researchGoalProspects() {
     const campaigns=db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
     const cap=Math.max(3,Math.ceil(goal.dailyResearchLimit/Math.max(1,campaigns.length)));
     const eligible=campaigns.filter(c=>{
+      if(c.intelligenceEnabled&&!c.intelligencePlanId)return false;
       if(c.researchDay!==day){c.researchDay=day;c.researchCount=0;c.researchQueriesToday=0;}
       if((c.researchCount||0)>=cap||(c.researchNextAttemptAt||0)>Date.now())return false;
       const used=new Set(db.getConversations().filter(thread=>thread.campaignId===c.id).map(thread=>thread.contactId));
@@ -47,7 +48,7 @@ export async function researchGoalProspects() {
     const fetchPage=async(url:string)=>{
       if(remaining()<=0)throw new ResearchQuota('Cupo de páginas alcanzado.');
       state.requests++;campaign.researchCount=(campaign.researchCount||0)+1;campaign.lastResearchAt=new Date().toISOString();state.status='running';db.save();
-      return fetchPublicText(url);
+      return fetcher(url);
     };
     const outcome:ResearchOutcome={at:new Date().toISOString(),query:'',created:0,reused:0,checked:0,reasons:{}};
     const enqueue=(candidate:ResearchCandidate,priority=false)=>{

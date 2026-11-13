@@ -754,6 +754,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">Permiso de Contacto</label>
+                  <label className="block my-3"><input type="checkbox" checked={formContact.whatsappConsent?.granted===true} onChange={e=>handleFormChange('whatsappConsent',{granted:e.target.checked,at:new Date().toISOString(),evidence:formContact.whatsappConsent?.evidence||''})}/> Autorizó recibir mensajes por WhatsApp</label>
+                  {formContact.whatsappConsent?.granted&&<input aria-label="Evidencia de autorización WhatsApp" placeholder="Dónde y cuándo dio su autorización" value={formContact.whatsappConsent.evidence} onChange={e=>handleFormChange('whatsappConsent',{...formContact.whatsappConsent!,evidence:e.target.value})} className="w-full border rounded-lg p-2 mb-3"/>}
                   <select
                     value={formContact.permission || 'desconocido'}
                     onChange={e => handleFormChange('permission', e.target.value)}
