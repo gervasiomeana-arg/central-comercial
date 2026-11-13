@@ -77,6 +77,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getLocalRuntime: () => fetchJson<import('./runtime-types.js').LocalRuntimeState>('/api/local-runtime'),
   getAssistant: () => fetchJson<import('./assistant-types.js').AssistantState>('/api/assistant'),
   askAssistant: (question: string, appId: string, kind: 'question' | 'report' = 'question') => fetchJson<import('./assistant-types.js').AssistantState & { id: string }>('/api/assistant/messages', { method: 'POST', body: JSON.stringify({ question, appId, kind }) }),
   getJarvisStatus: () => fetchJson<import('./openjarvis-types.js').JarvisStatus>('/api/openjarvis'),

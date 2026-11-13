@@ -1,5 +1,7 @@
 # OpenJarvis dentro de Central Comercial — primera integración
 
+Para el uso diario se recomienda ahora el **inicio único** `INICIAR_CENTRAL_COMERCIAL.bat`, explicado en `desktop/README.md`. Las instrucciones individuales de este archivo se conservan para diagnóstico y compatibilidad. La interfaz de trabajo sigue siendo Central Comercial.
+
 Esta etapa prepara estrategias comerciales por aplicación y país. Central Comercial conserva contactos, campañas, correo, WhatsApp y cuentas corrientes. El puente no cambia esos registros ni inicia envíos. Las propuestas del modelo se muestran para revisión: no son contactos investigados ni resultados comerciales.
 
 ## Antes de iniciar
