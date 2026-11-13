@@ -1,5 +1,23 @@
 # Inicio único de Central Comercial
 
+## Paquete completo y datos en tu PC
+
+Esta versión incluye la interfaz compilada y el servidor de Central Comercial. Durante la preparación instala las dependencias de la app desde npm. En el primer inicio obtiene una copia íntegra de los registros publicados mediante la conexión privada existente y pausa la instancia publicada. No traslada mientras existan envíos con una asignación todavía vigente. El traslado es repetible ante fallos de red, y una base local existente nunca se sobrescribe con la copia de la publicación.
+
+Después del traslado, Central Comercial trabaja en `http://127.0.0.1:39300`, dentro de la misma computadora, con sus datos en `%LOCALAPPDATA%\CentralComercial\runtime\records`. Esa carpeta se conserva al reiniciar y al actualizar el código. La publicación previa deja de ejecutar campañas y de servir los registros administrativos; muestra cómo abrir la instancia local. No hay dos motores activos ni dos interfaces que debas operar. Las cuatro apps que se promocionan siguen usando sus sitios públicos habituales.
+
+El servidor escucha solo en loopback y rechaza nombres de host u orígenes de otros sitios en su API local. No habilita acceso desde Internet o desde otros equipos de la red. La copia de traslado no incluye credenciales de correo ni perfiles de WhatsApp; se reutilizan los ya guardados. Si el traslado no se verifica, el inicio se detiene sin crear una base vacía ni enviar mensajes.
+
+## Circuito autónomo
+
+En **Iniciar Central Comercial**, configurar aplicación, país, límite total, objetivo mensual, horario y canales. Con la opción OpenJarvis activa, el sistema solicita una estrategia al motor local, valida que sus consultas correspondan al país y a la actividad de esa app y aplica esas consultas a la investigación. Hasta contar con una estrategia válida no investiga ni prepara promociones para esa campaña. Las búsquedas consultan fuentes públicas, verifican actividad y país, deduplican contactos y conservan las páginas pendientes. Los errores o bloqueos de fuentes se muestran y no se reemplazan con contactos inventados.
+
+Las notas usan el catálogo y las condiciones verificadas, no precios generados por el modelo. Los envíos respetan pausa, horario, límites, exclusiones y autorización de cada canal. Una búsqueda de teléfonos no da autorización para escribirles por WhatsApp. Es necesario registrar consentimiento, fecha y evidencia en el contacto, junto con permiso autorizado. Si se eligen ambos canales, se prepara una sola conversación por contacto y campaña, usando el canal preferido cuando está habilitado.
+
+WhatsApp utiliza la sesión ya vinculada y requiere aceptación del servidor para registrar un envío aceptado. Solo procesa chats comerciales previamente asociados a mensajes de Central, no grupos ni otros chats del teléfono. Las consultas de catálogo reciben respuestas verificadas; una solicitud de baja revoca el contacto. Negociaciones, condiciones no confirmadas y avisos de pago crean una tarea para el propietario. La API web es extraoficial: cambios del servicio, revocaciones o un QR nuevo pueden necesitar intervención. No se garantiza disponibilidad permanente del proveedor.
+
+Cuando hay intención de contratar, se crea la ficha del cliente y una tarea para confirmar plan y condiciones. La cuenta corriente registra vencimientos según la suscripción acordada. Los pagos nuevos permanecen pendientes y solo se cuentan como clientes con primer pago después de la revisión manual del propietario.
+
 Abrir `INICIAR_CENTRAL_COMERCIAL.bat` en la raíz del proyecto actualizado. Requiere Node.js 22 o posterior. No requiere instalar dependencias nuevas para el supervisor.
 
 ## Uso diario
@@ -10,7 +28,7 @@ Abrir `INICIAR_CENTRAL_COMERCIAL.bat` en la raíz del proyecto actualizado. Requ
 4. Para detener el conjunto, usar Ctrl+C en la ventana. El supervisor solo termina los procesos que él inició. La detención manual no se revierte automáticamente durante esa sesión.
 5. Para el inicio tras reiniciar Windows, abrir una vez `ACTIVAR_INICIO_AUTOMATICO.bat` en la PC dedicada. Copia únicamente el código del paquete a una ubicación estable del usuario y agrega un iniciador en su carpeta Inicio. No requiere guardar la contraseña de Windows. Requiere que el usuario inicie sesión; no funciona antes de ese momento ni en una PC apagada. `DESACTIVAR_INICIO_AUTOMATICO.bat` retira ese iniciador sin borrar datos.
 
-El inicio por sí mismo no crea campañas, cambia objetivos ni confirma pagos. Los ejecutores conservan su comportamiento: pueden procesar trabajos de campañas ya autorizadas y sus colas pendientes, respetando sus reglas. WhatsApp conserva únicamente su alcance de pruebas al propietario.
+El inicio por sí mismo no crea campañas, cambia objetivos ni confirma pagos. Los ejecutores pueden procesar trabajos de campañas ya autorizadas y sus colas pendientes, respetando sus reglas. WhatsApp incluye promoción autorizada y consultas relacionadas, además de las comprobaciones al propietario.
 
 ## Qué localiza
 

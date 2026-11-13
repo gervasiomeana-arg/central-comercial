@@ -64,6 +64,7 @@ export default function App() {
     windowsExecutionGuide: ''
   });
   const [geminiConfigured, setGeminiConfigured] = useState(false);
+  const [deployment,setDeployment]=useState({local:false,migrated:false});
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -122,6 +123,7 @@ export default function App() {
       if (statusRes && statusRes.scheduler) {
         setScheduler(statusRes.scheduler);
         setGeminiConfigured(Boolean(statusRes.geminiConfigured));
+        setDeployment({local:'localMode'in statusRes&&Boolean(statusRes.localMode),migrated:'localMigration'in statusRes&&Boolean(statusRes.localMigration)});
       }
       if (dashMetrics) setMetrics(dashMetrics);
       if (pipelineRes) setPipelineStatus(pipelineRes);
@@ -337,6 +339,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="cc-main">
+        {deployment.local?<p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Central Comercial está trabajando en tu PC. Los registros se guardan en esta computadora y se conservan al reiniciar.</p>:deployment.migrated?<div role="status" className="rounded-xl bg-amber-50 p-4 text-amber-950">La instancia activa se trasladó a tu PC dedicada. Esta publicación no ejecuta campañas. <a className="underline" href="http://127.0.0.1:39300">Abrir Central Comercial en mi PC</a></div>:<p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">Publicación de Central Comercial. El paquete completo permite trasladar los registros a la PC dedicada durante su primera activación.</p>}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />

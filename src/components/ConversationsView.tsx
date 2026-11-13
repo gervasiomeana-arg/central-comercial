@@ -369,7 +369,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                         </div>
 
-                        {onReviewDraft && msg.direction === 'outbound' && msg.channel === 'email' && msg.status === 'preparado' && <DraftReviewPanel key={`${msg.id}-${msg.draftRevision || 0}`} message={msg} recipient={activeContact?.email} onReview={input => onReviewDraft(activeConv.id, msg.id, input)}/>}
+                        {onReviewDraft && msg.direction === 'outbound' && ['email','whatsapp'].includes(msg.channel) && msg.status === 'preparado' && <DraftReviewPanel key={`${msg.id}-${msg.draftRevision || 0}`} message={msg} recipient={msg.channel==='whatsapp'?activeContact?.phone:activeContact?.email} onReview={input => onReviewDraft(activeConv.id, msg.id, input)}/>}
                         {/* Status tracking flag (crucial: zero fake confirmation) */}
                         {!isInbound && (
                           <div className="mt-1 flex items-center space-x-1 text-[10px]">

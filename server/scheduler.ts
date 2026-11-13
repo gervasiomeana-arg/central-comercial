@@ -1,5 +1,6 @@
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
+import {intelligenceCycle} from './intelligence-cycle.js';
 
 class CommercialScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -48,6 +49,7 @@ class CommercialScheduler {
 
       db.processLedger();
       db.processSalesDirector();
+      intelligenceCycle();
       await researchGoalProspects();
 
       // Check tasks due

@@ -93,6 +93,7 @@ export const api = {
   // Public Auth & Status
   getStatus: () => fetchJson<{
     appName: string;
+    localMode?:boolean;localMigration?:boolean;
     status: string;
     scheduler: SchedulerState;
     persistence: PersistenceStatus;

@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
+import { installDependencies } from './local-app.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VENDOR_INSTALLER = 'https://raw.githubusercontent.com/open-jarvis/OpenJarvis/afdbd5b35cb21f51564588c8cdbf6b74889c4f1f/deploy/windows/install.ps1';
@@ -20,6 +21,7 @@ if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('Actualiza
 const config = findConfig(root);
 console.log(config ? 'Conexión privada existente: encontrada. No se muestran ni cambian claves.' : 'Conexión privada: pendiente. Usar este paquete en la computadora ya vinculada.');
 if (!config) process.exit(1);
+console.log('Preparando las dependencias de Central Comercial desde el registro npm.');await installDependencies(root);
 const jarvis = findJarvis();
 console.log(jarvis ? 'Motor OpenJarvis: instalado.' : 'Motor OpenJarvis: pendiente de instalación inicial.');
 let model = selectedModel(ramGB, process.env.OPENJARVIS_MODEL), modelReady = false;

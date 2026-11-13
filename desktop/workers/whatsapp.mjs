@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
+import {commercialWhatsAppRunner} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -25,13 +26,14 @@ const save=()=>{fs.writeFileSync(journalFile+'.tmp',JSON.stringify(journal),{mod
 const phone='5492235802743';
 const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('549')?'54'+digits.slice(3):digits;};
 let whatsappReady=false,running=false,stopping=false;
-async function api(action,body={}){
- const response=await fetch(new URL(`/api/channel-tests/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});
+async function api(action,body={},area='channel-tests'){
+ const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});
  if(!response.ok){const error=new Error(`Central Comercial respondio HTTP ${response.status}`);error.httpStatus=response.status;throw error;}
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
 const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),puppeteer:{headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}});
+const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',qr=>{console.log('\nEn el telefono: WhatsApp > Dispositivos vinculados > Vincular un dispositivo.');console.log('Escanee este QR. No lo comparta por chat.');qrcode.generate(qr,{small:true});});
 client.on('ready',()=>{
  const account=client.info?.wid?.user;
@@ -44,8 +46,10 @@ async function tick(){
  if(running||stopping)return;running=true;
  try{
   await api('heartbeat',{email:false,whatsapp:whatsappReady});
+  await api('heartbeat',{ready:whatsappReady,account:client.info?.wid?.user||''},'commercial-whatsapp');
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
   if(!whatsappReady)return;
+  await commercial.tick();
   const {job}=await api('claim');if(!job)return;
   if(job.channel!=='whatsapp'||job.recipient!==phone)throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
   if(journal[job.id]){const previous=journal[job.id];await api('complete',{id:job.id,lease:job.lease,result:previous.result});previous.reported=true;save();return;}

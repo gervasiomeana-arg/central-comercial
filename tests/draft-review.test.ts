@@ -32,8 +32,8 @@ test('stale reviews are rejected instead of overwriting newer text', () => {
   const edited = reviewEmailDraft(message, { action: 'edit', expectedRevision: 0, content: 'Nueva nota' }, context, now);
   assert.throws(() => reviewEmailDraft(edited, { action: 'approve', expectedRevision: 0 }, context, now), (err: any) => err instanceof DraftReviewError && err.status === 409);
 });
-test('already attempted, sent, incoming and non-email messages cannot be revised', () => {
-  for (const patch of [{ status: 'enviado' }, { attemptedAt: now.toISOString() }, { serviceConfirmationId: 'provider-id' }, { direction: 'inbound' }, { channel: 'whatsapp' }]) {
+test('already attempted, sent, incoming and unsupported-channel messages cannot be revised', () => {
+  for (const patch of [{ status: 'enviado' }, { attemptedAt: now.toISOString() }, { serviceConfirmationId: 'provider-id' }, { direction: 'inbound' }, { channel: 'telegram' }]) {
     assert.throws(() => reviewEmailDraft({ ...message, ...patch } as Message, { action: 'reject', expectedRevision: 0 }, context, now));
   }
 });

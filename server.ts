@@ -1,9 +1,14 @@
-import { registerCommercialEmailRoutes } from './server/commercial-email.js';
+import { registerCommercialEmailRoutes,replyDecision } from './server/commercial-email.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { DATA_DIR } from './server/data-directory.js';
 import { registerCheckpointRoute } from './server/checkpoint.js';
+import {registerCommercialWhatsAppRoutes} from './server/commercial-whatsapp.js';
+import {configureIntelligence,applyStrategy} from './server/intelligence-cycle.js';
+import {whatsappStatus} from './server/commercial-whatsapp.js';
+import {whatsappAuthorized,whatsappPhone} from './src/whatsapp-policy.js';
+import {localRequestAllowed} from './server/local-boundary.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -24,16 +29,26 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isProduction = process.env.NODE_ENV === 'production';
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const localMode=process.env.CENTRAL_LOCAL_MODE==='true';
+if(localMode&&process.send)process.on('disconnect',()=>process.exit(75));
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use((req,res,next)=>{
+  if(localMode){
+    if(!localRequestAllowed(req.headers.host||'',req.headers.origin,String(req.headers['sec-fetch-site']||''),req.path.startsWith('/api'),PORT))return res.status(403).json({error:'La API local solo admite la interfaz de esta computadora.'});
+  }else if(db.getRaw().localMigration&&req.path.startsWith('/api')&&!['/api/status','/api/auth/status','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
+  next();
+});
 
 const channelTests = new ChannelTestQueue(path.join(DATA_DIR, 'channel_test_jobs.json'));
 registerWorkerTestRoutes(app, channelTests);
 registerCommercialEmailRoutes(app);
+registerCommercialWhatsAppRoutes(app);
 const jarvis = new JarvisQueue(path.join(DATA_DIR, 'openjarvis_plans.json'));
+configureIntelligence(jarvis);
 registerJarvisWorkerRoutes(app, jarvis);
 const assistant = new AssistantQueue(path.join(DATA_DIR, 'assistant_history.json'), jarvis);
 registerAssistantWorkerRoutes(app, assistant);
@@ -54,6 +69,7 @@ app.get('/api/status', (req, res) => {
 
   res.json({
     appName: 'Central Comercial',
+    localMode,localMigration:Boolean(db.getRaw().localMigration),
     status: 'online',
     version: '1.0.0',
     mode: isProduction ? 'production' : 'development',
@@ -198,6 +214,7 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+adminRouter.post('/openjarvis/apply',(req,res)=>{try{const c=db.getCampaignById(req.body.campaignId);if(!c)throw new Error('Campaña no encontrada.');applyStrategy(jarvis,req.body.planId,c);res.json({success:true});}catch(error:any){res.status(409).json({error:error.message});}});
 
 adminRouter.get('/local-runtime', (req, res) => {
   res.setHeader('Cache-Control', 'no-store'); res.json(localRuntime.status());
@@ -247,8 +264,8 @@ adminRouter.post('/channel-tests', (req, res) => {
 adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalReport(typeof req.query.month === 'string' ? req.query.month : undefined)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 
-adminRouter.get('/automation/run', (req,res)=>res.json(db.getAutonomousRunReport()));
-adminRouter.post('/automation/start', (req,res)=>{try{const report=db.startAutonomousRun(req.body);void scheduler.tick();res.json(report);}catch(error:any){res.status(400).json({error:error.message});}});
+adminRouter.get('/automation/run', (req,res)=>res.json(db.getAutonomousRunReport(whatsappStatus().ready)));
+adminRouter.post('/automation/start', (req,res)=>{try{db.startAutonomousRun(req.body);void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
 
 adminRouter.get('/automation/pipeline', (req, res) => {
   res.json(db.getAutomationPipelineStatus());
@@ -648,7 +665,7 @@ adminRouter.post('/campaigns', (req, res) => {
     if (!body.name || !body.appId) {
       return res.status(400).json({ error: 'Nombre de campaña y aplicación asociada son obligatorios.' });
     }
-    const result = db.saveCampaign(body);
+    const result = db.saveCampaign(body,whatsappStatus().ready);
     if (result.error) {
       return res.status(400).json({ error: result.error, campaign: result.campaign });
     }
@@ -668,7 +685,7 @@ adminRouter.put('/campaigns/:id', (req, res) => {
   try {
     const body: Campaign = req.body;
     body.id = req.params.id;
-    const result = db.saveCampaign(body);
+    const result = db.saveCampaign(body,whatsappStatus().ready);
     if (result.error) {
       return res.status(400).json({ error: result.error, campaign: result.campaign });
     }
@@ -730,7 +747,8 @@ adminRouter.post('/conversations/ai-suggest', async (req, res) => {
       return res.status(404).json({ error: 'Aplicación comercial no encontrada.' });
     }
 
-    const suggestion = await analyzeAndSuggestResponse(
+    const localDecision=localMode?replyDecision(String(messageContent||''),app,String(req.body.country||'')):null;
+    const suggestion = localMode?{classification:'requiere_intervencion' as const,suggestedResponse:localDecision?.kind==='answer'?localDecision.text:'Esta consulta requiere tu revisión. Podés analizarla con OpenJarvis en Hablar con Central.',confidence:0,requiresHumanIntervention:true,interventionReason:'Borrador para revisión del propietario; no se envía automáticamente.',sourceFaqsUsed:[]}:await analyzeAndSuggestResponse(
       app,
       contactName || 'Prospecto',
       messageContent || '',
@@ -799,14 +817,16 @@ adminRouter.post('/conversations/:id/messages', (req, res) => {
 
     const thread = db.getConversationById(req.params.id);
     const replyTo = thread?.messages.filter(m => m.direction === 'inbound' && m.providerMessageId).at(-1)?.providerMessageId;
-    const queueEmail = direction !== 'inbound' && (channel || 'email') === 'email' && replyTo && ['pendiente', 'preparado', undefined].includes(status);
+    const queueEmail = direction !== 'inbound' && ['email','whatsapp'].includes(channel||'email') && replyTo && ['pendiente', 'preparado', undefined].includes(status);
+    const contact=thread?db.getContactById(thread.contactId):undefined;
+    if(queueEmail&&channel==='whatsapp'&&(!contact||!whatsappAuthorized(contact)))return res.status(409).json({error:'El contacto no tiene autorización de WhatsApp vigente.'});
     const newMsg = db.addMessageToConversation(req.params.id, {
       conversationId: req.params.id,
       direction: direction || 'outbound',
       channel: channel || 'email',
       content,
       status: queueEmail ? 'preparado' : finalStatus || 'pendiente',
-      ...(queueEmail ? { replyToProviderId:replyTo, reviewStatus:'approved' as const, reviewedAt:new Date().toISOString(), reviewedBy:'Operador Central Comercial', approvedRecipient:db.getContactById(thread!.contactId)?.email.toLowerCase() } : {}),
+      ...(queueEmail ? { replyToProviderId:replyTo, reviewStatus:'approved' as const, reviewedAt:new Date().toISOString(), reviewedBy:'Operador Central Comercial', approvedRecipient:channel==='whatsapp'?whatsappPhone(contact!.phone):contact?.email.toLowerCase() } : {}),
       serviceConfirmationId
     });
 
@@ -1078,8 +1098,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Central Comercial] Servidor activo en http://0.0.0.0:${PORT}`);
+  app.listen(PORT, localMode?'127.0.0.1':'0.0.0.0', () => {
+    console.log(`[Central Comercial] Servidor activo en http://${localMode?'127.0.0.1':'0.0.0.0'}:${PORT}`);
   });
 }
 

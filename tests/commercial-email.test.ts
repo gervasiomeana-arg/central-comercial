@@ -11,7 +11,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
   try{
     for(const folder of ['server','src','data'])await fs.mkdir(path.join(directory,folder));
     await fs.writeFile(path.join(directory,'package.json'),'{"type":"module"}');
-    for(const name of ['db.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    await fs.symlink(path.resolve('node_modules'),path.join(directory,'node_modules'),'junction');
+    for(const name of ['db.ts','data-directory.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    await fs.copyFile(new URL('../src/whatsapp-policy.ts',import.meta.url),path.join(directory,'src','whatsapp-policy.ts'));
     await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
     const {db}=await import(pathToFileURL(path.join(directory,'server','db.ts')).href);
     const {claimCommercialEmail,completeCommercialEmail,importCommercialReply,replyDecision,currentReplyText}=await import(pathToFileURL(path.join(directory,'server','commercial-email.ts')).href);

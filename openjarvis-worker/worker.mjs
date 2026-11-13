@@ -13,7 +13,7 @@ const config = process.argv[2] || process.env.CENTRAL_CONFIG_FILE ||
     cached && fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8').trim() : '');
 if (!config || !fs.existsSync(config)) throw new Error('No se encontró la conexión de Central Comercial. Indique la ruta de su .env de correo como argumento; no comparta su contenido.');
 const shared = parseEnv(fs.readFileSync(config, 'utf8'));
-const central = new URL(shared.CENTRAL_URL || 'https://central-comercial.ai.studio');
+const central = new URL(process.env.CENTRAL_URL || shared.CENTRAL_URL || 'https://central-comercial.ai.studio');
 if (central.username || central.password || central.search || central.hash || central.pathname !== '/' ||
     (central.protocol !== 'https:' && !(central.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(central.hostname)))) throw new Error('La conexión de Central Comercial requiere HTTPS o servidor local.');
 const key = shared.CHANNEL_TEST_WORKER_KEY;
