@@ -665,7 +665,7 @@ adminRouter.post('/campaigns', (req, res) => {
     if (!body.name || !body.appId) {
       return res.status(400).json({ error: 'Nombre de campaña y aplicación asociada son obligatorios.' });
     }
-    const result = db.saveCampaign(body);
+    const result = db.saveCampaign(body,whatsappStatus().ready);
     if (result.error) {
       return res.status(400).json({ error: result.error, campaign: result.campaign });
     }
@@ -685,7 +685,7 @@ adminRouter.put('/campaigns/:id', (req, res) => {
   try {
     const body: Campaign = req.body;
     body.id = req.params.id;
-    const result = db.saveCampaign(body);
+    const result = db.saveCampaign(body,whatsappStatus().ready);
     if (result.error) {
       return res.status(400).json({ error: result.error, campaign: result.campaign });
     }

@@ -788,7 +788,7 @@ class DatabaseManager {
     return this.data.campaigns.find(c => c.id === id);
   }
 
-  public saveCampaign(campaign: Campaign): { campaign: Campaign; error?: string } {
+  public saveCampaign(campaign: Campaign,whatsappConnected=false): { campaign: Campaign; error?: string } {
     const app = this.getApplicationById(campaign.appId);
     if (!app) {
       return { campaign, error: 'La aplicación asociada a la campaña no existe.' };
@@ -809,8 +809,8 @@ class DatabaseManager {
       const whatsappConn = this.data.connectors.find(c => c.type === 'whatsapp_cloud');
 
       const missing: string[] = [];
-      if (needsEmail && emailConn?.status !== 'conectado') missing.push('Servidor de Correo (SMTP)');
-      if (needsWhatsapp && whatsappConn?.status !== 'conectado') missing.push('WhatsApp Business API');
+      if (needsEmail && emailConn?.status !== 'conectado'&&!this.getCommercialEmailStatus().send) missing.push('Ejecutor de correo');
+      if (needsWhatsapp && !whatsappConnected) missing.push('Ejecutor de WhatsApp vinculado');
 
       if (missing.length > 0) {
         campaign.status = 'bloqueada_por_configuracion';

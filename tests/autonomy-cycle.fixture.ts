@@ -41,6 +41,7 @@ const contact=structuredClone(db.getContacts()[0]);Object.assign(contact,{id:'wa
 db.saveContact(contact);assert.equal(db.prepareCampaignDrafts(campaign.id).created,0);
 contact.whatsappConsent={granted:true,at:now.toISOString(),evidence:'Consentimiento simulado exclusivamente para el control local'};db.saveContact(contact);assert.equal(db.prepareCampaignDrafts(campaign.id).created,1);
 whatsappHeartbeat('wa',true,'5492235802743');
+assert.equal(db.saveCampaign(campaign,true).campaign.status,'activa');
 const stateDir=path.join(process.env.CENTRAL_DATA_DIR!,'wa-fixture');fs.mkdirSync(stateDir);
 class FakeClient extends EventEmitter{sent=0;async getNumberId(){return {_serialized:'5491100000001@c.us'};}async sendMessage(){this.sent++;const id='wa-simulated-'+this.sent;this.emit('message_ack',{id:{_serialized:id}},1);return {id:{_serialized:id},ack:1};}}
 const transport=new FakeClient();
