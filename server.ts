@@ -1,4 +1,5 @@
 import { registerCommercialEmailRoutes } from './server/commercial-email.js';
+import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -28,6 +29,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 const channelTests = new ChannelTestQueue(path.join(__dirname, 'data/channel_test_jobs.json'));
 registerWorkerTestRoutes(app, channelTests);
 registerCommercialEmailRoutes(app);
+const jarvis = new JarvisQueue(path.join(__dirname, 'data/openjarvis_plans.json'));
+registerJarvisWorkerRoutes(app, jarvis);
 
 // Start background task runner
 scheduler.start(30000);
@@ -186,6 +189,17 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+
+adminRouter.get('/openjarvis', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ...jarvis.status(), configured: (process.env.CHANNEL_TEST_WORKER_KEY || '').length >= 32 });
+});
+adminRouter.post('/openjarvis/plans', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if ((process.env.CHANNEL_TEST_WORKER_KEY || '').length < 32) return res.status(409).json({ error: 'Falta la conexión privada existente del ejecutor.' });
+  try { res.json({ id: enqueueJarvisPlan(jarvis, req.body?.appId, req.body?.country) }); }
+  catch (error: any) { res.status(409).json({ error: error.message }); }
+});
 
 adminRouter.get('/channel-tests', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
