@@ -16,10 +16,12 @@ El inicio por sí mismo no crea campañas, cambia objetivos ni confirma pagos. L
 - Conexión: variable `CENTRAL_CONFIG_FILE`, `.env` en la raíz o ruta guardada por el iniciador de WhatsApp en `%LOCALAPPDATA%\CentralComercial\WhatsApp\correo-path.txt`.
 - Correo: `worker.mjs` y dependencias en la carpeta del `.env` ya configurado.
 - WhatsApp: instalación y sesión existentes en `%LOCALAPPDATA%\CentralComercial\WhatsApp`, con su `browser-path.txt` guardado. No crea otra sesión.
-- OpenJarvis: ejecutable `jarvis.exe` del PATH o `%LOCALAPPDATA%\OpenJarvis\.venv\Scripts\jarvis.exe`, ubicación usada por el instalador oficial de Windows. Se puede indicar `CENTRAL_JARVIS_EXE` para otra instalación de confianza.
+- OpenJarvis: ejecutable `jarvis.exe` del PATH o `%LOCALAPPDATA%\OpenJarvis\src\.venv\Scripts\jarvis.exe`, ubicación usada por el instalador oficial de Windows. Se conserva compatibilidad con la variante sin la carpeta `src`. Se puede indicar `CENTRAL_JARVIS_EXE` para otra instalación de confianza.
 - Ollama: API local `127.0.0.1:11434`; si no está ejecutándose, se intenta iniciar el ejecutable ya instalado, limitado a esa dirección. No se accede a motores remotos ni se instala Ollama automáticamente.
 
 ## Instalación inicial del motor
+
+El paquete incluye `PREPARAR_CENTRAL_COMERCIAL.bat`. Primero revisa este equipo y localiza la conexión existente. Si falta el motor, ofrece ejecutar el instalador oficial de OpenJarvis únicamente después de escribir SI en la consola. Descarga una revisión fijada y comprueba su resumen SHA-256 normalizado antes de ejecutarla. No usa `ExecutionPolicy Bypass`, no modifica la política de ejecución y no intenta eludir bloqueos del sistema. El instalador oficial puede instalar dependencias, descargar un modelo y requerir herramientas de compilación; la preparación puede detenerse si falta algún requisito. No se asegura que esa instalación haya finalizado hasta comprobar el equipo real.
 
 OpenJarvis y Ollama deben estar instalados previamente con un modelo apropiado. Documentación oficial: https://open-jarvis.github.io/OpenJarvis/getting-started/installation/
 

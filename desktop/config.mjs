@@ -31,6 +31,13 @@ export function selectedModel(ramGB, requested) {
   if (requested && (!/^[a-zA-Z0-9_.:/-]{1,160}$/.test(requested) || requested.includes('://'))) throw new Error('Nombre de modelo inválido.');
   return requested || (ramGB >= 16 ? 'qwen3.5:4b' : 'qwen3.5:2b');
 }
+export function findJarvis(env = process.env) {
+  const local = env.LOCALAPPDATA;
+  const candidates = [env.CENTRAL_JARVIS_EXE,
+    local && path.join(local, 'OpenJarvis', 'src', '.venv', 'Scripts', 'jarvis.exe'),
+    local && path.join(local, 'OpenJarvis', '.venv', 'Scripts', 'jarvis.exe'), executable('jarvis', env)].filter(Boolean);
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
 export function jarvisEnvironment(home, env = process.env) {
   // No mail secrets, cloud API keys or inherited OpenJarvis configuration.
   const allowed = ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'USERPROFILE', 'HOME', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'LANG', 'LC_ALL'];

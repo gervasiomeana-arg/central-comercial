@@ -5,7 +5,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { findConfig, executable, jarvisEnvironment, selectedModel } from './config.mjs';
+import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -54,8 +54,7 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
 // Dedicated OpenJarvis profile: explicit local engine, no channels, no inherited API keys.
 const profile = path.join(runtimeDir, 'intelligence'); fs.mkdirSync(profile, { recursive: true });
 fs.writeFileSync(path.join(profile, 'config.toml'), '[engine]\ndefault = "ollama"\n[server]\nhost = "127.0.0.1"\nport = 8765\nagent = "simple"\n');
-const jarvisCandidates = [process.env.CENTRAL_JARVIS_EXE, process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'OpenJarvis', '.venv', 'Scripts', 'jarvis.exe'), executable('jarvis')].filter(Boolean);
-const jarvis = jarvisCandidates.find(p => fs.existsSync(p));
+const jarvis = findJarvis();
 if (ramGB < 6) { issues.add('low_memory'); log('intelligence', 'Memoria insuficiente para iniciar automáticamente el modelo local recomendado.'); }
 else if (!jarvis) { issues.add('jarvis_missing'); log('intelligence', 'OpenJarvis aún no está instalado. El correo y los informes escritos siguen disponibles.'); }
 else {
