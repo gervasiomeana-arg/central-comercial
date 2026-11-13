@@ -1,6 +1,7 @@
 import { registerCommercialEmailRoutes } from './server/commercial-email.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
+import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -34,6 +35,8 @@ const jarvis = new JarvisQueue(path.join(__dirname, 'data/openjarvis_plans.json'
 registerJarvisWorkerRoutes(app, jarvis);
 const assistant = new AssistantQueue(path.join(__dirname, 'data/assistant_history.json'), jarvis);
 registerAssistantWorkerRoutes(app, assistant);
+const localRuntime = new LocalRuntime();
+registerLocalRuntimeRoutes(app, localRuntime);
 
 // Start background task runner
 scheduler.start(30000);
@@ -192,6 +195,10 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+
+adminRouter.get('/local-runtime', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store'); res.json(localRuntime.status());
+});
 
 adminRouter.get('/assistant', (req, res) => {
   res.setHeader('Cache-Control', 'no-store'); res.json(assistant.status());

@@ -89,8 +89,8 @@ export function OpenJarvisPanel() {
     </div>
     <details className="border-t border-slate-100 pt-4 text-sm text-slate-600">
       <summary className="cursor-pointer flex items-center gap-2 font-medium"><ChevronDown size={16} /> Cómo conectar mi computadora</summary>
-      <p className="mt-3 leading-relaxed">El proyecto incluye la carpeta <strong>openjarvis-worker</strong> con el iniciador y la guía. Reutiliza la conexión privada del correo. Primero hay que instalar OpenJarvis y un modelo compatible con tu equipo; este botón no instala programas.</p>
-      <p className="mt-2 leading-relaxed">El puente consulta únicamente OpenJarvis en tu computadora. El correo y WhatsApp siguen usando sus ejecutores actuales. No se usa Gemini como respaldo de estas estrategias.</p>
+      <p className="mt-3 leading-relaxed">Usá el inicio único <strong>INICIAR_CENTRAL_COMERCIAL.bat</strong> del proyecto actualizado. Reutiliza tus conexiones y coordina los componentes en segundo plano; no necesitás abrir otra interfaz de OpenJarvis.</p>
+      <p className="mt-2 leading-relaxed">La instalación inicial del motor y del modelo se explica en <strong>desktop/README.md</strong>. Su estado aparece arriba, en Tu computadora. No se usa Gemini como respaldo de estas estrategias.</p>
     </details>
   </section>;
 }
