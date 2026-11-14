@@ -1,3 +1,4 @@
+export function modelFailure(code, message) { const error = new Error(message); error.failureCode = code; return error; }
 // OpenJarvis API contract: https://open-jarvis.github.io/OpenJarvis/deployment/api-server/
 export function localJarvisURL(value = 'http://127.0.0.1:8000') {
   const url = new URL(value);
@@ -32,7 +33,7 @@ No inventes empresas, contactos, correos, teléfonos, precios, descuentos, resul
 La meta es conjunta entre las aplicaciones, no una meta independiente por aplicación. Respetá el país y los límites recibidos.
 Los segmentos y búsquedas son hipótesis por verificar en fuentes públicas institucionales. No afirmes haber investigado o enviado nada.
 Usá exactamente esta estructura: {"segments":[{"name":"segmento institucional","reason":"por qué podría necesitar la app"}],"searchQueries":["consulta de búsqueda con el país"],"campaignAngle":"enfoque breve basado en las funciones verificadas","nextSteps":["acción propuesta"],"ownerQuestions":[]}.
-Máximo 5 segmentos, 5 búsquedas, 6 pasos, 4 preguntas. El enfoque debe tener menos de 1000 caracteres. No incluyas notas promocionales finales ni datos de personas.` },
+Es una estrategia compacta: máximo 2 segmentos, 3 búsquedas y 3 pasos breves. ownerQuestions debe ser [] si no hay preguntas. El enfoque debe tener menos de 400 caracteres. Completar todas las claves del JSON; no agregar explicaciones fuera del objeto. No incluyas notas promocionales finales ni datos de personas.` },
     { role: 'user', content: JSON.stringify(context) }
   ];
 }
@@ -42,7 +43,7 @@ export function checkedStrategy(p) {
   if (!p || !Array.isArray(p.segments) || !p.segments.length || p.segments.length > 5 ||
       !p.segments.every(s => s && text(s.name, 160) && text(s.reason, 500)) ||
       !list(p.searchQueries, 1, 5, 240) || !text(p.campaignAngle, 1000) ||
-      !list(p.nextSteps, 1, 6, 400) || !list(p.ownerQuestions, 0, 4, 300)) throw new Error('Estrategia inválida.');
+      !list(p.nextSteps, 1, 6, 400) || !list(p.ownerQuestions, 0, 4, 300)) throw modelFailure('MODEL_SCHEMA', 'El JSON no cumple la estructura de estrategia requerida.');
   return { segments: p.segments.map(s => ({ name: s.name.trim(), reason: s.reason.trim() })),
     searchQueries: p.searchQueries.map(s => s.trim()), campaignAngle: p.campaignAngle.trim(),
     nextSteps: p.nextSteps.map(s => s.trim()), ownerQuestions: p.ownerQuestions.map(s => s.trim()) };
@@ -54,12 +55,14 @@ export async function generateStrategy(base, model, context, apiKey) {
     signal: AbortSignal.timeout(180000)
   });
   const choice = completion.choices?.[0];
-  if (choice?.finish_reason === 'length' || choice?.message?.tool_calls?.length || typeof choice?.message?.content !== 'string') {
-    throw new Error('El modelo no devolvió una estrategia completa de texto.');
-  }
+  if (choice?.finish_reason === 'length') throw modelFailure('MODEL_TRUNCATED', 'El modelo agotó el límite antes de completar la estrategia.');
+  if (choice?.message?.tool_calls?.length) throw modelFailure('MODEL_TOOLS', 'El modelo intentó devolver herramientas en lugar de una estrategia.');
+  if (typeof choice?.message?.content !== 'string' || !choice.message.content.trim()) throw modelFailure('MODEL_EMPTY', 'El modelo devolvió contenido vacío.');
   const content = choice.message.content.trim().replace(/^<think>[\s\S]*?<\/think>\s*/, '').replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/, '$1');
   if (content.length > 15000) throw new Error('Estrategia demasiado extensa.');
-  return checkedStrategy(JSON.parse(content));
+  let parsed;
+  try { parsed = JSON.parse(content); } catch { throw modelFailure('MODEL_JSON', 'El modelo devolvió texto que no es un objeto JSON completo.'); }
+  return checkedStrategy(parsed);
 }
 export async function answerQuestion(base, model, job, apiKey) {
   const completion = await json(new URL('/v1/chat/completions', base), {

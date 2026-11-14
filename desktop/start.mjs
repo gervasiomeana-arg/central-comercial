@@ -82,7 +82,7 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
 
 // Dedicated OpenJarvis profile: explicit local engine, no channels, no inherited API keys.
 const profile = path.join(runtimeDir, 'intelligence'); fs.mkdirSync(profile, { recursive: true });
-fs.writeFileSync(path.join(profile, 'config.toml'), '[engine]\ndefault = "ollama"\n[server]\nhost = "127.0.0.1"\nport = 8765\nagent = "simple"\n');
+fs.writeFileSync(path.join(profile, 'config.toml'), '[engine]\ndefault = "ollama"\n[server]\nhost = "127.0.0.1"\nport = 8765\nagent = ""\n');
 const jarvis = findJarvis();
 if (ramGB < 6) { issues.add('low_memory'); log('intelligence', 'Memoria insuficiente para iniciar automáticamente el modelo local recomendado.'); }
 else if (!jarvis) { issues.add('jarvis_missing'); log('intelligence', 'OpenJarvis aún no está instalado. El correo y los informes escritos siguen disponibles.'); }
@@ -107,7 +107,7 @@ else {
       // Do not attach to an unrelated service already occupying the private port.
       const probe = http.createServer();
       await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(8765, '127.0.0.1', () => probe.close(resolve)); });
-      launch('intelligence', jarvis, ['serve', '--host', '127.0.0.1', '--port', '8765', '--engine', 'ollama', '--model', model, '--agent', 'simple'], { cwd: runtimeDir, env: jarvisEnvironment(profile) });
+      launch('intelligence', jarvis, ['serve', '--host', '127.0.0.1', '--port', '8765', '--engine', 'ollama', '--model', model], { cwd: runtimeDir, env: jarvisEnvironment(profile) });
       launch('bridge', process.execPath, [path.join(root, 'openjarvis-worker', 'worker.mjs'), config.file], { env: { ...jarvisEnvironment(profile), CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, OPENJARVIS_MODEL: model, OPENJARVIS_URL: 'http://127.0.0.1:8765' } });
     }
   } catch (error) { issues.add(error.code === 'EADDRINUSE' ? 'jarvis_port_busy' : 'model_missing'); log('intelligence', 'El motor local no pudo prepararse. Revisá Ollama y el modelo instalado.'); }

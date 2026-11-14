@@ -24,7 +24,7 @@ export function intelligenceCycle(){
  for(const c of db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===report.goal.month&&c.intelligenceEnabled&&!c.intelligencePlanId&&['activa','lista','bloqueada_por_configuracion'].includes(c.status))){
   if((c.intelligenceNextAttemptAt||0)>Date.now())continue;
   try{
-   if(c.intelligenceRequestId){const plan=queue.completed(c.intelligenceRequestId);if(plan){applyStrategy(queue,plan.id,c);continue;}const job=queue.status().plans.find(p=>p.id===c.intelligenceRequestId);if(job?.state==='failed'){c.intelligenceError='OpenJarvis no completó la estrategia; se reintentará con el motor local.';delete c.intelligenceRequestId;c.intelligenceNextAttemptAt=Date.now()+600000;db.save();}continue;}
+   if(c.intelligenceRequestId){const plan=queue.completed(c.intelligenceRequestId);if(plan){applyStrategy(queue,plan.id,c);continue;}const job=queue.status().plans.find(p=>p.id===c.intelligenceRequestId);if(job?.state==='failed'){c.intelligenceError=job.error||'OpenJarvis no completó la estrategia; se reintentará con el motor local.';delete c.intelligenceRequestId;c.intelligenceNextAttemptAt=Date.now()+600000;db.save();}continue;}
    if(queue.status().ready){c.intelligenceRequestId=enqueueJarvisPlan(queue,c.appId,c.country);delete c.intelligenceError;db.save();}
    else{c.intelligenceError='Esperando el motor local de OpenJarvis antes de investigar y enviar.';db.save();}
   }catch(error:any){c.intelligenceError=error.message;c.intelligenceNextAttemptAt=Date.now()+3600000;db.save();}

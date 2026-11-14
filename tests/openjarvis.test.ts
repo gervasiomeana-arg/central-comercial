@@ -89,3 +89,19 @@ test('rutas del puente rechazan peticiones sin clave incluso si el panel usa acc
     assert.equal(result.status, 401);
   } finally { await new Promise<void>(r => server.close(() => r())); fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
+
+test('planificador distingue respuesta truncada, herramientas, vacío, JSON y esquema sin aplicar datos inválidos', async()=>{
+ let reply:any;
+ const fake=http.createServer((_req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(reply));});
+ await new Promise<void>(r=>fake.listen(0,'127.0.0.1',r));
+ try {
+  const base=localJarvisURL(`http://127.0.0.1:${(fake.address() as any).port}`);
+  for(const [choice,code] of [
+   [{finish_reason:'length',message:{content:'{}'}},'MODEL_TRUNCATED'],
+   [{finish_reason:'stop',message:{content:'{}',tool_calls:[{id:'tool'}]}},'MODEL_TOOLS'],
+   [{finish_reason:'stop',message:{content:''}},'MODEL_EMPTY'],
+   [{finish_reason:'stop',message:{content:'texto incompleto'}},'MODEL_JSON'],
+   [{finish_reason:'stop',message:{content:'{}'}},'MODEL_SCHEMA']
+  ] as const){reply={choices:[choice]};await assert.rejects(()=>generateStrategy(base,'local-model',context,''),(error:any)=>error.failureCode===code);}
+ }finally{await new Promise<void>(r=>fake.close(()=>r()));}
+});

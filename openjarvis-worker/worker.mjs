@@ -82,12 +82,13 @@ async function tick() {
         state.pending = { id: job.id, lease: job.lease, area, strategy };
       }
       save();
-    } catch {
-      state.pending = { id: job.id, lease: job.lease, area, failed: true }; save();
-      console.error('El modelo no devolvió una respuesta válida. No se repite automáticamente.');
+    } catch (error) {
+      const failureCode = ['MODEL_TRUNCATED','MODEL_TOOLS','MODEL_EMPTY','MODEL_JSON','MODEL_SCHEMA'].includes(error.failureCode) ? error.failureCode : 'MODEL_REQUEST';
+      state.pending = { id: job.id, lease: job.lease, area, failed: true, failureCode }; save();
+      console.error(`Estrategia no aplicada [${failureCode}]: ${failureCode==='MODEL_REQUEST'?'Falló la solicitud al motor local.':error.message} No se enviaron mensajes.`);
     }
     await flush();
-    console.log('Resultado guardado en Central Comercial. No se enviaron mensajes.');
+    console.log('Resultado de planificación registrado en Central Comercial; este puente no envía mensajes.');
   } catch (e) { console.error(e.message); }
   finally { processing = false; }
 }
