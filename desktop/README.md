@@ -176,3 +176,30 @@ regla se aplica al preparar notas y al reclamar un envío, para bloquear tambié
 borradores antiguos sin borrar sus registros. Las direcciones legítimas de
 dominios gratuitos no se excluyen en bloque. El tipo de organización heredado
 se conserva al editar aunque no pertenezca a las opciones predefinidas.
+
+### Revisión de persistencia y recuperación — 14/11/2026
+
+La revisión manual usa la misma validación de email que la extracción y el
+transporte. Al iniciar, los correos de ejemplo de descubrimientos históricos
+se descartan y sus notas de email sin intentos se rechazan; se conservan fuente,
+notas, mensajes y evidencia previa. La corrección es idempotente. El resumen
+excluye destinatarios no utilizables y notas de contactos descartados o dados
+de baja. El programador no genera seguimientos nuevos para esos contactos.
+
+Si falta la base principal pero quedan respaldos, un archivo temporal o el
+registro de traslado, el servidor detiene el arranque para revisión. Un JSON
+que no contiene las colecciones comerciales tampoco se convierte en una base
+vacía. No se restauran copias antiguas automáticamente.
+
+Validación: 76 pruebas de aplicación y 5 de transportes aprobadas, TypeScript,
+compilación y comprobación HTTP del servidor de producción en copia aislada.
+Una regresión ejecuta tres procesos sucesivos y comprueba descartes, bajas,
+objetivo, cupos, pagos, confirmaciones y ausencia de reenvíos de resultado
+incierto. Los transportes son simulados; no hubo promociones reales.
+
+Esto no proporciona almacenamiento duradero a un alojamiento efímero ni
+supervisión remota de la PC. Una publicación nueva debe conservar su carpeta
+CENTRAL_DATA_DIR mediante el almacenamiento del alojamiento; la ruta por sí
+sola no lo garantiza. La instalación local conserva la base fuera del código.
+Quedan por comprobar en el equipo dedicado las conexiones reales, el inicio
+con Windows y la continuidad al apagar o suspender el equipo.

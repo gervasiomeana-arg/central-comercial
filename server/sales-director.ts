@@ -1,5 +1,7 @@
 import type { Application, Campaign, MonthlySalesGoal, PaymentRecord, Client } from '../src/types.js';
 import { accountingDay, validDay } from '../src/ledger.js';
+import {usableContactEmail} from '../src/email-policy.js';
+import {whatsappAuthorized} from '../src/whatsapp-policy.js';
 
 export const normalize = (value: string) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 export function defaultGoal(month: string): MonthlySalesGoal {
@@ -85,9 +87,10 @@ export function operationalSummary(
     if (!value || !Number.isFinite(Date.parse(value))) return false;
     return accountingDay(new Date(value)).slice(0, 7) === month;
   };
-  const pool = contacts.filter(c => c.interestedAppIds?.includes(app.id) && !['cliente', 'descartado', 'baja_solicitada'].includes(c.status) && c.permission !== 'revocado' && c.source?.trim() && Number.isFinite(Date.parse(c.sourceReviewDate)));
+  const pool = contacts.filter(c => c.interestedAppIds?.includes(app.id) && !['cliente', 'descartado', 'baja_solicitada'].includes(c.status) && c.permission !== 'revocado' && c.source?.trim() && Number.isFinite(Date.parse(c.sourceReviewDate)) && (usableContactEmail(c.email) || whatsappAuthorized(c)));
   const threads = conversations.filter(c => c.appId === app.id);
   const attempted = threads.flatMap(c => c.messages.map(m => ({ ...m, contactId: c.contactId })));
+  const contactById = new Map(contacts.map(c => [c.id,c]));
   const accepted = attempted.filter(m => m.direction === 'outbound' && ['aceptado_proveedor', 'entrega_confirmada', 'enviado'].includes(m.status) && m.serviceConfirmationId && inMonth(m.acceptedAt || m.sentAt));
   const received = threads.filter(c => c.messages.some(m => m.direction === 'inbound' && m.providerMessageId && inMonth(m.createdAt)));
   const questions = threads.filter(c => c.requiresHumanIntervention && c.messages.some(m => m.direction === 'inbound')).map(c => {
@@ -97,7 +100,10 @@ export function operationalSummary(
   });
   return {
     contactsAvailable: pool.length,
-    prepared: attempted.filter(m => m.direction === 'outbound' && m.status === 'preparado' && m.reviewStatus !== 'rejected' && inMonth(m.createdAt)).length,
+    prepared: attempted.filter(m => {
+      const contact = contactById.get(m.contactId);
+      return m.direction === 'outbound' && m.status === 'preparado' && m.reviewStatus !== 'rejected' && inMonth(m.createdAt) && contact && !['descartado','baja_solicitada'].includes(contact.status) && contact.permission !== 'revocado' && (m.channel === 'email' ? usableContactEmail(contact.email) : m.channel === 'whatsapp' && whatsappAuthorized(contact));
+    }).length,
     acceptedContacts: new Set(accepted.map(m => m.contactId)).size,
     responses: new Set(received.map(c => c.contactId)).size,
     interested: contacts.filter(c => c.interestedAppIds?.includes(app.id) && c.status === 'interesado').length,

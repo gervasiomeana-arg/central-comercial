@@ -56,7 +56,7 @@ class CommercialScheduler {
       const now = new Date();
       const contacts = db.getContacts();
       for (const contact of contacts) {
-        if (contact.nextFollowUpDate && contact.status !== 'cliente' && contact.status !== 'baja_solicitada') {
+        if (contact.nextFollowUpDate && !['cliente','baja_solicitada','descartado'].includes(contact.status) && contact.permission !== 'revocado') {
           const followUpDate = new Date(contact.nextFollowUpDate);
           if (followUpDate <= now) {
             // Check if there is already a pending task for this follow-up

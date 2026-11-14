@@ -16,3 +16,12 @@ test('regresión en sitio real: input/textarea/atributos no son fuente de email;
  assert.equal(reviewContactPage(prefix+'<p>Escribinos: contacto@agencia.com.ar</p>','https://agencia.test',app,'Argentina').contact?.email,'contacto@agencia.com.ar');
  assert.equal(reviewContactPage(prefix+'<script type="application/ld+json">{"@type":"Organization","email":"info@agencia.com.ar"}</script>','https://agencia.test',app,'Argentina').contact?.email,'info@agencia.com.ar');
 });
+
+test('el resumen no ofrece correos de ejemplo ni cuenta notas de contactos descartados como pendientes',async()=>{
+ const {operationalSummary}=await import('../server/sales-director.js');
+ const base={interestedAppIds:[app.id],source:'https://agencia.test',sourceReviewDate:'2026-11-01',permission:'autorizado',status:'prospecto'};
+ const contacts=[{...base,id:'valid',email:'hola@institucion.test'},{...base,id:'example',email:'tu@email.com'},{...base,id:'discarded',email:'archivo@institucion.test',status:'descartado'},{...base,id:'stop',email:'baja@institucion.test',permission:'revocado'}] as any;
+ const conversations=contacts.map((c:any)=>({contactId:c.id,appId:app.id,messages:[{channel:'email',direction:'outbound',status:'preparado',content:'Invitación',createdAt:'2026-11-14T12:00:00Z'}]}));
+ const report=operationalSummary(app,'2026-11',contacts,[],conversations,[],[]);
+ assert.equal(report.contactsAvailable,1);assert.equal(report.prepared,1);
+});

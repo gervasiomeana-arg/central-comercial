@@ -66,8 +66,10 @@ test('database startup persists the catalog while preserving commercial records'
   try {
     await fs.mkdir(path.join(directory, 'server')); await fs.mkdir(path.join(directory, 'data')); await fs.mkdir(path.join(directory, 'src'));
     await fs.copyFile(new URL('../src/ledger.ts', import.meta.url), path.join(directory, 'src', 'ledger.ts'));
+    for (const file of ['email-policy.ts','whatsapp-policy.ts']) await fs.copyFile(new URL(`../src/${file}`, import.meta.url), path.join(directory, 'src', file));
+    await fs.symlink(path.resolve('node_modules'), path.join(directory, 'node_modules'), 'junction');
     await fs.writeFile(path.join(directory, 'package.json'), '{"type":"module"}');
-    for (const file of ['db.ts', 'commercial-catalog.ts', 'campaign-preparation.ts', 'sales-director.ts']) await fs.copyFile(new URL(`../server/${file}`, import.meta.url), path.join(directory, 'server', file));
+    for (const file of ['db.ts', 'data-directory.ts', 'discovery-plan.ts', 'commercial-catalog.ts', 'campaign-preparation.ts', 'sales-director.ts']) await fs.copyFile(new URL(`../server/${file}`, import.meta.url), path.join(directory, 'server', file));
     const original = { version: 1, applications: [{ ...commercialCatalog()[0], commercialCatalogVersion: undefined }], contacts: [{ id: 'saved-contact', orgName: 'Datos existentes' }], campaigns: [], conversations: [{ id: 'saved-conversation', messages: [] }], clients: [{ id: 'saved-client' }], subscriptions: [{ id: 'saved-subscription', agreedAmount: 37 }], payments: [{ id: 'saved-payment', amount: 37, currency: 'USD', status: 'pendiente_confirmacion_manual' }], tasks: [], connectors: [], logs: [] };
     const filename = path.join(directory, 'data', 'central_comercial_db.json');
     await fs.writeFile(filename, JSON.stringify(original));
