@@ -40,7 +40,7 @@ El inicio por sí mismo no crea campañas, cambia objetivos ni confirma pagos. L
 
 ## Instalación inicial del motor
 
-El paquete incluye `PREPARAR_CENTRAL_COMERCIAL.bat`. Primero revisa este equipo y localiza la conexión existente. Si falta el motor, ofrece ejecutar el instalador oficial de OpenJarvis únicamente después de escribir SI en la consola. Descarga una revisión fijada y comprueba su resumen SHA-256 normalizado antes de ejecutarla. No usa `ExecutionPolicy Bypass`, no modifica la política de ejecución y no intenta eludir bloqueos del sistema. El instalador oficial puede instalar dependencias, descargar un modelo y requerir herramientas de compilación; la preparación puede detenerse si falta algún requisito. No se asegura que esa instalación haya finalizado hasta comprobar el equipo real.
+El paquete incluye `PREPARAR_CENTRAL_COMERCIAL.bat`. Revisa la conexión existente y ofrece preparar el motor mediante winget y uv después de escribir SI. No descarga ni ejecuta el instalador .ps1 ni el EXE de OpenJarvis. Ver la preparación integrada detallada al final de este documento.
 
 OpenJarvis y Ollama deben estar instalados previamente con un modelo apropiado. Documentación oficial: https://open-jarvis.github.io/OpenJarvis/getting-started/installation/
 
@@ -72,3 +72,18 @@ El supervisor descarga una copia de la base comercial y las colas cada minuto po
 Si falla Internet o el servidor no tiene publicada esta versión, conserva el respaldo anterior y muestra el problema. No se restauran copias antiguas automáticamente sobre registros más nuevos. Una recuperación del servidor requiere revisar consistencia y envíos con resultado incierto antes de usar esas copias.
 
 En el servidor, `CENTRAL_DATA_DIR` puede señalar una carpeta absoluta de un volumen persistente. Debe existir ese almacenamiento; una variable no garantiza durabilidad en un contenedor efímero. `DATABASE_URL` por sí sola no conecta PostgreSQL en esta versión. Si la base actual está corrupta, el arranque se detiene conservando el archivo y los respaldos en lugar de reemplazarla por datos iniciales.
+
+### Preparación sin el instalador PowerShell
+
+PREPARAR_CENTRAL_COMERCIAL usa el catálogo winget para Git, uv, Rust, Ollama y
+las herramientas C++ de Microsoft. uv instala Python 3.12 y las dependencias del
+motor oficial, fijado al commit afdbd5b35cb21f51564588c8cdbf6b74889c4f1f, en
+%LOCALAPPDATA%/OpenJarvis/central-src. No ejecuta el instalador .ps1 ni el EXE de
+OpenJarvis, no modifica políticas o protecciones, ni registra servicios.
+La confirmación SI incluye descargas de varios GB y las autorizaciones normales
+del instalador de Microsoft. Si winget falta, un permiso se rechaza, se requiere
+reiniciar o un binario no inicia, se detiene con el motivo real; no declara éxito.
+Comprueba importaciones del motor/extensión nativa y presencia del modelo.
+Las claves y sesiones existentes no se copian a los instaladores.
+Este método se revisó en el entorno de desarrollo; la ejecución e instalación
+completas en Windows siguen pendientes de comprobar en la PC dedicada.
