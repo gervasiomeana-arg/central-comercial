@@ -104,3 +104,13 @@ la confirmación de pagos sigue siendo manual. No habilita países nuevos fuera
 de los parámetros del objetivo. El piloto avanzado conserva su selección
 manual y su tope total y desactiva el director mientras dure esa modalidad.
 Activar la modalidad no equivale a haber enviado mensajes ni conseguido clientes.
+
+### Contrato del planificador local
+
+El servidor OpenJarvis se inicia sin agente genérico (server.agent vacío),
+para que /v1/chat/completions use el motor directo y respete los mensajes,
+temperatura y max_tokens del planificador. La versión fijada no transmite esos
+parámetros al agente SimpleAgent. No se habilitan herramientas ni acciones del
+modelo. La salida compacta debe superar las mismas validaciones de estructura,
+país y actividad. Los fallos distinguen truncamiento, JSON, esquema, contenido
+vacío y conexión; no convierten una respuesta inválida en una campaña enviada.

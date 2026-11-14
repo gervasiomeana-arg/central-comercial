@@ -89,7 +89,7 @@ export class JarvisQueue {
     plan.model = this.worker.model; this.save();
     return { id: plan.id, lease, context: plan.context, model: plan.model };
   }
-  complete(id: string, workerId: string, lease: unknown, input: { strategy?: unknown; failed?: boolean }) {
+  complete(id: string, workerId: string, lease: unknown, input: { strategy?: unknown; failed?: boolean; failureCode?: unknown }) {
     this.expire();
     const plan = this.plans.find(p => p.id === id);
     if (!plan || plan.workerId !== workerId || !text(lease, 100) || !plan.leaseHash ||
@@ -97,7 +97,10 @@ export class JarvisQueue {
     // Duplicate delivery after a lost HTTP response is acknowledged without regenerating.
     if (plan.state === 'completed' || plan.state === 'failed') return;
     if (plan.state !== 'running') throw new Error('Tarea no ejecutable.');
-    if (input.failed === true) { plan.state = 'failed'; plan.error = 'No se obtuvo una estrategia válida del modelo local. Revisá la ventana del puente.'; }
+    if (input.failed === true) {
+      const reasons: Record<string,string> = {MODEL_TRUNCATED:'La estrategia quedó truncada por el límite del modelo.',MODEL_TOOLS:'El modelo devolvió herramientas en lugar de una estrategia.',MODEL_EMPTY:'El modelo devolvió contenido vacío.',MODEL_JSON:'El modelo no devolvió JSON completo.',MODEL_SCHEMA:'El JSON no cumple la estructura requerida.',MODEL_REQUEST:'Falló la solicitud al motor local.'};
+      plan.state = 'failed'; plan.error = typeof input.failureCode === 'string' && reasons[input.failureCode] || 'No se obtuvo una estrategia válida del modelo local. Revisá la ventana del puente.';
+    }
     else { plan.strategy = validateStrategy(input.strategy); plan.state = 'completed'; }
     plan.updatedAt = this.now(); this.save();
   }
