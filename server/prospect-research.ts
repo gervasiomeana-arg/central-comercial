@@ -1,7 +1,8 @@
+import {searchRequest} from './discovery-plan.js';
 import {campaignStrategyReady} from './sales-director.js';
 import { db } from './db.js';
 import { accountingDay } from '../src/ledger.js';
-import { fetchPublicText, searchLinks, contactLinks, reviewContactPage, publicUrl } from './public-web.js';
+import { fetchPublicText, relevantSearchLinks, contactLinks, reviewContactPage, publicUrl } from './public-web.js';
 import { normalize, researchQueriesFor } from './sales-director.js';
 import type { ResearchCandidate, ResearchOutcome } from '../src/types.js';
 
@@ -36,7 +37,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       return available.length<needed;
     }).sort((a,b)=>(a.lastResearchAt||'').localeCompare(b.lastResearchAt||''));
     const campaign=eligible[0];
-    if(!campaign){state.status='waiting';state.detail='Sin páginas para consultar ahora: contactos suficientes, cupo por campaña o espera programada.';db.save();return;}
+    if(!campaign){state.status='waiting';state.detail=`Sin tarea elegible: ${campaigns.filter(c=>(c.researchCount||0)>=cap).length} campañas agotaron su reparto de páginas; ${campaigns.filter(c=>(c.researchNextAttemptAt||0)>Date.now()).length} están en espera. Solicitudes usadas: ${state.requests}/${goal.dailyResearchLimit}.`;db.save();return;}
     const app=db.getApplicationById(campaign.appId)!, country=campaign.country;
     // Only generated goal campaigns are migrated. Custom campaign queries stay intact.
     if(campaign.researchQueryVersion!==2){campaign.researchQueries=researchQueriesFor(app,country);campaign.researchQueryVersion=2;campaign.researchQueryIndex=0;}
@@ -59,15 +60,17 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     };
     let index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     if(index<0){
-      if((campaign.researchQueriesToday||0)>=3||remaining()<2){state.status='waiting';state.detail='Consultas de hoy terminadas; se conserva la cola para continuar sin repetir búsquedas.';campaign.researchNextAttemptAt=Date.now()+6*60*60*1000;db.save();return;}
-      const query=queries[(campaign.researchQueryIndex||0)%queries.length];outcome.query=query;
+      if((campaign.researchQueriesToday||0)>=3||remaining()<1){state.status='waiting';state.detail='Consultas de hoy terminadas; se conserva la cola para continuar sin repetir búsquedas.';campaign.researchNextAttemptAt=Date.now()+6*60*60*1000;db.save();return;}
+      const fallback=campaign.researchSearchFallbackQuery;const query=fallback||queries[(campaign.researchQueryIndex||0)%queries.length];outcome.query=query;
       // Advance once per search, including failures; never repeat a single daily query forever.
-      campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;db.save();
+      if(!fallback)campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;db.save();
       try{
-        const rss=await fetchPage(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`);
-        if(!/<rss|<feed/i.test(rss.text)){state.blocked=true;throw new Error('El buscador no devolvió un listado público compatible. Requiere revisión.');}
-        const links=searchLinks(rss.text);links.forEach(url=>enqueue({url}));
-        db.addLog('info','contactos',`Consulta pública realizada para ${app.name}: ${links.length} páginas en el listado, todavía sin verificar contactos.`,{campaignId:campaign.id,query});
+        const rss=await fetchPage(searchRequest(query,country,Boolean(fallback)));
+        if(!fallback&&!/<rss|<feed/i.test(rss.text)){state.blocked=true;throw new Error('El buscador no devolvió un listado público compatible. Requiere revisión.');}
+        if(fallback&&/captcha|anomaly-modal|challenge-form/i.test(rss.text)){state.blocked=true;throw new Error('El buscador requiere verificación humana. No se eludirá.');}
+        const links=relevantSearchLinks(rss.text,app,country,Boolean(fallback));links.forEach(url=>enqueue({url}));
+        if(!fallback&&!links.length)campaign.researchSearchFallbackQuery=query;else delete campaign.researchSearchFallbackQuery;
+        db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados pertinentes por actividad y país; todavía sin verificar contactos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'});
         state.lastSuccess=new Date().toISOString();delete state.lastError;
         reason(outcome,links.length?'Resultados del buscador conservados':'Consulta sin páginas nuevas de organizaciones');
       }catch(error:any){state.status='error';state.lastError=String(error.message);if(/bloqueado|requiere revisión/i.test(error.message))state.blocked=true;campaign.researchNextAttemptAt=Date.now()+30*60*1000;db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:error.message});db.save();return;}
@@ -100,10 +103,13 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         }
         if(!reviewed.contact?.email){
           const context=reviewed.evidence;
+          if(!context.topicVerified && !candidate.context && new URL(page.url).pathname!=='/') {enqueue({url:new URL('/',page.url).href,context,returnTo:page.url},true);}
+          if(context.topicVerified){
           for(const url of contactLinks(page.text,page.url).reverse())if(url!==page.url)enqueue({url,context},true);
           const root=new URL('/',page.url).href;
           if(page.url!==root && !candidate.context)enqueue({url:root,context,returnTo:page.url},true);
           if(candidate.returnTo&&context.topicVerified&&context.countryVerified)enqueue({url:candidate.returnTo,context},true);
+          }
         }
         if(!state.blocked){state.status=outcome.created||outcome.reused?'ready':'waiting';state.detail=`${outcome.checked} página revisada; ${outcome.created} contactos nuevos. Pendientes: ${queue.length}.`;}
       }catch(error:any){
@@ -116,6 +122,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         }
       }
     }
+    if(index<0){state.status=state.requests>=goal.dailyResearchLimit?'quota':'waiting';state.detail=state.status==='quota'?'Cupo global de solicitudes agotado; se conservan candidatos para el próximo día.':campaign.researchSearchFallbackQuery?'Los resultados RSS no verificaron actividad y país; se programó una consulta HTML pública alternativa.':'No hubo resultados pertinentes; se continuará con otra consulta dentro del cupo.';}
     campaign.researchLastOutcome=outcome;
     db.addLog('info','contactos',`Investigación ${app.name}: ${outcome.created} contactos nuevos, ${outcome.checked} páginas revisadas.`,{campaignId:campaign.id,...outcome,pendingPages:queue.length,requestsToday:state.requests});
     db.save();

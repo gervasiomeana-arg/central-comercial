@@ -1,3 +1,4 @@
+import {repairDiscoveryPlan} from './discovery-plan.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
@@ -692,6 +693,7 @@ class DatabaseManager {
       if (app&&!campaign.intelligencePlanId) { campaign.researchQueries = researchQueriesFor(app,campaign.country); campaign.researchQueryVersion=2; }
       campaign.dailyLimit = Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, this.data.applications.filter(a => a.status === 'lista' && a.campaignsAllowed).length)));
     }
+    if(goal.dailyResearchLimit>previous.dailyResearchLimit&&!this.data.researchState.blocked){for(const c of this.data.campaigns.filter(c=>c.goalMonth===goal.month))delete c.researchNextAttemptAt;}
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
   }
   public startMonthlyDirector() {
@@ -718,6 +720,7 @@ class DatabaseManager {
       const channels = report.goal.directorChannels || ['email'];
       for (const c of this.data.campaigns.filter(c => this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
+        if(app && repairDiscoveryPlan(c,app)){changed=true;this.addLog('info','contactos','Búsqueda reparada: consultas de prospectos y cola anterior archivada; el cupo global consumido se conserva.',{campaignId:c.id});}
         if (!c.intelligencePlanId && app && !campaignStrategyReady({...c,intelligenceEnabled:true},app)) {
           const queries = researchQueriesFor(app,c.country);
           if (queries.length) {

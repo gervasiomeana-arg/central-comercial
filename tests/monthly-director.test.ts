@@ -29,7 +29,7 @@ test('monthly director creates its own campaigns, persists limits, excludes deve
   const campaign=campaigns.find(c=>db.getApplicationById(c.appId)?.slug==='open-voley')!;
   for(const c of campaigns)c.lastResearchAt=c===campaign?'2000-01-01':new Date().toISOString();
   campaign.sendWindowStart='00:00';campaign.sendWindowEnd='23:59';
-  let pages=0;await researchGoalProspects(async url=>{pages++;return {url,text:url.includes('bing.com')?'<rss><channel><item><link>https://club-catalogo-ficticio.test/contacto</link></item></channel></rss>':'<h1>Club de voleibol Argentina</h1><a href="mailto:info@club-catalogo-ficticio.test">Contacto institucional</a>'};});
+  let pages=0;await researchGoalProspects(async url=>{pages++;return {url,text:url.includes('bing.com')?'<rss><channel><item><title>Club de voleibol Argentina</title><description>Contacto institucional de club argentino de voleibol.</description><link>https://club-catalogo-ficticio.test/contacto</link></item></channel></rss>':'<h1>Club de voleibol Argentina</h1><a href="mailto:info@club-catalogo-ficticio.test">Contacto institucional</a>'};});
   assert.equal(pages,2);assert.equal(db.getContacts().length,1);
   assert.equal(db.prepareCampaignDrafts(campaign.id).created,1);
   db.commercialEmailHeartbeat('simulated-mail',true,true,'owner@fixture.test');

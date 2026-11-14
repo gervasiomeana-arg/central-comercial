@@ -138,3 +138,18 @@ investigar, preparar o enviar. Las propuestas válidas de OpenJarvis pueden
 reemplazar esa base; sus fallos no bloquean una base del catálogo válida.
 La interfaz muestra estado, páginas del cupo, motivo y próximo intento de
 búsqueda. No elude bloqueos del buscador ni inventa contactos/resultados.
+
+### Reparación de resultados de búsqueda ajenos
+
+El plan de descubrimiento v3 archiva consultas, colas y contadores anteriores
+por campaña, sin borrar registros ni reiniciar las solicitudes globales del día.
+Las consultas deben buscar organizaciones compradoras y no la propia app.
+Los títulos y resúmenes del listado se filtran por actividad y país antes de
+abrir páginas; esos indicios no reemplazan la verificación en el sitio oficial.
+Bing RSS se consulta con mercado e idioma; ante respuesta 200 sin resultados
+pertinentes se permite una consulta HTML pública alternativa de DuckDuckGo.
+No se cambia de método para evadir bloqueos ni se resuelven captchas.
+No se siguen enlaces institucionales de páginas sin actividad comprobada,
+salvo una visita a la portada para verificar un contacto que carece de contexto.
+El cambio de cupo diario elimina esperas programadas si el propietario lo
+aumenta y no hay un bloqueo del proveedor; no elimina solicitudes ya gastadas.
