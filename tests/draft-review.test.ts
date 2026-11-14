@@ -5,12 +5,12 @@ import type { Application, Contact, Message } from '../src/types.js';
 
 const now = new Date('2026-11-12T12:00:00Z');
 const message = { id: 'message', conversationId: 'conversation', channel: 'email', direction: 'outbound', status: 'preparado', content: 'Una invitación a conocer Open Voley.', createdAt: '2026-11-12T10:00:00Z' } as Message;
-const context = { app: { id: 'voley', status: 'lista', campaignsAllowed: true } as Application, contact: { permission: 'autorizado', status: 'prospecto', email: 'Club@Example.org', source: 'https://example.org', sourceReviewDate: '2026-11-01' } as Contact, actor: 'owner@example.org' };
+const context = { app: { id: 'voley', status: 'lista', campaignsAllowed: true } as Application, contact: { permission: 'autorizado', status: 'prospecto', email: 'Club@Institucion.test', source: 'https://example.org', sourceReviewDate: '2026-11-01' } as Contact, actor: 'owner@example.org' };
 
 test('approval records reviewer and recipient without sending or mutating input', () => {
   const approved = reviewEmailDraft(message, { action: 'approve', expectedRevision: 0 }, context, now);
   assert.equal(approved.reviewStatus, 'approved');
-  assert.equal(approved.approvedRecipient, 'club@example.org');
+  assert.equal(approved.approvedRecipient, 'club@institucion.test');
   assert.equal(approved.reviewedBy, context.actor);
   assert.equal(approved.reviewedAt, now.toISOString());
   assert.equal(approved.status, 'preparado');
@@ -45,7 +45,7 @@ test('rejecting removes approval; discarded note can be edited and reviewed agai
   assert.equal(reviewEmailDraft(rejected, { action: 'edit', expectedRevision: 2, content: 'Corregida' }, context, now).reviewStatus, 'pending');
 });
 test('approval rechecks current contact authorization, source, email and application availability', () => {
-  for (const patch of [{ permission: 'revocado' }, { status: 'baja_solicitada' }, { status: 'cliente' }, { email: 'bad' }, { source: '' }, { sourceReviewDate: '2027-01-01' }]) {
+  for (const patch of [{ permission: 'revocado' }, { status: 'baja_solicitada' }, { status: 'cliente' }, { email: 'bad' }, {email:'tu@email.com'}, {email:'you@example.com'}, { source: '' }, { sourceReviewDate: '2027-01-01' }]) {
     assert.throws(() => reviewEmailDraft(message, { action: 'approve', expectedRevision: 0 }, { ...context, contact: { ...context.contact, ...patch } as Contact }, now));
   }
   assert.throws(() => reviewEmailDraft(message, { action: 'approve', expectedRevision: 0 }, { ...context, app: { ...context.app, status: 'en_desarrollo' } }, now));

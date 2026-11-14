@@ -1,4 +1,5 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
+import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
@@ -202,6 +203,25 @@ class DatabaseManager {
   private migrateData(schema: DatabaseSchema): boolean {
     let changed = false;
 
+    // Recheck historical discoveries too, including snapshots restored on deploy.
+    // Keep the source, notes and messages; never change delivery evidence.
+    for (const contact of schema.contacts) {
+      if (contact.outreachBasis !== 'public_business_contact' || !exampleContactEmail(contact.email)) continue;
+      const now = new Date().toISOString();
+      if (contact.status === 'prospecto') {
+        contact.status = 'descartado'; contact.updatedAt = now;
+        contact.history ||= [];
+        contact.history.push({id:`email-quality-${contact.id}`,timestamp:now,type:'cambio_estado',author:'Control de calidad',description:'Correo público identificado como ejemplo de formulario. Descartado sin borrar la fuente ni el historial; requiere un contacto válido.'});
+        changed = true;
+      }
+      for (const conv of schema.conversations.filter(c => c.contactId === contact.id)) for (const message of conv.messages) {
+        if (message.channel !== 'email' || message.direction !== 'outbound' || message.status !== 'preparado' || message.reviewStatus === 'rejected' || message.attemptedAt || message.serviceConfirmationId) continue;
+        message.reviewStatus = 'rejected'; message.reviewedAt = now; message.reviewedBy = 'Control de calidad: correo de ejemplo';
+        message.draftRevision = (message.draftRevision || 0) + 1; delete message.approvedRecipient;
+        changed = true;
+      }
+    }
+
     // Preserve the confirmed fixture for audit, but never count it as revenue.
     for (const payment of schema.payments) {
       if (payment.id === 'pay-1794435057839' &&
@@ -266,9 +286,13 @@ class DatabaseManager {
 
   private loadAndMigrate(): DatabaseSchema {
     try {
+      if (!fs.existsSync(DB_FILE) && (fs.readdirSync(BACKUPS_DIR).some(name => /^db_backup_.*\.json$/.test(name)) || fs.existsSync(`${DB_FILE}.tmp`) || fs.existsSync(path.join(DATA_DIR,'local-handoff.json')))) {
+        throw new Error('Falta la base principal pero existen registros previos. Revisar respaldos antes de continuar.');
+      }
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || ['applications','contacts','campaigns','conversations','clients','subscriptions','payments'].some(key => !Array.isArray(parsed[key]))) throw new Error('La base no contiene las colecciones comerciales requeridas.');
         const schema: DatabaseSchema = {
           version: parsed.version || 1,
           localMigration:parsed.localMigration,
@@ -809,7 +833,7 @@ class DatabaseManager {
     const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);
     const messages=threads.flatMap(c=>c.messages);
     const contacted=new Set(threads.map(c=>c.contactId));
-    const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&c.email&&c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
+    const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&usableContactEmail(c.email)&&c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
     const prepared=messages.filter(m=>m.direction==='outbound'&&m.status==='preparado'&&m.reviewStatus!=='rejected').length;
     const accepted=messages.filter(m=>m.direction==='outbound'&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
     const received=messages.filter(m=>m.direction==='inbound'&&m.providerMessageId).length;

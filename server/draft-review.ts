@@ -1,4 +1,5 @@
 import type { Application, Contact, Message } from '../src/types.js';
+import {usableContactEmail} from '../src/email-policy.js';
 import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
 
 export class DraftReviewError extends Error {
@@ -24,7 +25,7 @@ export function reviewEmailDraft(message: Message, input: { action: string; expe
       const permitted = context.contact && (context.contact.permission === 'autorizado' || (context.contact.permission === 'desconocido' && (replying || (context.allowPublicEmail === true && context.contact.outreachBasis === 'public_business_contact'))));
       if (!context.contact || !permitted || ['descartado', 'baja_solicitada'].includes(context.contact.status) || (context.contact.status === 'cliente' && !replying)) throw new DraftReviewError('El contacto ya no está habilitado para esta promoción o respuesta.');
       if(message.channel==='whatsapp'){if(!whatsappAuthorized(context.contact,now))throw new DraftReviewError('Falta registrar autorización de WhatsApp.');}
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(context.contact.email?.trim() || '')) throw new DraftReviewError('El contacto no tiene un email válido.');
+      else if (!usableContactEmail(context.contact.email)) throw new DraftReviewError('El contacto no tiene un email válido; no se admiten direcciones de ejemplo.');
       const sourceReviewedAt = Date.parse(context.contact.sourceReviewDate);
       if (!context.contact.source?.trim() || !Number.isFinite(sourceReviewedAt) || sourceReviewedAt > now.getTime()) throw new DraftReviewError('Revisá la fuente del contacto antes de aprobar la nota.');
       if (!message.content.trim() || /\{[^{}]+\}/.test(message.content)) throw new DraftReviewError('Completá la nota antes de aprobarla.');
