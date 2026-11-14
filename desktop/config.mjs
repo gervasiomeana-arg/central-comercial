@@ -35,6 +35,7 @@ export function selectedModel(ramGB, requested) {
 export function findJarvis(env = process.env) {
   const local = env.LOCALAPPDATA;
   const candidates = [env.CENTRAL_JARVIS_EXE,
+    local && path.join(local, 'OpenJarvis', 'central-src', '.venv', 'Scripts', 'jarvis.exe'),
     local && path.join(local, 'OpenJarvis', 'src', '.venv', 'Scripts', 'jarvis.exe'),
     local && path.join(local, 'OpenJarvis', '.venv', 'Scripts', 'jarvis.exe'), executable('jarvis', env)].filter(Boolean);
   return candidates.find(p => fs.existsSync(p)) || null;
