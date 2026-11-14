@@ -264,6 +264,7 @@ adminRouter.post('/channel-tests', (req, res) => {
 adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalReport(typeof req.query.month === 'string' ? req.query.month : undefined)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 
+adminRouter.post('/automation/director/start', (req,res)=>{try{db.startMonthlyDirector();void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
 adminRouter.get('/automation/run', (req,res)=>res.json(db.getAutonomousRunReport(whatsappStatus().ready)));
 adminRouter.post('/automation/start', (req,res)=>{try{db.startAutonomousRun(req.body);void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
 

@@ -284,6 +284,7 @@ export interface ClientSubscription {
 export type PaymentStatus = 'pendiente_confirmacion_manual' | 'confirmado' | 'rechazado';
 
 export interface MonthlySalesGoal {
+  directorEnabled?: boolean; directorChannels?: ('email'|'whatsapp')[];
   month: string; targetClients: number; enabled: boolean;
   discoverContacts: boolean; sendEmail: boolean; answerEmail: boolean;
   countries: string[]; dailyEmailLimit: number; dailyResearchLimit: number;
