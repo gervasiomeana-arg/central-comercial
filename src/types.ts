@@ -137,6 +137,7 @@ export interface ResearchState {
   status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
 }
 export interface Campaign {
+  intelligenceRecoveryVersion?: number;
   autoSendWhatsApp?:boolean;
   intelligenceEnabled?:boolean;
   intelligencePlanId?:string;

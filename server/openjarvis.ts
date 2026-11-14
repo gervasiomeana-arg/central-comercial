@@ -4,9 +4,10 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
 import { db } from './db.js';
+import {playbook, normalize} from './sales-director.js';
 import type { JarvisContext, JarvisPlan, JarvisStatus, JarvisStrategy } from '../src/openjarvis-types.js';
 
-type StoredPlan = JarvisPlan & { workerId?: string; leaseHash?: string };
+type StoredPlan = JarvisPlan & { planningContractVersion?:number; correctionRecovery?:boolean; workerId?: string; leaseHash?: string };
 const digest = (s: string) => createHash('sha256').update(s).digest();
 const text = (v: unknown, max: number) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 export function validateStrategy(input: unknown): JarvisStrategy {
@@ -68,14 +69,23 @@ export class JarvisQueue {
   }
   assistantWorkerReady(id: string) { return this.status().assistantReady === true && this.worker?.id === id; }
   completed(id:string){const p=this.plans.find(p=>p.id===id);if(p?.state!=='completed'||!p.strategy)return null;return {id:p.id,context:p.context,strategy:p.strategy};}
+  rejectStrategy(id:string) {
+    const plan=this.plans.find(p=>p.id===id);
+    if(plan?.state==='completed'){plan.state='failed';plan.error='Las búsquedas no verifican el país y la actividad institucional requeridos.';plan.updatedAt=this.now();this.save();}
+  }
   enqueue(context: JarvisContext) {
     this.expire();
     // Reuse identical requests, including completed ones, for a day: no repeated model spending.
     const same = this.plans.find(p => p.state !== 'failed' && this.now() - p.createdAt < 86400000 && JSON.stringify(p.context) === JSON.stringify(context));
     if (same) return same.id;
     if (!this.status().ready) throw new Error('Primero conectá OpenJarvis y su modelo local. No se llamó a una API de pago.');
-    if (this.plans.filter(p => this.now() - p.createdAt < 86400000).length >= 6) throw new Error('Límite de seis estrategias diarias para cuidar los recursos.');
-    const plan: StoredPlan = { id: randomUUID(), context, state: 'queued', createdAt: this.now(), updatedAt: this.now() };
+    const today=this.plans.filter(p=>this.now()-p.createdAt<86400000);
+    const sameScope=(p:StoredPlan)=>p.context.app.id===context.app.id&&normalize(p.context.country)===normalize(context.country)&&p.context.goal.month===context.goal.month;
+    const correctionRecovery=today.length>=6;
+    if(correctionRecovery && !(today.some(p=>sameScope(p)&&p.state==='failed'&&!p.planningContractVersion) && !today.some(p=>sameScope(p)&&p.planningContractVersion===2) && today.filter(p=>p.correctionRecovery).length<3)) throw new Error('Se alcanzó el cupo de planificación local. Se conservan los resultados y se retoma al liberar cupo.');
+    // One bounded recovery per app/country after this contract correction,
+    // at most three in 24h. Old attempts are retained; restarting never resets it.
+    const plan: StoredPlan = { id: randomUUID(), context, planningContractVersion:2, correctionRecovery, state: 'queued', createdAt: this.now(), updatedAt: this.now() };
     this.plans.push(plan); this.save(); return plan.id;
   }
   claim(id: string) {
@@ -112,7 +122,7 @@ export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: u
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Esta aplicación todavía no está habilitada para campañas.');
   if (!report.goal.countries.includes(country as string)) throw new Error('El país debe estar incluido en el objetivo mensual.');
   // No contacts, message histories, balances, credentials or unverified offers leave this boundary.
-  return queue.enqueue({ app: { id: app.id, name: app.name, description: app.description,
+  return queue.enqueue({ queryRules:{country:country as string,activityTerms:playbook(app).terms,institutionalOnly:normalize(app.slug+' '+app.name).includes('neuro')}, app: { id: app.id, name: app.name, description: app.description,
     audience: app.targetAudience, website: app.website, features: app.verifiedFeatures }, country: country as string,
     goal: { month: report.goal.month, targetClients: report.goal.targetClients, remainingClients: report.remaining,
       dailyEmailLimit: report.goal.dailyEmailLimit, dailyResearchLimit: report.goal.dailyResearchLimit } });
