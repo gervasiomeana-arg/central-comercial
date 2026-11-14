@@ -153,3 +153,16 @@ No se siguen enlaces institucionales de páginas sin actividad comprobada,
 salvo una visita a la portada para verificar un contacto que carece de contexto.
 El cambio de cupo diario elimina esperas programadas si el propietario lo
 aumenta y no hay un bloqueo del proveedor; no elimina solicitudes ya gastadas.
+
+### Verificación de estado del director
+
+Las campañas del director que estaban en lista pasan a activa cuando su base
+comercial está lista; no se reactivan campañas pausadas ni productos en desarrollo.
+Esto evita mostrar cero campañas activas mientras el director está ejecutándolas.
+El estado de WhatsApp del objetivo consulta al ejecutor real y no usa el mensaje
+fijo de conexión pendiente.
+Se comprobó la regresión del respaldo en almacenamiento temporal: once solicitudes
+consumidas, cola antigua, RSS ajeno, resultado HTML pertinente, portada, contacto,
+borrador y aceptación de transporte simulada sin duplicados. También se revisó
+el servidor HTTP de producción con copia aislada, actualización de objetivo,
+activación/pausa y rechazo de orígenes externos. No son envíos reales.

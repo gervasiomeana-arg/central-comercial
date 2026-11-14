@@ -4,8 +4,9 @@ import { api } from '../api.js';
 import type { MonthlySalesGoal } from '../types.js';
 
 export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate: (tab: string, appId: string) => void; selectedApp?: string }) {
+  const [whatsappReady,setWhatsappReady]=useState(false);
   const [report,setReport] = useState<any>(null), [goal,setGoal] = useState<MonthlySalesGoal|null>(null), [editing,setEditing] = useState(false), [error,setError] = useState(''), [busy,setBusy] = useState(false);
-  const load = async () => { try { const r = await api.getSalesGoal(); setReport(r); if(!editing) setGoal(r.goal); } catch(e:any){setError(e.message);} };
+  const load = async () => { try { const [r,channels] = await Promise.all([api.getSalesGoal(),api.getRealChannelTests()]); setWhatsappReady(Boolean(channels.whatsappReady)); setReport(r); if(!editing) setGoal(r.goal); } catch(e:any){setError(e.message);} };
   useEffect(()=>{ void load(); const timer=setInterval(()=>void load(),30000); return()=>clearInterval(timer); },[editing]);
   const save=async(e:React.FormEvent)=>{e.preventDefault(); if(!goal)return; setBusy(true);setError('');try{const r=await api.saveSalesGoal(goal);setReport(r);setGoal(r.goal);setEditing(false);}catch(e:any){setError(e.message);}finally{setBusy(false);}};
   return <section className="cc-panel cc-goal-panel" aria-label="Objetivo mensual">
@@ -14,7 +15,7 @@ export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate
     {report&&<><div className="cc-goal-progress"><strong>{report.achieved}<span> / {report.goal.targetClients}</span></strong><div><b>clientes nuevos con primer pago confirmado</b><p>Faltan {report.remaining} · {report.daysRemaining} días en el mes</p></div></div><progress aria-label="Avance del objetivo mensual" max={Math.max(1,report.goal.targetClients)} value={report.achieved}/>
     <div className="cc-goal-strategies">{report.apps.filter((app:any)=>selectedApp==='all'||app.id===selectedApp).map((app:any)=><AppOperations key={app.id} app={app} report={report} onNavigate={onNavigate}/>)}</div>
     <p className="cc-goal-evidence">Actividad del mes seleccionado. Contactos disponibles: cartera actual. Un correo aceptado por el proveedor no acredita entrega ni lectura. Las consultas contabilizadas tienen un identificador de correo registrado.</p>
-    <p className="cc-goal-state">{report.paused?'Automatizaciones pausadas.':!report.goal.enabled?'Objetivo desactivado.':report.worker.send&&report.worker.read?'Correo conectado para enviar y recibir.':'Ejecutor de correo pendiente de conexión.'} {report.research.blocked?'Búsqueda detenida para revisión.':report.research.lastSuccess?'Búsqueda pública con consultas registradas.':'Primera búsqueda pública pendiente.'} WhatsApp Web sigue pendiente.</p></>}
+    <p className="cc-goal-state">{report.paused?'Automatizaciones pausadas.':!report.goal.enabled?'Objetivo desactivado.':report.worker.send&&report.worker.read?'Correo conectado para enviar y recibir.':'Ejecutor de correo pendiente de conexión.'} {report.research.blocked?'Búsqueda detenida para revisión.':report.research.lastSuccess?'Búsqueda pública con consultas registradas.':'Primera búsqueda pública pendiente.'} WhatsApp Web {whatsappReady?'conectado.':'pendiente de conexión.'}</p></>}
     {editing&&goal&&<form className="cc-goal-form" onSubmit={save}>
       <label>Mes<input type="month" required value={goal.month} onChange={async e=>{const month=e.target.value;if(!month)return;try{const r=await api.getSalesGoal(month);setGoal(r.goal);}catch(e:any){setError(e.message);}}}/></label>
       <label>Clientes nuevos a alcanzar<input type="number" min="0" max="10000" required value={goal.targetClients} onChange={e=>setGoal({...goal,targetClients:Number(e.target.value)})}/></label>

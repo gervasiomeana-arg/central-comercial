@@ -729,6 +729,7 @@ class DatabaseManager {
             changed=true;
           }
         }
+        if(c.status==='lista'&&campaignStrategyReady(c,app)){c.status='activa';c.updatedAt=new Date().toISOString();changed=true;}
         if (!c.intelligenceEnabled || c.channels.join(',') !== channels.join(',') || c.autoSendEmail !== (report.goal.sendEmail && channels.includes('email')) || c.autoSendWhatsApp !== channels.includes('whatsapp')) {
           Object.assign(c, { intelligenceEnabled: true, channels: [...channels], autoPrepare: true,
             autoSendEmail: report.goal.sendEmail && channels.includes('email'), autoSendWhatsApp: channels.includes('whatsapp'), updatedAt: new Date().toISOString() });

@@ -20,6 +20,7 @@ test('monthly director creates its own campaigns, persists limits, excludes deve
   const campaigns=db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id));
   assert.ok(campaigns.every(c=>c.intelligenceEnabled&&c.channels.includes('email')&&c.channels.includes('whatsapp')&&!c.maxContacts));
   assert.ok(campaigns.every(c=>ready.some(a=>a.id===c.appId)));
+  assert.ok(campaigns.every(c=>c.status==='activa'),'El director activado debe marcar las campañas en ejecución, no dejarlas en lista.');
   assert.ok(report.director?.campaigns.every(c=>c.strategyReady&&c.strategySource==='Catálogo verificado'));
   assert.ok(!report.blockers.some(b=>b.includes('OpenJarvis')));
   assert.ok(campaigns.every(c=>c.catalogStrategy&&!c.intelligencePlanId));
