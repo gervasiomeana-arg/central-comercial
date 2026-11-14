@@ -166,3 +166,13 @@ consumidas, cola antigua, RSS ajeno, resultado HTML pertinente, portada, contact
 borrador y aceptación de transporte simulada sin duplicados. También se revisó
 el servidor HTTP de producción con copia aislada, actualización de objetivo,
 activación/pausa y rechazo de orígenes externos. No son envíos reales.
+
+### Calidad de correos públicos
+
+La extracción toma correos de texto visible, enlaces mailto o datos de
+organización, no de atributos de inputs ni de áreas de texto de formularios.
+Una regla común excluye direcciones de ejemplo como tu@email.com. Esa misma
+regla se aplica al preparar notas y al reclamar un envío, para bloquear también
+borradores antiguos sin borrar sus registros. Las direcciones legítimas de
+dominios gratuitos no se excluyen en bloque. El tipo de organización heredado
+se conserva al editar aunque no pertenezca a las opciones predefinidas.

@@ -611,6 +611,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
                     onChange={e => handleFormChange('orgType', e.target.value)}
                     className="w-full border border-slate-300 rounded-lg p-2"
                   >
+                    {formContact.orgType&&!['club','asociacion','agencia','empresa','familia','funeraria','otro'].includes(formContact.orgType)&&<option value={formContact.orgType}>{formContact.orgType}</option>}
                     <option value="club">Club Deportivo</option>
                     <option value="asociacion">Asociación / Federación</option>
                     <option value="agencia">Agencia de Marketing / Digital</option>

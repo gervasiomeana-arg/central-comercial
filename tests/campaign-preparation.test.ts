@@ -6,7 +6,7 @@ import type { Application, Campaign, Contact, Conversation } from '../src/types.
 const now = new Date('2026-11-12T01:00:00Z');
 const app = { id: 'voley', name: 'Open Voley', status: 'lista', campaignsAllowed: true, website: 'https://openvoley.com' } as Application;
 const campaign = { id: 'campaign', appId: 'voley', status: 'lista', channels: ['email'], country: 'Argentina', language: 'es', segment: 'club', dailyLimit: 2, timezone: 'America/Argentina/Buenos_Aires', startDate: '2026-11-11', endDate: '2026-11-30', messageTemplate: 'Hola {nombre}, presentamos {aplicacion} a {organizacion}. {web}' } as Campaign;
-const contact = (id: string, overrides: Partial<Contact> = {}) => ({ id, orgName: `Club ${id}`, contactPerson: 'Ana', orgType: 'club', country: 'Argentina', language: 'es', email: `${id}@example.org`, interestedAppIds: ['voley'], permission: 'autorizado', status: 'prospecto', source: 'https://example.org', sourceReviewDate: '2026-11-01', ...overrides } as Contact);
+const contact = (id: string, overrides: Partial<Contact> = {}) => ({ id, orgName: `Club ${id}`, contactPerson: 'Ana', orgType: 'club', country: 'Argentina', language: 'es', email: `${id}@club.test`, interestedAppIds: ['voley'], permission: 'autorizado', status: 'prospecto', source: 'https://example.org', sourceReviewDate: '2026-11-01', ...overrides } as Contact);
 
 test('personalizes drafts without mutating contacts, creating send evidence or claiming delivery', () => {
   const contacts = [contact('one')]; const before = JSON.stringify(contacts);
@@ -18,7 +18,7 @@ test('personalizes drafts without mutating contacts, creating send evidence or c
   assert.equal(JSON.stringify(contacts), before);
 });
 test('repeated execution and duplicate email aliases do not create new drafts', () => {
-  const contacts = [contact('one'), contact('two', { email: ' ONE@EXAMPLE.ORG ' })];
+  const contacts = [contact('one'), contact('two', { email: ' ONE@CLUB.TEST ' })];
   const first = prepareCampaign(campaign, app, contacts, [], now);
   assert.equal(first.drafts.length, 1);
   assert.equal(prepareCampaign(campaign, app, contacts, first.drafts, now).drafts.length, 0);

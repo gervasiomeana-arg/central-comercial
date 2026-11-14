@@ -1,3 +1,4 @@
+import {usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation } from '../src/types.js';
@@ -45,7 +46,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const channel=campaign.channels.includes('whatsapp')&&whatsappAuthorized(contact,now)&&(contact.preferredChannel==='whatsapp'||!campaign.channels.includes('email')||!contact.email)?'whatsapp':'email';
     if(channel==='email'&&!campaign.channels.includes('email')){skip('WhatsApp sin autorización registrada');continue;}
     const email = channel==='whatsapp'?whatsappPhone(contact.phone):contact.email?.trim().toLowerCase();
-    if (!email || channel==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { skip('Destinatario no válido'); continue; }
+    if (!email || channel==='email'&&!usableContactEmail(email)) { skip('Destinatario no válido'); continue; }
     if (usedIds.has(contact.id) || usedEmails.has(email)) { skip('Ya preparado en esta campaña'); continue; }
     if (conversations.some(c => c.contactId === contact.id && c.appId === app.id && c.messages.some(m => m.direction === 'inbound'))) { skip('Ya respondió: revisar conversación'); continue; }
     if (drafts.length >= remaining) { skip('Límite diario alcanzado'); continue; }

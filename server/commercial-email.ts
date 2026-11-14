@@ -1,3 +1,4 @@
+import {usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -39,7 +40,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   for (const conv of db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
+    if (!usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
     for (const msg of conv.messages) {
       if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
