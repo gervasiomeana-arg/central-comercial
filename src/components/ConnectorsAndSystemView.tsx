@@ -364,12 +364,8 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
                 </h2>
               </div>
 
-              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                persistenceStatus?.postgresConfigured
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-blue-100 text-blue-800 border border-blue-300'
-              }`}>
-                {persistenceStatus?.postgresConfigured ? 'Motor: PostgreSQL Remoto' : 'Motor: Archivo JSON Local con Fsync'}
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                Motor: Archivo JSON local
               </span>
             </div>
 
@@ -415,42 +411,30 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
             </div>
           </div>
 
-          {/* PostgreSQL External Database Section */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
               <div className="flex items-center space-x-2">
                 <Cpu className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
-                  Configuración de Base de Datos PostgreSQL
+                  Conservación entre actualizaciones
                 </h3>
               </div>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                persistenceStatus?.postgresConfigured ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {persistenceStatus?.postgresConfigured ? 'DATABASE_URL detectada' : 'Pendiente de configurar en .env'}
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-900">
+                Publicación: almacenamiento duradero sin verificar
               </span>
             </div>
-
             <p className="text-slate-600 leading-relaxed text-xs">
-              Para entornos en producción permanente o cuando se requiera persistencia garantizada ante cualquier reinicio o redespliegue de contenedor, configure la variable de entorno <code>DATABASE_URL</code> en su archivo <code>.env</code> o en las variables secretas de la plataforma.
+              Los registros y sus copias rotativas se guardan en el mismo equipo que ejecuta Central.
+              Esas copias ayudan ante una escritura interrumpida, pero no protegen si el alojamiento reemplaza todo su disco.
             </p>
-
-            <div className="p-3 bg-slate-900 text-slate-100 rounded-lg space-y-2 font-mono text-[11px]">
-              <span className="text-emerald-400 block font-bold"># Formato de conexión PostgreSQL requerido:</span>
-              <p className="text-amber-300 break-all select-all">
-                postgresql://USUARIO:PASSWORD@HOST:PUERTO/NOMBRE_BD?sslmode=require
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1.5 text-slate-700 text-[11px]">
-              <span className="font-bold block text-slate-800">Pasos para activar PostgreSQL:</span>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Crear o aprovisionar una instancia PostgreSQL (ej. Cloud SQL, Neon, Supabase, o servidor propio).</li>
-                <li>Reemplazar USUARIO, PASSWORD, HOST, PUERTO y NOMBRE_BD con las credenciales asignadas.</li>
-                <li>Incluir <code>DATABASE_URL="postgresql://USUARIO:PASSWORD@HOST:PUERTO/NOMBRE_BD?sslmode=require"</code> en <code>.env</code>.</li>
-                <li>Reiniciar el servidor: Central Comercial detectará la conexión y operará con persistencia cloud permanente.</li>
-              </ol>
-            </div>
+            <ul className="list-disc list-inside space-y-2 text-slate-700 text-xs leading-relaxed">
+              <li>En la PC dedicada, el inicio único conserva los registros fuera de la carpeta del programa para actualizar el código sin reemplazar la base.</li>
+              <li>En la publicación, hace falta verificar un disco persistente o implementar una base externa antes de confiar en que una actualización conservará los registros.</li>
+              <li>Antes de actualizar la publicación, guardá una copia con el botón de respaldo. La copia descargada no se restaura automáticamente ni se aplica sobre registros más recientes.</li>
+            </ul>
+            <p className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-slate-600 text-[11px] leading-relaxed">
+              PostgreSQL todavía no está integrado en esta versión. Configurar <code>DATABASE_URL</code> no conecta una base externa ni cambia el motor de almacenamiento.
+            </p>
           </div>
         </div>
       )}
