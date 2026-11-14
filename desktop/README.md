@@ -87,3 +87,8 @@ Comprueba importaciones del motor/extensión nativa y presencia del modelo.
 Las claves y sesiones existentes no se copian a los instaladores.
 Este método se revisó en el entorno de desarrollo; la ejecución e instalación
 completas en Windows siguen pendientes de comprobar en la PC dedicada.
+
+Detección v3: comprueba winget ejecutándolo, sin depender de existsSync para
+alias de WindowsApps. Si falla el alias, consulta la ubicación del paquete de
+Microsoft con Get-AppxPackage (solo lectura) y prueba su ejecutable. No registra
+paquetes ni cambia las políticas de Windows.

@@ -25,7 +25,8 @@ export function run(exe, args, { env = process.env, cwd, capture = false, verbat
 }
 
 export function nativePaths(env = process.env) {
-  return [env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'),
+  return [env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps'),
+    env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'),
     env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Programs', 'Git', 'cmd'),
     env.ProgramFiles && path.join(env.ProgramFiles, 'Git', 'cmd'),
     env.USERPROFILE && path.join(env.USERPROFILE, '.local', 'bin'),
@@ -46,6 +47,30 @@ export function wingetArguments(id, msvc = false) {
   return ['install', '--exact', '--id', id, '--source', 'winget', ...(msvc ? ['--override',
     '--wait --passive --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'] : [])];
 }
+// Windows execution aliases may run even when fs.existsSync cannot see them.
+// Probe the command and WindowsApps directly before diagnosing a missing package.
+export async function findWinget(env = process.env, execute = run) {
+  const candidates = ['winget.exe', env.LOCALAPPDATA &&
+    path.join(env.LOCALAPPDATA, 'Microsoft', 'WindowsApps', 'winget.exe'), executable('winget', env)].filter(Boolean);
+  const probe = async file => {
+    try {
+      const version = await execute(file, ['--version'], { env, capture: true });
+      return /^v?\d+\.\d+(?:\.\d+)?(?:[-.][\w.-]+)?$/m.test(version.trim()) ? file : null;
+    } catch { return null; }
+  };
+  for (const file of [...new Set(candidates)]) { const found = await probe(file); if (found) return found; }
+  // Read-only query of the installed Microsoft package. No .ps1 execution,
+  // registration, execution-policy changes, or alternate download.
+  const powershell = env.SystemRoot && path.join(env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  if (powershell) try {
+    const location = await execute(powershell, ['-NoProfile', '-NonInteractive', '-Command',
+      '(Get-AppxPackage -Name Microsoft.DesktopAppInstaller | Select-Object -First 1).InstallLocation'], { env, capture: true });
+    if (location.trim() && !/[\r\n]/.test(location.trim()) && path.isAbsolute(location.trim())) {
+      return await probe(path.join(location.trim(), 'winget.exe'));
+    }
+  } catch {}
+  return null;
+}
 async function has(command, env) {
   const exe = executable(command, env);
   if (!exe) return null;
@@ -54,8 +79,8 @@ async function has(command, env) {
 async function ensure(command, id, env) {
   const found = await has(command, env);
   if (found) return found;
-  const winget = executable('winget', env);
-  if (!winget) throw new Error('Falta el Instalador de aplicaciones de Microsoft (winget). No se descargó un reemplazo ni se cambiaron protecciones.');
+  const winget = await findWinget(env);
+  if (!winget) throw new Error('Windows no pudo ejecutar winget ni por su alias ni desde el paquete instalado. No reinstalar otra vez: conservar este diagnóstico para revisar el registro del componente.');
   console.log(`Instalando ${id} desde el catálogo de Windows. Puede pedir confirmación o permisos.`);
   await run(winget, wingetArguments(id), { env });
   const installed = await has(command, env);
@@ -76,7 +101,7 @@ async function findMsvc(env) {
 async function compilerEnvironment(env) {
   let folder = await findMsvc(env);
   if (!folder) {
-    const winget = executable('winget', env);
+    const winget = await findWinget(env);
     if (!winget) throw new Error('Falta winget para instalar las herramientas C++ de Microsoft.');
     console.log('Instalando herramientas C++ de Microsoft: descarga de varios GB. Autorizar solamente el instalador de Microsoft.');
     await run(winget, wingetArguments(PACKAGES.msvc, true), { env });
