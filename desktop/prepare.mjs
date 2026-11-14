@@ -9,7 +9,7 @@ import { installDependencies } from './local-app.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 import { prepareNative } from './install-native.mjs';
 const ramGB = Math.round(os.totalmem() / 1024 ** 3);
-console.log('CENTRAL COMERCIAL — Preparación integrada v2 (winget)');
+console.log('CENTRAL COMERCIAL — Preparación integrada v3 (detección WindowsApps)');
 console.log(`Memoria de este equipo: ${ramGB} GB. Procesador: ${os.cpus()[0]?.model || 'sin identificar'}.`);
 console.log('No se inicia correo, WhatsApp ni campañas durante esta revisión.');
 if (process.platform !== 'win32') throw new Error('Este preparador es para la computadora Windows dedicada. No se instaló nada.');

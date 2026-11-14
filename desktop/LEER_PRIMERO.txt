@@ -7,7 +7,7 @@ el correo y tu WhatsApp personal. En la computadora actual no instales nada.
    ni de WhatsApp; no hay que reemplazar manualmente sus archivos.
 2. Abrir PREPARAR_CENTRAL_COMERCIAL.bat. Revisa memoria, conexión y motor.
    Si ofrece instalar OpenJarvis, hacerlo solo en la computadora dedicada.
-   El nuevo preparador usa winget, el gestor de Windows, sin PowerShell
+   El nuevo preparador usa winget, el gestor de Windows, sin instaladores PowerShell
    ni el instalador EXE de OpenJarvis. Puede requerir varios GB y pedir
    autorización para las herramientas C++ de Microsoft. No se ha ejecutado ni verificado en tu PC todavía.
 3. Terminada la preparación, cerrar los iniciadores antiguos de correo,
