@@ -203,3 +203,9 @@ CENTRAL_DATA_DIR mediante el almacenamiento del alojamiento; la ruta por sí
 sola no lo garantiza. La instalación local conserva la base fuera del código.
 Quedan por comprobar en el equipo dedicado las conexiones reales, el inicio
 con Windows y la continuidad al apagar o suspender el equipo.
+
+La pantalla de persistencia describe el motor JSON que realmente se utiliza y
+no ofrece una activación inexistente de PostgreSQL mediante DATABASE_URL.
+Se retiró también esa configuración ficticia de .env.example. La copia JSON
+que descarga la publicación cubre la base comercial; no reemplaza una copia de
+las sesiones de los ejecutores ni constituye almacenamiento cloud automático.
