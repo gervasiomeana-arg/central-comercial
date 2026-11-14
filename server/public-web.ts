@@ -108,3 +108,31 @@ export function reviewContactPage(html: string, url: string, app: Application, c
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {
   return reviewContactPage(html,url,app,country,now,context).contact;
 }
+
+// Search summaries select candidate pages; they never prove a contact's country,
+// activity or permission. Those facts are checked again on the official page.
+export function relevantSearchLinks(document:string,app:Application,country:string,html=false){
+ const plain=(s:string)=>decode(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+ const entries:{url:string;text:string}[]=[];
+ if(!html){for(const m of document.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)){
+  const item=m[1],link=item.match(/<link(?:\s[^>]*)?>([\s\S]*?)<\/link>/i)?.[1];
+  if(link)entries.push({url:decode(link).trim(),text:plain((item.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||'')+' '+(item.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]||''))});
+ }}else{
+  const matches=[...document.matchAll(/<a\b([^>]*class=["'][^"']*result__a[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi)];
+  for(let i=0;i<matches.length;i++){
+   const m=matches[i],href=m[1].match(/href=["']([^"']+)["']/i)?.[1];if(!href)continue;
+   try{const link=new URL(decode(href),'https://html.duckduckgo.com');const target=link.hostname.endsWith('duckduckgo.com')?link.searchParams.get('uddg'):link.href;if(!target)continue;
+    const tail=document.slice((m.index||0)+m[0].length,matches[i+1]?.index||Math.min(document.length,(m.index||0)+5000));
+    const snippet=tail.match(/<(?:a|div)[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/i)?.[1]||'';
+    entries.push({url:target,text:plain(m[2]+' '+snippet)});
+   }catch{}
+  }
+ }
+ const rule=countries[normalize(country)];
+ const suffix:Record<string,string>={argentina:'.ar',brasil:'.br',mexico:'.mx',chile:'.cl',uruguay:'.uy',paraguay:'.py',colombia:'.co',espana:'.es'};
+ return [...new Set(entries.flatMap(item=>{try{const u=publicUrl(item.url),text=item.text+' '+u.hostname+u.pathname;
+  const topic=playbook(app).terms.some(t=>word(text,t));
+  const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(suffix[normalize(country)]&&u.hostname.endsWith(suffix[normalize(country)]));
+  return !excluded.test(u.hostname)&&topic&&place?[u.href]:[];
+ }catch{return [];}}))].slice(0,10);
+}

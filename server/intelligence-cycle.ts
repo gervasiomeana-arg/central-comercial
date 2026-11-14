@@ -1,3 +1,4 @@
+import {prospectQuery} from './discovery-plan.js';
 import {db} from './db.js';
 import type {JarvisQueue} from './openjarvis.js';
 import {enqueueJarvisPlan} from './openjarvis.js';
@@ -10,8 +11,8 @@ export function strategyQueries(strategy:JarvisStrategy,app:Application,country:
  const terms=playbook(app).terms.map(normalize);
  const queries=[...new Set(strategy.searchQueries.map(q=>q.trim()))];
  const institutionalOnly=normalize(app.slug+' '+app.name).includes('neuro');
- const institutional=/(centro|instituci|escuela|colegio|fundaci|asociaci|clinica|consultorio|educativ|jardin)/;
- const vetted=queries.filter(q=>normalize(q).includes(normalize(country))&&terms.some(t=>normalize(q).includes(t))&&(!institutionalOnly||institutional.test(normalize(q))));
+ const institutional=/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin)/;
+ const vetted=queries.filter(q=>prospectQuery(q,app,country)&&terms.some(t=>normalize(q).includes(t))&&(!institutionalOnly||institutional.test(normalize(q))));
  if(!vetted.length)throw new Error('Ninguna búsqueda incluye el país y la actividad institucional requeridos.');
  return vetted;
 }
