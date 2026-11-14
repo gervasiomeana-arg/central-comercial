@@ -19,7 +19,7 @@ export function applyStrategy(q:JarvisQueue,planId:string,campaign:Campaign){
  const plan=q.completed(planId),app=db.getApplicationById(campaign.appId),goal=db.getMonthlyGoal();
  if(!plan||!app||app.status!=='lista'||!app.campaignsAllowed||plan.context.app.id!==campaign.appId||normalize(plan.context.country)!==normalize(campaign.country)||plan.context.goal.month!==goal.month||campaign.goalMonth!==goal.month)throw new Error('La estrategia no corresponde a esta aplicación, país y mes.');
  let queries:string[];try{queries=strategyQueries(plan.strategy,app,campaign.country);}catch(error){q.rejectStrategy(planId);throw error;}
- campaign.researchQueries=queries;campaign.researchQueryVersion=2;campaign.researchQueryIndex=0;campaign.researchSegment=plan.strategy.segments.map(s=>s.name).join('; ');campaign.intelligenceEnabled=true;campaign.intelligencePlanId=planId;delete campaign.intelligenceError;db.save();
+ delete campaign.catalogStrategy;campaign.researchQueries=queries;campaign.researchQueryVersion=2;campaign.researchQueryIndex=0;campaign.researchSegment=plan.strategy.segments.map(s=>s.name).join('; ');campaign.intelligenceEnabled=true;campaign.intelligencePlanId=planId;delete campaign.intelligenceError;db.save();
  // The verified promotional template, limits, consent, prices and payment policies stay in force.
 }
 export function intelligenceCycle(){

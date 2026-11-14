@@ -1,4 +1,4 @@
-import { defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
+import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
@@ -717,6 +717,15 @@ class DatabaseManager {
     if (report.goal.directorEnabled) {
       const channels = report.goal.directorChannels || ['email'];
       for (const c of this.data.campaigns.filter(c => this.campaignInActiveRun(c.id))) {
+        const app = this.getApplicationById(c.appId);
+        if (!c.intelligencePlanId && app && !campaignStrategyReady({...c,intelligenceEnabled:true},app)) {
+          const queries = researchQueriesFor(app,c.country);
+          if (queries.length) {
+            Object.assign(c,{catalogStrategy:{version:1,appId:app.id,country:c.country},researchQueries:queries,researchQueryVersion:2,researchQueryIndex:0,researchSegment:playbook(app).audience});
+            this.addLog('info','campañas',`Base comercial del catálogo verificado aplicada a ${app.name} · ${c.country}. La búsqueda no depende de una respuesta del modelo.`,{campaignId:c.id});
+            changed=true;
+          }
+        }
         if (!c.intelligenceEnabled || c.channels.join(',') !== channels.join(',') || c.autoSendEmail !== (report.goal.sendEmail && channels.includes('email')) || c.autoSendWhatsApp !== channels.includes('whatsapp')) {
           Object.assign(c, { intelligenceEnabled: true, channels: [...channels], autoPrepare: true,
             autoSendEmail: report.goal.sendEmail && channels.includes('email'), autoSendWhatsApp: channels.includes('whatsapp'), updatedAt: new Date().toISOString() });
@@ -783,14 +792,14 @@ class DatabaseManager {
       if (this.data.scheduler.automationsPaused) blockers.push('El director está pausado.');
       if (report.goal.sendEmail && !worker.send) blockers.push('Falta la conexión de envío de correo.');
       if (report.goal.answerEmail && !worker.read) blockers.push('Falta la conexión del buzón de respuestas.');
-      if (campaigns.some(c => !c.intelligencePlanId)) blockers.push('OpenJarvis está preparando o validando estrategias antes de investigar y enviar.');
+      if (campaigns.some(c => !campaignStrategyReady(c,this.getApplicationById(c.appId)))) blockers.push('Falta una estrategia comercial válida del catálogo o de OpenJarvis.');
       if (this.data.researchState.lastError) blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
       return {run:null,director:{month:report.goal.month,target:report.goal.targetClients,achieved:report.achieved,remaining:report.remaining,
         countries:report.goal.countries,dailyLimit:report.goal.dailyEmailLimit,channels:report.goal.directorChannels,
         campaigns:campaigns.map(c=>({id:c.id,app:this.getApplicationById(c.appId)?.name,country:c.country,status:c.status,
-          audience:c.researchSegment,strategyReady:Boolean(c.intelligencePlanId),error:c.intelligenceError})),
+          audience:c.researchSegment,strategyReady:campaignStrategyReady(c,this.getApplicationById(c.appId)),strategySource:c.intelligencePlanId?'OpenJarvis':c.catalogStrategy?'Catálogo verificado':'Pendiente',error:campaignStrategyReady(c,this.getApplicationById(c.appId))?undefined:c.intelligenceError,intelligenceNote:c.intelligenceError})),
         apps:report.apps.filter(a=>a.ready)},paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers,
-        lastCycleAt:this.data.scheduler.lastRunAt};
+        research:{status:this.data.researchState.status,detail:this.data.researchState.detail,blocked:this.data.researchState.blocked,requests:this.data.researchState.day===accountingDay()?this.data.researchState.requests:0,limit:report.goal.dailyResearchLimit,lastError:this.data.researchState.lastError,nextAttemptAt:campaigns.map(c=>c.researchNextAttemptAt).filter((n):n is number=>typeof n==='number'&&n>Date.now()).sort((a,b)=>a-b)[0]},lastCycleAt:this.data.scheduler.lastRunAt};
     }
     const campaign=this.getCampaignById(run.campaignId), app=this.getApplicationById(run.appId);
     const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);

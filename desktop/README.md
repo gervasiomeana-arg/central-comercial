@@ -127,3 +127,14 @@ TDAH, psicopedagogía y actividades terapéuticas; siguen excluyendo búsquedas
 de personas/familias. Se conservan únicamente consultas que incluyen país y
 actividad y, para NeuroPlaneta, una categoría institucional. Una estrategia
 sin consultas válidas se marca fallida y no se reutiliza como completada.
+
+### Ejecución con catálogo verificado
+
+El director mensual aplica consultas determinísticas del público de cada app y
+país autorizado cuando todavía no hay una estrategia válida del modelo. La UI
+lo identifica como Catálogo verificado, sin presentarlo como resultado de IA.
+Se comprueba que esas consultas sean exactamente las del catálogo antes de
+investigar, preparar o enviar. Las propuestas válidas de OpenJarvis pueden
+reemplazar esa base; sus fallos no bloquean una base del catálogo válida.
+La interfaz muestra estado, páginas del cupo, motivo y próximo intento de
+búsqueda. No elude bloqueos del buscador ni inventa contactos/resultados.
