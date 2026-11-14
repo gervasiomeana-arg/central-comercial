@@ -92,3 +92,15 @@ Detección v3: comprueba winget ejecutándolo, sin depender de existsSync para
 alias de WindowsApps. Si falla el alias, consulta la ubicación del paquete de
 Microsoft con Get-AppxPackage (solo lectura) y prueba su ejecutable. No registra
 paquetes ni cambia las políticas de Windows.
+
+### Director mensual como activación principal
+
+Activar director autónomo toma el objetivo mensual, los países y cupos guardados.
+Crea y mantiene campañas para las aplicaciones listas, excluye productos en
+desarrollo y requiere estrategias validadas de OpenJarvis antes de investigar
+o enviar. Continúa diariamente dentro de los límites, sin tope total de piloto.
+Los envíos por WhatsApp requieren autorización ya registrada del destinatario;
+la confirmación de pagos sigue siendo manual. No habilita países nuevos fuera
+de los parámetros del objetivo. El piloto avanzado conserva su selección
+manual y su tope total y desactiva el director mientras dure esa modalidad.
+Activar la modalidad no equivale a haber enviado mensajes ni conseguido clientes.

@@ -34,8 +34,10 @@ que ya guardaste. No hace falta pedir otra clave por chat.
 Es necesaria la versión actualizada de Central Comercial publicada.
 El paquete por sí mismo no crea campañas ni confirma pagos. Las tareas que
 ya autorizaste conservan sus reglas y pueden procesarse al iniciar.
-Para iniciar una campaña nueva, usar Iniciar Central Comercial y elegir
-aplicación, país, objetivo, límite, horario y canales. OpenJarvis prepara y
+Para trabajar sin armar campañas manualmente, pulsar Activar director autónomo.
+Usa el objetivo mensual y países guardados; crea campañas para las aplicaciones
+listas y pide estrategias a OpenJarvis. Piloto avanzado es una opción aparte
+para una campaña limitada que el propietario quiera elegir manualmente. OpenJarvis prepara y
 aplica consultas validadas; email o WhatsApp envían bajo esos parámetros.
 WhatsApp solo envía a contactos con autorización y evidencia registradas.
 Los números encontrados en Internet no se habilitan automáticamente.

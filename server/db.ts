@@ -681,7 +681,8 @@ class DatabaseManager {
   }
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
-    const goal: MonthlySalesGoal = { month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
+    const previous = this.getMonthlyGoal(input.month);
+    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
     const index = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (index < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[index] = goal;
     this.addLog('info', 'campañas', `Objetivo ${goal.month}: ${goal.targetClients} clientes nuevos con primer pago confirmado.`, { enabled: goal.enabled });
@@ -693,11 +694,38 @@ class DatabaseManager {
     }
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
   }
+  public startMonthlyDirector() {
+    const current = this.getMonthlyGoal();
+    validateGoal(current);
+    if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
+    if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
+    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true,
+      directorChannels: ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
+    const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
+    if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
+    delete this.data.autonomousRun;
+    this.data.scheduler.automationsPaused = false;
+    this.addLog('info', 'campañas', `Director mensual activado: ${goal.targetClients} clientes; campañas y públicos seleccionados por Central dentro de ${goal.countries.join(', ')}. Los límites guardados siguen vigentes.`);
+    this.processSalesDirector(); this.save();
+  }
   public processSalesDirector() {
     const report = this.getSalesGoalReport();
     if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
     const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
-    if (created.length) { this.data.campaigns.push(...created); this.addLog('info', 'campañas', `${created.length} campañas creadas para el objetivo ${report.goal.month}.`); this.save(); }
+    this.data.campaigns.push(...created);
+    let changed = created.length > 0;
+    if (report.goal.directorEnabled) {
+      const channels = report.goal.directorChannels || ['email'];
+      for (const c of this.data.campaigns.filter(c => this.campaignInActiveRun(c.id))) {
+        if (!c.intelligenceEnabled || c.channels.join(',') !== channels.join(',') || c.autoSendEmail !== (report.goal.sendEmail && channels.includes('email')) || c.autoSendWhatsApp !== channels.includes('whatsapp')) {
+          Object.assign(c, { intelligenceEnabled: true, channels: [...channels], autoPrepare: true,
+            autoSendEmail: report.goal.sendEmail && channels.includes('email'), autoSendWhatsApp: channels.includes('whatsapp'), updatedAt: new Date().toISOString() });
+          changed = true;
+        }
+      }
+    }
+    if (created.length) this.addLog('info', 'campañas', `${created.length} campañas creadas por Central para el objetivo ${report.goal.month}.`);
+    if (changed) this.save();
   }
   public getResearchState() { return this.data.researchState; }
   public commercialEmailHeartbeat(id: string, send: boolean, read: boolean, sender: string) {
@@ -713,6 +741,11 @@ class DatabaseManager {
   }
 
   public campaignInActiveRun(id: string) {
+    const goal = this.getMonthlyGoal();
+    if (goal.directorEnabled) {
+      const campaign = this.getCampaignById(id), app = campaign && this.getApplicationById(campaign.appId);
+      return Boolean(campaign && campaign.id.startsWith(`goal-${goal.month}-`) && campaign.goalMonth === goal.month && goal.countries.includes(campaign.country) && app?.status === 'lista' && app.campaignsAllowed);
+    }
     return !this.data.autonomousRun || this.data.autonomousRun.campaignId === id;
   }
   public getAutonomousRun() { return this.data.autonomousRun; }
@@ -724,7 +757,7 @@ class DatabaseManager {
     if (!country || country.length > 60 || !Number.isInteger(input.maxContacts) || input.maxContacts < 1 || input.maxContacts > 20) throw new Error('Indicá un país y un máximo total de 1 a 20 contactos.');
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowStart || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowEnd || '') || input.sendWindowStart >= input.sendWindowEnd) throw new Error('Revisá el horario de envío.');
     const day = accountingDay(), month = day.slice(0,7);
-    const goal = { ...this.getMonthlyGoal(month), targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:20, updatedAt:new Date().toISOString() };
+    const goal = { ...this.getMonthlyGoal(month), directorEnabled:false, targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:20, updatedAt:new Date().toISOString() };
     validateGoal(goal);
     if(goal.targetClients<1)throw new Error('El objetivo mensual debe ser de al menos un cliente.');
     const template = goalCampaigns(goal, [app], [])[0];
@@ -742,7 +775,23 @@ class DatabaseManager {
   }
   public getAutonomousRunReport(whatsappReady=false) {
     const run = this.data.autonomousRun, worker = this.getCommercialEmailStatus();
-    if(!run)return {run:null,paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers:[]};
+    if (!run) {
+      const report = this.getSalesGoalReport();
+      if (!report.goal.directorEnabled) return {run:null,paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers:[]};
+      const campaigns = this.getCampaigns().filter(c => this.campaignInActiveRun(c.id));
+      const blockers: string[] = [];
+      if (this.data.scheduler.automationsPaused) blockers.push('El director está pausado.');
+      if (report.goal.sendEmail && !worker.send) blockers.push('Falta la conexión de envío de correo.');
+      if (report.goal.answerEmail && !worker.read) blockers.push('Falta la conexión del buzón de respuestas.');
+      if (campaigns.some(c => !c.intelligencePlanId)) blockers.push('OpenJarvis está preparando o validando estrategias antes de investigar y enviar.');
+      if (this.data.researchState.lastError) blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
+      return {run:null,director:{month:report.goal.month,target:report.goal.targetClients,achieved:report.achieved,remaining:report.remaining,
+        countries:report.goal.countries,dailyLimit:report.goal.dailyEmailLimit,channels:report.goal.directorChannels,
+        campaigns:campaigns.map(c=>({id:c.id,app:this.getApplicationById(c.appId)?.name,country:c.country,status:c.status,
+          audience:c.researchSegment,strategyReady:Boolean(c.intelligencePlanId),error:c.intelligenceError})),
+        apps:report.apps.filter(a=>a.ready)},paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers,
+        lastCycleAt:this.data.scheduler.lastRunAt};
+    }
     const campaign=this.getCampaignById(run.campaignId), app=this.getApplicationById(run.appId);
     const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);
     const messages=threads.flatMap(c=>c.messages);
