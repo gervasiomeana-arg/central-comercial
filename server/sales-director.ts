@@ -26,6 +26,14 @@ export function researchQueriesFor(app: Application, country: string) {
   const segments=name.includes('voley')?['clube vôlei contato','escola voleibol contato','federação voleibol contato']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
   return segments.map(segment=>`${segment} ${country}`);
 }
+// Catalog execution is explicit and distinct from a completed AI proposal.
+export function campaignStrategyReady(c: Campaign, app: Application | undefined) {
+  if (!c.intelligenceEnabled || c.intelligencePlanId) return true;
+  const base = c.catalogStrategy;
+  if (!app || app.status !== 'lista' || !app.campaignsAllowed || !base || base.version !== 1 || base.appId !== app.id || base.country !== c.country) return false;
+  const canonical = researchQueriesFor(app, c.country);
+  return Boolean(c.researchQueries?.length && c.researchQueries.every(q => canonical.includes(q)));
+}
 export function goalProgress(goal: MonthlySalesGoal, applications: Application[], payments: PaymentRecord[], clients: Client[], now = new Date()) {
   const eligibleApps = applications.filter(a => a.status === 'lista' && a.campaignsAllowed);
   const appIds = new Set(eligibleApps.map(a => a.id)), clientIds = new Set(clients.map(c => c.id));

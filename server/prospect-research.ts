@@ -1,3 +1,4 @@
+import {campaignStrategyReady} from './sales-director.js';
 import { db } from './db.js';
 import { accountingDay } from '../src/ledger.js';
 import { fetchPublicText, searchLinks, contactLinks, reviewContactPage, publicUrl } from './public-web.js';
@@ -25,7 +26,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     const campaigns=db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
     const cap=Math.max(3,Math.ceil(goal.dailyResearchLimit/Math.max(1,campaigns.length)));
     const eligible=campaigns.filter(c=>{
-      if(c.intelligenceEnabled&&!c.intelligencePlanId)return false;
+      if(!campaignStrategyReady(c,db.getApplicationById(c.appId)))return false;
       if(c.researchDay!==day){c.researchDay=day;c.researchCount=0;c.researchQueriesToday=0;}
       if((c.researchCount||0)>=cap||(c.researchNextAttemptAt||0)>Date.now())return false;
       const used=new Set(db.getConversations().filter(thread=>thread.campaignId===c.id).map(thread=>thread.contactId));
@@ -66,6 +67,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         const rss=await fetchPage(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`);
         if(!/<rss|<feed/i.test(rss.text)){state.blocked=true;throw new Error('El buscador no devolvió un listado público compatible. Requiere revisión.');}
         const links=searchLinks(rss.text);links.forEach(url=>enqueue({url}));
+        db.addLog('info','contactos',`Consulta pública realizada para ${app.name}: ${links.length} páginas en el listado, todavía sin verificar contactos.`,{campaignId:campaign.id,query});
         state.lastSuccess=new Date().toISOString();delete state.lastError;
         reason(outcome,links.length?'Resultados del buscador conservados':'Consulta sin páginas nuevas de organizaciones');
       }catch(error:any){state.status='error';state.lastError=String(error.message);if(/bloqueado|requiere revisión/i.test(error.message))state.blocked=true;campaign.researchNextAttemptAt=Date.now()+30*60*1000;db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:error.message});db.save();return;}
@@ -77,6 +79,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       try{
         const page=await fetchPage(candidate.url);outcome.checked++;
         const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context);
+        db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url});
         if(!db.campaignInActiveRun(campaign.id)||db.getSchedulerState().automationsPaused)return;
         queue.splice(index,1);seen.push(candidateKey(candidate));campaign.researchSeenUrls=seen.slice(-1000);
         reason(outcome,reviewed.reason);

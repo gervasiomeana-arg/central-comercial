@@ -1,3 +1,4 @@
+import {campaignStrategyReady} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation } from '../src/types.js';
 import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
@@ -14,7 +15,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) return result('La aplicación no está habilitada para campañas.');
   if (['pausada', 'finalizada'].includes(campaign.status)) return result('La campaña está pausada o finalizada.');
   if (!campaign.channels?.some(c=>c==='email'||c==='whatsapp')) return result('Elegí email o WhatsApp.');
-  if(campaign.intelligenceEnabled&&!campaign.intelligencePlanId)return result('Esperando una estrategia válida de OpenJarvis.');
+  if(!campaignStrategyReady(campaign,app))return result('Esperando una estrategia válida de OpenJarvis.');
   if (!campaign.country?.trim() || !campaign.language?.trim()) return result('Definí un país y un idioma para seleccionar destinatarios.');
   if (!campaign.messageTemplate?.trim()) return result('Falta escribir la nota de promoción.');
   const allowed = new Set(['nombre', 'organizacion', 'cargo', 'pais', 'aplicacion', 'web']);
