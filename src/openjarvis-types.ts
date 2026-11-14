@@ -1,4 +1,5 @@
 export interface JarvisContext {
+  queryRules?: { country: string; activityTerms: string[]; institutionalOnly: boolean };
   app: { id: string; name: string; description: string; audience: string; website: string; features: string[] };
   country: string;
   goal: { month: string; targetClients: number; remainingClients: number; dailyEmailLimit: number; dailyResearchLimit: number };

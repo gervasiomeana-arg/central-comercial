@@ -105,3 +105,19 @@ test('planificador distingue respuesta truncada, herramientas, vacío, JSON y es
   ] as const){reply={choices:[choice]};await assert.rejects(()=>generateStrategy(base,'local-model',context,''),(error:any)=>error.failureCode===code);}
  }finally{await new Promise<void>(r=>fake.close(()=>r()));}
 });
+
+test('corrección concede como máximo tres recuperaciones y una por app/país, conservadas al reiniciar',()=>{
+ const f=fixture();
+ try {
+  const legacy=Array.from({length:6},(_,i)=>({id:`legacy-${i}`,state:'failed',createdAt:1000000,updatedAt:1000000,context:{...context,app:{...context.app,id:`app-${i%3}`}}}));
+  fs.writeFileSync(f.file,JSON.stringify(legacy));const q=new JarvisQueue(f.file,()=>1000000);q.heartbeat('worker',true,'model');
+  for(let i=0;i<3;i++){
+   const ctx={...context,app:{...context.app,id:`app-${i}`}};
+   const id=q.enqueue(ctx);assert.equal(q.enqueue(ctx),id);
+   const job=q.claim('worker')!;assert.equal(job.id,id);q.complete(id,'worker',job.lease,{failed:true});
+   assert.throws(()=>q.enqueue(ctx),/cupo/);
+  }
+  const stored=JSON.parse(fs.readFileSync(f.file,'utf8'));assert.equal(stored.length,9);assert.equal(stored.filter((p:any)=>p.correctionRecovery).length,3);
+  const restored=new JarvisQueue(f.file,()=>1000000);restored.heartbeat('worker',true,'model');assert.throws(()=>restored.enqueue({...context,app:{...context.app,id:'app-0'}}),/cupo/);
+ }finally{fs.rmSync(f.dir,{recursive:true,force:true});}
+});

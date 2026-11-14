@@ -114,3 +114,16 @@ parámetros al agente SimpleAgent. No se habilitan herramientas ni acciones del
 modelo. La salida compacta debe superar las mismas validaciones de estructura,
 país y actividad. Los fallos distinguen truncamiento, JSON, esquema, contenido
 vacío y conexión; no convierten una respuesta inválida en una campaña enviada.
+
+### Recuperación acotada de la planificación
+
+La corrección del contrato permite como máximo tres intentos adicionales en
+24 horas, uno por aplicación/país, únicamente si ya falló un intento anterior
+al contrato nuevo y se agotó el cupo normal de seis. El historial se conserva
+y reiniciar no renueva esta concesión. Los intentos nuevos se etiquetan con
+la versión del contrato. No se cambia el límite diario de mensajes.
+Las consultas de NeuroPlaneta reconocen centros institucionales de autismo,
+TDAH, psicopedagogía y actividades terapéuticas; siguen excluyendo búsquedas
+de personas/familias. Se conservan únicamente consultas que incluyen país y
+actividad y, para NeuroPlaneta, una categoría institucional. Una estrategia
+sin consultas válidas se marca fallida y no se reutiliza como completada.
