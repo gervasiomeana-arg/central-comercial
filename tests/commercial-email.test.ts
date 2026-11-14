@@ -12,8 +12,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     for(const folder of ['server','src','data'])await fs.mkdir(path.join(directory,folder));
     await fs.writeFile(path.join(directory,'package.json'),'{"type":"module"}');
     await fs.symlink(path.resolve('node_modules'),path.join(directory,'node_modules'),'junction');
-    for(const name of ['db.ts','data-directory.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    for(const name of ['db.ts','data-directory.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts','discovery-plan.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
     await fs.copyFile(new URL('../src/whatsapp-policy.ts',import.meta.url),path.join(directory,'src','whatsapp-policy.ts'));
+    await fs.copyFile(new URL('../src/email-policy.ts',import.meta.url),path.join(directory,'src','email-policy.ts'));
     await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
     const {db}=await import(pathToFileURL(path.join(directory,'server','db.ts')).href);
     const {claimCommercialEmail,completeCommercialEmail,importCommercialReply,replyDecision,currentReplyText}=await import(pathToFileURL(path.join(directory,'server','commercial-email.ts')).href);
@@ -23,6 +24,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     db.saveContact({id:'research-contact',orgName:'Club prueba',contactPerson:'',role:'Contacto',orgType:'Club',country:'Argentina',language:'es',timezone:'America/Argentina/Buenos_Aires',website:'https://club.test',email:'info@club.test',phone:'',source:'https://club.test/contacto',sourceReviewDate:new Date(now.getTime()-1000).toISOString(),interestedAppIds:[app.id],assignedTo:'',notes:'',history:[],preferredChannel:'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
     db.prepareCampaignDrafts(campaign.id);db.commercialEmailHeartbeat('test-worker',true,true,'owner@test.org');
     assert.throws(()=>claimCommercialEmail('another-worker'));
+    const originalContact=db.getContactById('research-contact');db.saveContact({...originalContact,email:'tu@email.com'});
+    assert.equal(claimCommercialEmail('test-worker',now),null,'Existing prepared drafts cannot be sent to form examples');
+    db.saveContact({...originalContact,email:'info@club.test'});
     const job=claimCommercialEmail('test-worker',now);assert.ok(job);assert.equal(job.recipient,'info@club.test');
     assert.equal(claimCommercialEmail('test-worker',now),null,'never leases same draft twice');
     assert.throws(()=>completeCommercialEmail({...job,workerId:'test-worker',lease:'wrong',outcome:'accepted',response:'250 OK'}));

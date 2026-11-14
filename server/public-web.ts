@@ -1,3 +1,4 @@
+import {usableContactEmail} from '../src/email-policy.js';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import net from 'node:net';
@@ -95,10 +96,11 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const evidence:ResearchEvidence={url,appId:app.id,country,title,topicVerified:Boolean(inherited?.topicVerified||playbook(app).terms.some(term=>word(text,term))),countryVerified:Boolean(inherited?.countryVerified||(rule?.aliases||[country]).some(alias=>word(text,alias))||(rule&&(phone.startsWith(rule.prefix)||telephone.startsWith(rule.prefix)))||structured.countries.some(name=>normalize(name)===normalize(country)||Boolean(rule&&name.toUpperCase()===rule.iso)))};
   if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
   if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
-  const emails:string[]=decode(clean).match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
+  const visibleEmailText=decode(clean.replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi,'').replace(/<[^>]+>/g,' '));
+  const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
   for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
   emails.push(...structured.emails);
-  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(e=>e.length<200&&/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)&&!/example\.|ejemplo\.|noreply@|no-reply@|\.(png|jpg|webp|svg|css|js)$/.test(e));
+  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(usableContactEmail);
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
