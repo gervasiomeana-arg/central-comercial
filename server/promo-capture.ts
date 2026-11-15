@@ -4,11 +4,9 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {requireAdminAuth} from './auth.js';
-import {cloudMonitorMode} from './execution-role.js';
 let busy=false;
 export function registerPromoCaptureRoutes(app:Express){
  app.post('/api/promo/capture',requireAdminAuth,async(req,res)=>{
-  if(cloudMonitorMode())return res.status(409).json({error:'La captura requiere el ejecutor local con Chromium; no se puede ejecutar en la publicacion de supervision.'});
   if(busy)return res.status(429).json({error:'Ya hay una captura en proceso.'});
   const raw=String(req.body?.url||'');
   let url:URL;try{url=new URL(raw);if(url.protocol!=='https:'||url.username||url.password)throw Error();}catch{return res.status(400).json({error:'URL HTTPS invalida.'});}
