@@ -61,20 +61,28 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     let index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     if(index<0){
       if(remaining()<1){state.status='waiting';state.detail='Consultas de hoy terminadas; se conserva la cola para continuar sin repetir búsquedas.';campaign.researchNextAttemptAt=Date.now()+60*1000;db.save();return;}
-      const fallback=campaign.researchSearchFallbackQuery;const query=fallback||queries[(campaign.researchQueryIndex||0)%queries.length];outcome.query=query;
+      const fallback=campaign.researchSearchFallbackQuery;
+      const searchIndex=campaign.researchQueryIndex||0;
+      const base=queries[searchIndex%queries.length];
+      // Rotate geography and search intent after exhausting the initial fixed query set.
+      const regions=normalize(country)==='argentina'?['Córdoba','Rosario','Mendoza','Tucumán','Mar del Plata','La Plata','Salta','Neuquén','Bahía Blanca','Santa Fe']:normalize(country)==='brasil'?['São Paulo','Rio de Janeiro','Campinas','Curitiba','Belo Horizonte','Porto Alegre','Recife','Santos']:normalize(country)==='mexico'?['Ciudad de México','Guadalajara','Monterrey','Puebla','Mérida','Querétaro']:[];
+      const round=Math.floor(searchIndex/queries.length);
+      const region=round>0&&regions.length?regions[(round-1)%regions.length]:'';
+      const intent=round>regions.length+1?['contacto institucional','email comercial','sitio oficial','asociación regional'][Math.floor(round/Math.max(1,regions.length))%4]:'';
+      const query=fallback||[base,region,intent].filter(Boolean).join(' ');outcome.query=query;
       // Advance once per search, including failures; never repeat a single daily query forever.
       if(!fallback){campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;}db.save();
       try{
         const rss=await fetchPage(searchRequest(query,country,Boolean(fallback)));
         if(!fallback&&!/<rss|<feed/i.test(rss.text)){state.blocked=true;throw new Error('El buscador no devolvió un listado público compatible. Requiere revisión.');}
         if(fallback&&/captcha|anomaly-modal|challenge-form/i.test(rss.text)){state.blocked=true;throw new Error('El buscador requiere verificación humana. No se eludirá.');}
-        const links=relevantSearchLinks(rss.text,app,country,Boolean(fallback));links.forEach(url=>enqueue({url}));
+        const links=relevantSearchLinks(rss.text,app,country,Boolean(fallback));const previous=queue.length;links.forEach(url=>enqueue({url}));const added=queue.length-previous;
         if(!fallback&&!links.length)campaign.researchSearchFallbackQuery=query;else delete campaign.researchSearchFallbackQuery;
         // A search that returns only previously seen URLs is also exhausted.
-        if(!queue.length && !fallback && links.length){campaign.researchSearchFallbackQuery=query;}
-        db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados pertinentes por actividad y país; todavía sin verificar contactos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'});
+        if(!added && !fallback && links.length){campaign.researchSearchFallbackQuery=query;}
+        db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados, ${added} enlaces nuevos para revisar; ${links.length-added} repetidos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'});
         state.lastSuccess=new Date().toISOString();delete state.lastError;
-        reason(outcome,links.length?'Resultados del buscador conservados':'Consulta sin páginas nuevas de organizaciones');
+        reason(outcome,added?'Enlaces nuevos pendientes de verificación':links.length?'Resultados repetidos, sin enlaces nuevos':'Consulta sin páginas nuevas de organizaciones');
       }catch(error:any){state.status='error';state.lastError=String(error.message);if(/bloqueado|requiere revisión/i.test(error.message))state.blocked=true;campaign.researchNextAttemptAt=Date.now()+30*60*1000;db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:error.message});db.save();return;}
       index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     }
