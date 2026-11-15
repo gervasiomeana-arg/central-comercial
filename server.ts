@@ -86,7 +86,7 @@ app.get('/api/status', (req, res) => {
     status: 'online',
     version: release.version,release,cloudMonitorMode:cloudMonitorMode(),diagnosticMode:diagnosticMode(),
     mode: isProduction ? 'production' : 'development',
-    scheduler: {...schedulerState,isRunning:!cloudMonitorMode()&&!diagnosticMode()&&schedulerState.isRunning},
+    scheduler: {...schedulerState,isRunning:!diagnosticMode()&&schedulerState.isRunning},
     storage: 'local_file_db',
     persistence: persistenceStatus,
     pipeline: pipelineStatus,
