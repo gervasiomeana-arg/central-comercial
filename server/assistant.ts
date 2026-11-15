@@ -98,7 +98,9 @@ export class AssistantQueue {
     const lease = randomBytes(24).toString('hex');
     entry.state = 'running'; entry.workerId = workerId; entry.leaseHash = hash(lease).toString('hex'); entry.updatedAt = this.now(); entry.model = this.jarvis.status().model;
     this.save();
-    return { id: entry.id, lease, question: entry.question, report: entry.report, model: entry.model };
+    const previous = this.entries.filter(e => e.appId === entry.appId && e.state === 'completed' && Boolean(e.answer) && e.createdAt < entry.createdAt).slice(-6);
+    const conversationContext = previous.map(e => `Usuario: ${e.question.slice(0, 500)}\nCentral: ${(e.answer || '').slice(0, 900)}`).join('\n\n');
+    return { id: entry.id, lease, question: entry.question, conversationContext, report: entry.report, model: entry.model };
   }
   complete(id: string, workerId: string, lease: unknown, input: { failed?: boolean; answer?: unknown }) {
     this.expire(); const entry = this.entries.find(e => e.id === id);
