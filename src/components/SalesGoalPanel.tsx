@@ -21,7 +21,7 @@ export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate
       <label>Clientes nuevos a alcanzar<input type="number" min="0" max="10000" required value={goal.targetClients} onChange={e=>setGoal({...goal,targetClients:Number(e.target.value)})}/></label>
       <label>Países, separados por comas<input required value={goal.countries.join(', ')} onChange={e=>setGoal({...goal,countries:e.target.value.split(',').map(c=>c.trim())})}/></label>
       <label>Máximo de correos al día<input type="number" min="1" max="50" required value={goal.dailyEmailLimit} onChange={e=>setGoal({...goal,dailyEmailLimit:Number(e.target.value)})}/></label>
-      <label>Páginas a investigar al día<input type="number" min="1" max="20" required value={goal.dailyResearchLimit} onChange={e=>setGoal({...goal,dailyResearchLimit:Number(e.target.value)})}/></label>
+      <label>Páginas a investigar al día<input type="number" min="1" max="40" required value={goal.dailyResearchLimit} onChange={e=>setGoal({...goal,dailyResearchLimit:Number(e.target.value)})}/></label>
       <div className="cc-goal-checks">{([{key:'enabled',label:'Activar objetivo'},{key:'discoverContacts',label:'Buscar contactos públicos'},{key:'sendEmail',label:'Enviar campañas por correo'},{key:'answerEmail',label:'Responder consultas con información verificada'}] as const).map(x=><label key={x.key}><input type="checkbox" checked={goal[x.key]} onChange={e=>setGoal({...goal,[x.key]:e.target.checked})}/>{x.label}</label>)}</div>
       <button className="cc-button cc-button-primary" disabled={busy}>{busy?'Guardando…':'Guardar objetivo y plan comercial'}</button>
     </form>}

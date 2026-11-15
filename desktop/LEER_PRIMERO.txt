@@ -57,3 +57,10 @@ La PC guarda la base comercial. La publicacion actualizada solo supervisa;
 no ejecuta otra campana ni necesita otra base comercial externa.
 El estado sin claves tambien queda en runtime/estado.json en la carpeta
 CentralComercial de LOCALAPPDATA. No compartir .env, perfiles ni respaldos.
+
+ARRANQUE AUTONOMO CONCILIADO (15/11/2026)
+Cerrar el iniciador de verificacion con Ctrl+C. Abrir
+PONER_EN_MARCHA_CENTRAL.bat. Conserva ambas bases, agrega lo faltante,
+aplica el cupo autorizado de 24 paginas sin reiniciar el consumo,
+configura el inicio con Windows y abre la operacion autonoma normal.
+No requiere volver a vincular Gmail ni WhatsApp.

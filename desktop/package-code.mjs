@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 export function copyCode(source,target){
-  const rootFiles=['package.json','package-lock.json','tsconfig.json','INICIAR_CENTRAL_COMERCIAL.bat','VERIFICAR_CENTRAL_COMERCIAL.bat','PREPARAR_CENTRAL_COMERCIAL.bat','ACTIVAR_INICIO_AUTOMATICO.bat','DESACTIVAR_INICIO_AUTOMATICO.bat','server.ts'];
+  const rootFiles=['package.json','package-lock.json','tsconfig.json','INICIAR_CENTRAL_COMERCIAL.bat','VERIFICAR_CENTRAL_COMERCIAL.bat','PONER_EN_MARCHA_CENTRAL.bat','PREPARAR_CENTRAL_COMERCIAL.bat','ACTIVAR_INICIO_AUTOMATICO.bat','DESACTIVAR_INICIO_AUTOMATICO.bat','server.ts'];
   const copy=(from,to)=>{if(path.resolve(from)===path.resolve(to))return;fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);};
   for(const name of rootFiles)copy(path.join(source,name),path.join(target,name));
   const walk=(dir,relative='')=>{
