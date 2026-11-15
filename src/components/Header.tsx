@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command, AudioLines } from 'lucide-react';
+import { LayoutDashboard, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command, AudioLines, Video } from 'lucide-react';
 
 interface HeaderProps {
   currentTab: string; setCurrentTab: (tab: string) => void;
@@ -20,6 +20,7 @@ export function Header(props: HeaderProps) {
     { id: 'applications', label: 'Aplicaciones', icon: Layers },
     { id: 'contacts', label: 'Contactos', icon: Users },
     { id: 'campaigns', label: 'Campañas', icon: Send },
+    { id: 'videos', label: 'Videos promocionales', icon: Video },
     { id: 'conversations', label: 'Conversaciones', icon: MessageSquare },
     { id: 'clients', label: 'Clientes y pagos', icon: CreditCard },
     { id: 'system', label: 'Conexiones', icon: Settings2 }
