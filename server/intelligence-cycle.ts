@@ -42,7 +42,7 @@ async function runIntelligenceCycle(){
   }
   // An empty research result triggers a fresh AI-led prospecting approach, not a fixed retry loop.
   const empty=c.researchLastOutcome && c.researchLastOutcome.created===0 && c.researchLastOutcome.reused===0 && (c.researchLastOutcome.checked>0 || Object.keys(c.researchLastOutcome.reasons||{}).length>0);
-  if(empty && !c.intelligencePlanId && !queue.status().ready && process.env.CENTRAL_GEMINI_FREE_ONLY==='true' && process.env.GEMINI_API_KEY && (c.intelligenceNextAttemptAt||0)<=Date.now()){
+  if(empty && !queue.status().ready && process.env.CENTRAL_GEMINI_FREE_ONLY==='true' && process.env.GEMINI_API_KEY && (c.intelligenceNextAttemptAt||0)<=Date.now()){
    c.intelligenceNextAttemptAt=Date.now()+6*60*60*1000;db.save();
    try {
     const app=db.getApplicationById(c.appId);
