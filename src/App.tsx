@@ -342,7 +342,8 @@ export default function App() {
       <main className="cc-main">
         {deployment.local?<p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Central Comercial está trabajando en tu PC. Los registros se guardan en esta computadora y se conservan al reiniciar.</p>:deployment.migrated?<div role="status" className="rounded-xl bg-amber-50 p-4 text-amber-950">La instancia activa se trasladó a tu PC dedicada. Esta publicación no ejecuta campañas. <a className="underline" href="http://127.0.0.1:39300">Abrir Central Comercial en mi PC</a></div>:<p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">Publicación de Central Comercial. El paquete completo permite trasladar los registros a la PC dedicada durante su primera activación.</p>}
         {deployment.diagnostic && <p role="status" className="rounded-xl bg-amber-100 p-4 text-amber-950">Verificación sin envíos. Se comprueban las conexiones; las campañas y sus límites guardados se conservan.</p>}
-        {deployment.monitor ? <div className="space-y-4"><p className="rounded-xl bg-slate-100 p-4">Supervisión de la PC dedicada. La publicación no ejecuta trabajos, incluso después de un despliegue. Los registros anteriores se conservan para el traslado inicial; los registros nuevos se guardan en tu PC. <a className="underline" href="http://127.0.0.1:39300">Abrir Central Comercial en esta PC</a></p><LocalRuntimePanel remote /></div> : loading ? (
+        {deployment.monitor && <div role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950"><strong>Vista de consulta desde AI Studio.</strong> Podés recorrer los módulos y revisar los registros disponibles en esta publicación. La edición y los envíos desde la web siguen bloqueados para evitar pérdidas o duplicaciones mientras la base activa está prevista para la PC. Las conexiones reales se verifican desde la PC dedicada.</div>}
+        {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs font-semibold">Conectando a Central Comercial...</span>
@@ -444,6 +445,7 @@ export default function App() {
 
             {currentTab === 'assistant' && <AssistantView selectedAppFilter={selectedAppFilter} applications={applications} />}
 
+            {currentTab === 'system' && deployment.monitor && <LocalRuntimePanel remote />}
             {currentTab === 'system' && (
               <ConnectorsAndSystemView
                 connectors={connectors}
