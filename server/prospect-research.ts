@@ -24,7 +24,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     if(state.lastError==='Cupo diario de investigación alcanzado.')delete state.lastError;
     if(state.blocked){state.status='error';state.detail=state.lastError||'El proveedor requiere revisión antes de continuar.';db.save();return;}
     
-    const campaigns=db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
+    const campaigns=db.getCampaigns().filter(c=>c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
     const cap=Number.POSITIVE_INFINITY;
     const eligible=campaigns.filter(c=>{
       if(!campaignStrategyReady(c,db.getApplicationById(c.appId)))return false;
@@ -93,7 +93,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         const page=await fetchPage(candidate.url);outcome.checked++;
         const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context);
         db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url});
-        if(!db.campaignInActiveRun(campaign.id)||db.getSchedulerState().automationsPaused)return;
+        if(db.getSchedulerState().automationsPaused)return;
         queue.splice(index,1);seen.push(candidateKey(candidate));campaign.researchSeenUrls=seen.slice(-1000);
         reason(outcome,reviewed.reason);
         if(reviewed.contact){
