@@ -246,3 +246,29 @@ El archivo local runtime/estado.json contiene el mismo estado sin claves.
 /api/status informa versión y huella SHA-256 de los archivos realmente en
 uso. La huella permite contrastar publicación y paquete sin depender del
 texto antiguo 1.0.0; una coincidencia de interfaz sola no prueba el backend.
+
+
+### Puesta en marcha conciliada — 15/11/2026
+
+PONER_EN_MARCHA_CENTRAL.bat se usa después de cerrar el iniciador de
+verificación con Ctrl+C. Comprueba que los tres puertos locales estén libres,
+guarda la base local completa, solicita una copia congelada de la publicación
+y verifica su integridad. Incorpora contactos, conversaciones y otros registros
+faltantes por identificador. Conserva decisiones y configuración local,
+archiva las diferencias y detiene conflictos de identidad, mensajes o pagos.
+No importa las colas remotas a los ejecutores ni toca sus claves/sesiones.
+Los intentos de envío pendientes de resultado quedan como desconocidos.
+
+La conciliación conserva el mayor día de consumo de investigación y el contador
+más alto de ese día. Para esta puesta en marcha, el propietario autorizó 24
+páginas diarias, manteniendo los 10 correos diarios y los países existentes.
+No reinicia solicitudes consumidas. La copia íntegra de cada lado y el informe
+quedan en runtime/reconciliation; runtime/reconciliation-report.json resume
+el resultado sin mensajes ni claves. El iniciador detecta cambios concurrentes
+antes de reemplazar de forma atómica la base local.
+
+Después de conciliar, configura el inicio con Windows mediante el mecanismo
+existente (sin privilegios ni cambios de protección) y abre el guardián desde
+la ubicación estable. Se activa el director mensual con las cuatro aplicaciones,
+las reglas de WhatsApp, horarios y países guardados. Desde ese momento puede
+procesar campañas reales autorizadas; ya no es el modo de verificación.
