@@ -8,7 +8,7 @@ class CommercialScheduler {
   private isProcessing = false;
 
   public start(intervalMs = 30000) {
-    if (cloudMonitorMode() || diagnosticMode()) return;
+    if (diagnosticMode()) return;
     if (this.timer) return;
     const state = db.getSchedulerState();
     state.isRunning = true;
@@ -35,7 +35,7 @@ class CommercialScheduler {
   }
 
   public async tick() {
-    if (cloudMonitorMode() || diagnosticMode()) return;
+    if (diagnosticMode() || (cloudMonitorMode() && (!db.getMonthlyGoal().directorEnabled || db.getSchedulerState().automationsPaused))) return;
     if (this.isProcessing) return;
     this.isProcessing = true;
 
