@@ -1,0 +1,47 @@
+name: Central Comercial - pruebas seguras
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Compilacion y regresiones sin envios
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      CENTRAL_DIAGNOSTIC_MODE: 'true'
+      CENTRAL_LOCAL_MODE: 'false'
+    steps:
+      - name: Obtener codigo
+        uses: actions/checkout@v4
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias reproducibles
+        run: npm ci
+      - name: Comprobar TypeScript
+        run: npm run lint
+      - name: Compilar interfaz
+        run: npm run build
+      - name: Pruebas de campanas y catalogo
+        run: npm run test:campaigns
+      - name: Pruebas de registros y cuentas
+        run: npm run test:ledger
+      - name: Pruebas de director y correo simulado
+        run: npm run test:sales
+      - name: Pruebas de canales simulados
+        run: npm run test:channels
