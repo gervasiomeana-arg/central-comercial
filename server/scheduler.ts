@@ -52,7 +52,14 @@ class CommercialScheduler {
 
       db.processLedger();
       db.processSalesDirector();
-      intelligenceCycle();
+      for(const campaign of db.getCampaigns()){
+        const app=db.getApplicationById(campaign.appId);
+        if(app && /voley/i.test(app.slug+' '+app.name)){
+          if(/14\s+d[ií]as/i.test(campaign.objective))campaign.objective=campaign.objective.replace(/14\s+d[ií]as/gi,'7 días');
+          if(/14\s+d[ií]as/i.test(campaign.messageTemplate))campaign.messageTemplate=campaign.messageTemplate.replace(/14\s+d[ií]as/gi,'7 días');
+        }
+      }
+      await intelligenceCycle();
       await researchGoalProspects();
 
       // Check tasks due
