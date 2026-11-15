@@ -9,7 +9,7 @@ import type { ResearchCandidate, ResearchOutcome } from '../src/types.js';
 let running=false;
 class ResearchQuota extends Error {}
 const host=(url:string)=>new URL(url).hostname.toLowerCase().replace(/^www\./,'');
-const candidateKey=(candidate:ResearchCandidate)=>`${candidate.url}|${candidate.context?.topicVerified?'topic':''}|${candidate.context?.countryVerified?'country':''}`;
+const candidateKey=(candidate:ResearchCandidate)=>{const u=new URL(candidate.url);return `${u.hostname.toLowerCase().replace(/^www\./,'')}${u.pathname.replace(/\/$/,'')||'/'}${u.search}`;};
 const reason=(outcome:ResearchOutcome,label:string)=>{outcome.reasons[label]=(outcome.reasons[label]||0)+1;};
 
 export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetchPublicText) {
@@ -46,6 +46,9 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     campaign.researchQueue ||= [];
     campaign.researchSeenUrls ||= [];
     const queue=campaign.researchQueue, seen=campaign.researchSeenUrls;
+    // Canonicalize historical duplicates while preserving the first candidate and its evidence.
+    const dedup=new Set<string>();for(let i=queue.length-1;i>=0;i--){try{const k=candidateKey(queue[i]);if(dedup.has(k))queue.splice(i,1);else dedup.add(k);}catch{queue.splice(i,1);}}
+    const seenCanonical=new Set<string>();campaign.researchSeenUrls=seen.filter(k=>{const url=k.split('|')[0];try{const key=candidateKey({url} as ResearchCandidate);if(seenCanonical.has(key))return false;seenCanonical.add(key);return true;}catch{return false;}}).map(k=>candidateKey({url:k.split('|')[0]} as ResearchCandidate));
     const remaining=()=>Number.POSITIVE_INFINITY;
     const fetchPage=async(url:string)=>{
       if(remaining()<=0)throw new ResearchQuota('Cupo de páginas alcanzado.');
@@ -56,7 +59,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     const enqueue=(candidate:ResearchCandidate,priority=false)=>{
       try{candidate.url=publicUrl(candidate.url).href;}catch{return;}
       const key=candidateKey(candidate);
-      if(!seen.includes(key)&&!queue.some(item=>candidateKey(item)===key)){if(priority)queue.unshift(candidate);else queue.push(candidate);}
+      if(!seenCanonical.has(key)&&!queue.some(item=>candidateKey(item)===key)){if(priority)queue.unshift(candidate);else queue.push(candidate);}
     };
     let index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     if(index<0){
@@ -86,7 +89,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       }catch(error:any){state.status='error';state.lastError=String(error.message);if(/bloqueado|requiere revisión/i.test(error.message))state.blocked=true;campaign.researchNextAttemptAt=Date.now()+30*60*1000;db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:error.message});db.save();return;}
       index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     }
-    // One page per cycle: queued contact pages survive quota exhaustion and restarts.
+    // Queued contact pages survive restarts. Each tick processes one page without a daily cap.
     if(index>=0&&remaining()>0){
       const candidate=queue[index];
       try{
@@ -94,7 +97,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context);
         db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url});
         if(db.getSchedulerState().automationsPaused)return;
-        queue.splice(index,1);seen.push(candidateKey(candidate));campaign.researchSeenUrls=seen.slice(-1000);
+        queue.splice(index,1);seenCanonical.add(candidateKey(candidate));campaign.researchSeenUrls=[...seenCanonical].slice(-5000);
         reason(outcome,reviewed.reason);
         if(reviewed.contact){
           const contact=reviewed.contact;
@@ -127,7 +130,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         else{
           outcome.checked++;reason(outcome,`Página no accesible: ${String(error.message).slice(0,180)}`);queue.splice(index,1);
           if(!/bloqueado/i.test(error.message)&&(candidate.attempts||0)<1)queue.push({...candidate,attempts:1,retryAt:Date.now()+6*60*60*1000});
-          else{seen.push(candidateKey(candidate));campaign.researchSeenUrls=seen.slice(-1000);}
+          else{seenCanonical.add(candidateKey(candidate));campaign.researchSeenUrls=[...seenCanonical].slice(-5000);}
           state.status='waiting';state.detail='Una página no pudo verificarse; se continúa con las demás sin inventar contactos.';
         }
       }
