@@ -35,7 +35,7 @@ class CommercialScheduler {
   }
 
   public async tick() {
-    if (diagnosticMode() || (cloudMonitorMode() && (!db.getMonthlyGoal().directorEnabled || db.getSchedulerState().automationsPaused))) return;
+    if (diagnosticMode() || db.getSchedulerState().automationsPaused) return;
     if (this.isProcessing) return;
     this.isProcessing = true;
 
@@ -60,6 +60,7 @@ class CommercialScheduler {
         }
       }
       await intelligenceCycle();
+      // Public research is read-only on external sites and safe to execute in cloud mode.
       await researchGoalProspects();
 
       // Check tasks due
