@@ -1,12 +1,14 @@
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
+import {cloudMonitorMode,diagnosticMode} from './execution-role.js';
 
 class CommercialScheduler {
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
   public start(intervalMs = 30000) {
+    if (cloudMonitorMode() || diagnosticMode()) return;
     if (this.timer) return;
     const state = db.getSchedulerState();
     state.isRunning = true;
@@ -33,6 +35,7 @@ class CommercialScheduler {
   }
 
   public async tick() {
+    if (cloudMonitorMode() || diagnosticMode()) return;
     if (this.isProcessing) return;
     this.isProcessing = true;
 

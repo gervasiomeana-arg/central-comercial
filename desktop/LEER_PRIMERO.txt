@@ -11,7 +11,10 @@ el correo y tu WhatsApp personal. En la computadora actual no instales nada.
    ni el instalador EXE de OpenJarvis. Puede requerir varios GB y pedir
    autorización para las herramientas C++ de Microsoft. No se ha ejecutado ni verificado en tu PC todavía.
 3. Terminada la preparación, cerrar los iniciadores antiguos de correo,
-   WhatsApp y OpenJarvis. Abrir INICIAR_CENTRAL_COMERCIAL.bat.
+   WhatsApp y OpenJarvis. Abrir VERIFICAR_CENTRAL_COMERCIAL.bat.
+   Este modo conecta los componentes sin entregar envios a los ejecutores.
+   Revisar Conexiones en el panel local. Para trabajar normalmente, detener
+   con Ctrl+C y abrir INICIAR_CENTRAL_COMERCIAL.bat.
    La primera vez traslada los registros de la publicación a la PC y pausa
    esa instancia publicada, para que no haya dos motores enviando mensajes.
    Si no puede verificar el traslado, no crea una base vacía.
@@ -48,3 +51,9 @@ Si Windows bloquea un archivo o la preparación informa un requisito faltante,
 conservar el mensaje. No desactivar las protecciones de Windows.
 
 Lectura detallada: desktop/README.md.
+
+VERSION 15/11/2026: Funeraria Control habilitada por el propietario.
+La PC guarda la base comercial. La publicacion actualizada solo supervisa;
+no ejecuta otra campana ni necesita otra base comercial externa.
+El estado sin claves tambien queda en runtime/estado.json en la carpeta
+CentralComercial de LOCALAPPDATA. No compartir .env, perfiles ni respaldos.

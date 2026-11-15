@@ -14,12 +14,12 @@ test('November defaults to five clients; future months remain editable and inact
 test('goal counts unique first paying clients; renewals, pending, duplicates and development apps do not count',()=>{
   const payment=(id:string,clientId:string,date:string,changes:any={})=>({id,clientId,appId:apps[0].id,paymentDate:date,amount:20,status:'confirmado',reviewedAt:now.toISOString(),...changes} as PaymentRecord);
   const payments=[payment('old','a','2026-10-10'),payment('renew','a','2026-11-01'),payment('new','b','2026-11-02'),payment('secondapp','b','2026-11-04',{appId:apps[1].id}),payment('pending','c','2026-11-03',{status:'pendiente_confirmacion_manual'}),payment('future','c','2026-12-01'),payment('dev','d','2026-11-03',{appId:apps[3].id}),payment('unreviewed','e','2026-11-03',{reviewedAt:undefined})];
-  const report=goalProgress(defaultGoal('2026-11'),apps,payments,['a','b','c','d','e'].map(id=>({id} as Client)),now);
+  const report=goalProgress(defaultGoal('2026-11'),apps.map((a,i)=>i===3?{...a,status:'en_desarrollo',campaignsAllowed:false}:a),payments,['a','b','c','d','e'].map(id=>({id} as Client)),now);
   assert.equal(report.achieved,1);assert.equal(report.remaining,4);assert.equal(report.daysRemaining,19);assert.equal(report.apps.find(a=>a.id===apps[1].id)?.clients,1);
 });
 test('director creates only ready apps, deduplicates, stops outside month and separates countries/languages',()=>{
   const goal={...defaultGoal('2026-11'),countries:['Argentina','Brasil']};const campaigns=goalCampaigns(goal,apps,[],now);
-  assert.equal(campaigns.length,6);assert.ok(campaigns.every(c=>c.channels.join()==='email'));
+  assert.equal(campaigns.length,8);assert.ok(campaigns.every(c=>c.channels.join()==='email'));
   assert.ok(campaigns.filter(c=>c.country==='Brasil').every(c=>c.language==='pt-BR'&&c.messageTemplate.includes('Olá')));
   assert.equal(goalCampaigns(goal,apps,campaigns,now).length,0);assert.equal(goalCampaigns(goal,apps,[],new Date('2026-12-01T15:00:00Z')).length,0);
 });
