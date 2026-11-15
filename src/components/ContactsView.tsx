@@ -83,7 +83,8 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
       c.phone.includes(searchQuery) ||
       c.country.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+    // 'Todos' se refiere a contactos en prospección; los clientes viven en Clientes y pagos.
+    const matchesStatus = statusFilter === 'all' ? c.status !== 'cliente' && !c.convertedToClientId : c.status === statusFilter;
     const matchesApp =
       selectedAppFilter === 'all' || c.interestedAppIds.includes(selectedAppFilter);
 
