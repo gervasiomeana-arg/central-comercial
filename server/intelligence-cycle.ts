@@ -33,7 +33,7 @@ export async function intelligenceCycle(){
 async function runIntelligenceCycle(){
  if(!queue||db.getSchedulerState().automationsPaused)return;
  const report=db.getSalesGoalReport();if(!report.goal.enabled||!report.remaining)return;
- for(const c of db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===report.goal.month&&c.intelligenceEnabled&&!c.intelligencePlanId&&['activa','lista','bloqueada_por_configuracion'].includes(c.status))){
+ for(const c of db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===report.goal.month&&c.intelligenceEnabled&&['activa','lista','bloqueada_por_configuracion'].includes(c.status))){
   if(c.intelligenceRecoveryVersion!==2){
    c.intelligenceRecoveryVersion=2;delete c.intelligenceNextAttemptAt;delete c.intelligenceError;
    const previous=queue.status().plans.find(p=>p.id===c.intelligenceRequestId);
@@ -54,14 +54,14 @@ async function runIntelligenceCycle(){
     if(!Array.isArray(candidate.searchQueries))throw new Error('Gemini no devolvió búsquedas estructuradas.');
     const queries=strategyQueries(candidate,app,c.country).filter(q=>!(c.researchQueries||[]).some(old=>normalize(old)===normalize(q)));
     if(!queries.length)throw new Error('Gemini no encontró una nueva estrategia válida.');
-    c.researchQueries=queries;c.researchQueryIndex=0;c.researchQueriesToday=0;c.researchQueryVersion=2;
+    c.researchQueries=queries;c.researchQueryIndex=0;c.researchQueriesToday=0;c.researchQueryVersion=2;c.researchLastOutcome=undefined;
     c.intelligenceError=undefined;db.addLog('info','contactos',`Gemini cambió la estrategia de búsqueda de ${app.name} tras resultados vacíos.`,{campaignId:c.id,queries});db.save();
    }catch(error:any){c.intelligenceError=/429|quota|RESOURCE_EXHAUSTED/i.test(String(error?.message))?'Gemini alcanzó su cuota; investigación conservada para el próximo intento.':'Gemini no pudo proponer nuevas consultas verificables.';db.save();}
    continue;
   }
   if((c.intelligenceNextAttemptAt||0)>Date.now())continue;
   try{
-   if(c.intelligenceRequestId){const plan=queue.completed(c.intelligenceRequestId);if(plan){applyStrategy(queue,plan.id,c);continue;}const job=queue.status().plans.find(p=>p.id===c.intelligenceRequestId);if(job?.state==='failed'){c.intelligenceError=job.error||'OpenJarvis no completó la estrategia; se reintentará con el motor local.';delete c.intelligenceRequestId;c.intelligenceNextAttemptAt=Date.now()+600000;db.save();}continue;}
+   if(c.intelligenceRequestId){const plan=queue.completed(c.intelligenceRequestId);if(plan){if(empty){delete c.intelligenceRequestId;delete c.intelligencePlanId;}else{applyStrategy(queue,plan.id,c);continue;}}const job=queue.status().plans.find(p=>p.id===c.intelligenceRequestId);if(job?.state==='failed'){c.intelligenceError=job.error||'OpenJarvis no completó la estrategia; se reintentará con el motor local.';delete c.intelligenceRequestId;c.intelligenceNextAttemptAt=Date.now()+600000;db.save();}continue;}
    if(queue.status().ready){c.intelligenceRequestId=enqueueJarvisPlan(queue,c.appId,c.country);delete c.intelligenceError;db.save();}
    else{c.intelligenceError='Esperando el motor local de OpenJarvis antes de investigar y enviar.';db.save();}
   }catch(error:any){c.intelligenceError=error.message;const invalid=c.intelligenceRequestId&&queue.status().plans.some(p=>p.id===c.intelligenceRequestId&&p.state==='failed');if(invalid)delete c.intelligenceRequestId;c.intelligenceNextAttemptAt=Date.now()+(invalid?30000:3600000);db.save();}
