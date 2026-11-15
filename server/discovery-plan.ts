@@ -2,7 +2,7 @@ import type {Application,Campaign} from '../src/types.js';
 import {normalize,researchQueriesFor,playbook} from './sales-director.js';
 export function prospectQuery(query:string,app:Application,country:string){
  const q=normalize(query),name=normalize(app.slug+' '+app.name);
- const audience=name.includes('voley')?/(club|federac|asociac|associac|escuela|escola|equipo)/:name.includes('visibility')?/(agencia|consultor|empresa|pyme|hotel)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin)/;
+ const audience=name.includes('voley')?/(club|federac|asociac|associac|escuela|escola|equipo)/:name.includes('visibility')?/(agencia|consultor|empresa|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin)/;
  return q.includes(normalize(country))&&audience.test(q)&&playbook(app).terms.some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
 }
 export function repairDiscoveryPlan(c:Campaign,app:Application){

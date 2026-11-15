@@ -16,7 +16,7 @@ test('empty databases receive all four products with source-backed prices for th
   assert.equal(visibility.plans[0].interval, 'unico');
   assert.equal(neuro.plans[0].price, 20); assert.equal(neuro.trialDurationDays, 2);
   for (const app of [voley, visibility, neuro]) for (const p of app.plans) { assert.ok(p.sourceUrl?.startsWith('https://')); assert.ok(p.verifiedAt); assert.equal(p.verified, true); }
-  assert.equal(funeraria.status, 'en_desarrollo'); assert.equal(funeraria.campaignsAllowed, false); assert.equal(funeraria.plans.length, 0);
+  assert.equal(funeraria.status, 'lista'); assert.equal(funeraria.campaignsAllowed, true); assert.equal(funeraria.plans.length, 0);
 });
 test('migration keeps existing IDs, custom tariffs, websites, notes and relationships', () => {
   const source = commercialCatalog()[0];

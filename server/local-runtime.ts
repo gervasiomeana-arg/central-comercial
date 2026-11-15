@@ -17,14 +17,19 @@ export class LocalRuntime {
       !Array.isArray(input.issues) || input.issues.length > 12 || input.issues.some((i: unknown) => typeof i !== 'string' || !issues.includes(i))) {
       throw new Error('Estado de la computadora inválido.');
     }
+    if(input.connections!==undefined && (!input.connections || ['email','whatsapp','intelligence'].some(k=>typeof input.connections[k]!=='boolean')))throw new Error('Conexiones inválidas.');
+    if(input.sourceFingerprint!==undefined && !/^[a-f0-9]{64}$/.test(input.sourceFingerprint))throw new Error('Versión inválida.');
+    if(input.diagnosticMode!==undefined && typeof input.diagnosticMode!=='boolean')throw new Error('Modo inválido.');
     if (this.current && this.now() - this.current.at < 90000 && this.current.id !== input.workerId) throw new Error('Ya hay otra computadora de Central Comercial conectada.');
     this.current = { id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
-      components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)] };
+      components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)],
+      connections:input.connections ? {email:input.connections.email,whatsapp:input.connections.whatsapp,intelligence:input.connections.intelligence}:undefined,
+      diagnosticMode:input.diagnosticMode,sourceFingerprint:input.sourceFingerprint };
   }
   status(): LocalRuntimeState {
     if (!this.current || this.now() - this.current.at >= 90000) return { online: false, issues: [] };
     const { id, at, ...status } = this.current;
-    return { online: true, ...status };
+    return { online: true, ...status,receivedAt:at };
   }
 }
 export function registerLocalRuntimeRoutes(app: Express, runtime: LocalRuntime) {

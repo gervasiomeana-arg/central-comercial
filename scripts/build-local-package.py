@@ -4,7 +4,7 @@ import hashlib, json, sys
 
 root = Path(__file__).resolve().parents[1]
 output = Path(sys.argv[1]).resolve()
-files = [root / name for name in ('server.ts', 'package.json', 'package-lock.json', 'tsconfig.json', 'INICIAR_CENTRAL_COMERCIAL.bat', 'PREPARAR_CENTRAL_COMERCIAL.bat', 'ACTIVAR_INICIO_AUTOMATICO.bat', 'DESACTIVAR_INICIO_AUTOMATICO.bat')]
+files = [root / name for name in ('server.ts', 'package.json', 'package-lock.json', 'tsconfig.json', 'INICIAR_CENTRAL_COMERCIAL.bat', 'VERIFICAR_CENTRAL_COMERCIAL.bat', 'PREPARAR_CENTRAL_COMERCIAL.bat', 'ACTIVAR_INICIO_AUTOMATICO.bat', 'DESACTIVAR_INICIO_AUTOMATICO.bat')]
 extensions = {'.ts', '.tsx', '.js', '.mjs', '.css', '.md', '.bat', '.txt'}
 for folder in ('server', 'src', 'desktop', 'email-worker', 'openjarvis-worker', 'dist'):
     for file in (root / folder).rglob('*'):

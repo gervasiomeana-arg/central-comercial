@@ -1,4 +1,6 @@
 import { registerCommercialEmailRoutes,replyDecision } from './server/commercial-email.js';
+import {cloudMonitorMode,diagnosticMode} from './server/execution-role.js';
+import {release} from './server/release.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
@@ -18,7 +20,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { scheduler } from './server/scheduler.js';
-import { ChannelTestQueue, registerWorkerTestRoutes } from './server/channelTests.js';
+import { ChannelTestQueue, registerWorkerTestRoutes, workerAuthorized } from './server/channelTests.js';
 import { analyzeAndSuggestResponse } from './server/ai.js';
 import { authManager, requireAdminAuth, passwordlessTestingEnabled, TESTING_ADMIN } from './server/auth.js';
 import { testConnectorReal } from './server/connectors.js';
@@ -37,9 +39,11 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req,res,next)=>{
+  if(diagnosticMode() && /^\/api\/(commercial-email|commercial-whatsapp|channel-tests)\/worker\/claim$/.test(req.path))return workerAuthorized(req.headers.authorization)?res.json({job:null,diagnosticMode:true}):res.status(401).json({error:'Ejecutor no autorizado.'});
+  if(cloudMonitorMode() && req.path.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(req.method) && !['/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/auth/login','/api/auth/logout','/api/auth/setup','/api/auth/recover'].includes(req.path))return res.status(409).json({error:'La publicación supervisa la PC y conserva los registros previos para su traslado. Operá las campañas desde Central Comercial en tu PC.'});
   if(localMode){
     if(!localRequestAllowed(req.headers.host||'',req.headers.origin,String(req.headers['sec-fetch-site']||''),req.path.startsWith('/api'),PORT))return res.status(403).json({error:'La API local solo admite la interfaz de esta computadora.'});
-  }else if(db.getRaw().localMigration&&req.path.startsWith('/api')&&!['/api/status','/api/auth/status','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
+  }else if(db.getRaw().localMigration&&req.path.startsWith('/api')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
   next();
 });
 
@@ -54,6 +58,12 @@ const assistant = new AssistantQueue(path.join(DATA_DIR, 'assistant_history.json
 registerAssistantWorkerRoutes(app, assistant);
 const localRuntime = new LocalRuntime();
 registerLocalRuntimeRoutes(app, localRuntime);
+app.get('/api/local-runtime/report',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if(!localMode || !workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
+  const worker=db.getSalesGoalReport().worker;
+  res.json({connections:{email:worker.online&&worker.send&&worker.read,whatsapp:whatsappStatus().ready,intelligence:jarvis.status().ready},diagnosticMode:diagnosticMode(),release});
+});
 registerCheckpointRoute(app);
 
 // Start background task runner
@@ -63,6 +73,7 @@ scheduler.start(30000);
 
 // Health & System Status (Public, does not reveal private business data)
 app.get('/api/status', (req, res) => {
+  res.setHeader('Cache-Control','no-store');
   const schedulerState = db.getSchedulerState();
   const persistenceStatus = db.getPersistenceStatus();
   const pipelineStatus = db.getAutomationPipelineStatus();
@@ -71,9 +82,9 @@ app.get('/api/status', (req, res) => {
     appName: 'Central Comercial',
     localMode,localMigration:Boolean(db.getRaw().localMigration),
     status: 'online',
-    version: '1.0.0',
+    version: release.version,release,cloudMonitorMode:cloudMonitorMode(),diagnosticMode:diagnosticMode(),
     mode: isProduction ? 'production' : 'development',
-    scheduler: schedulerState,
+    scheduler: {...schedulerState,isRunning:!cloudMonitorMode()&&!diagnosticMode()&&schedulerState.isRunning},
     storage: 'local_file_db',
     persistence: persistenceStatus,
     pipeline: pipelineStatus,

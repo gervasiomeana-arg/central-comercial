@@ -209,3 +209,40 @@ no ofrece una activación inexistente de PostgreSQL mediante DATABASE_URL.
 Se retiró también esa configuración ficticia de .env.example. La copia JSON
 que descarga la publicación cubre la base comercial; no reemplaza una copia de
 las sesiones de los ejecutores ni constituye almacenamiento cloud automático.
+
+
+### Lanzamiento 15/11/2026: una instancia autónoma y verificación sin envíos
+
+Funeraria Control se incorpora por autorización del propietario, con búsquedas
+públicas de funerarias y salas velatorias. No cambia países, horarios ni cupos
+existentes. Sus precios y prueba siguen a consultar hasta registrar condiciones.
+
+Primero abrir VERIFICAR_CENTRAL_COMERCIAL.bat: inicia el conjunto con
+CENTRAL_DIAGNOSTIC_MODE=true. El programador no procesa tareas y los tres
+endpoints de asignación de mensajes (email, WhatsApp y pruebas al propietario)
+no entregan trabajos, aunque existan mensajes preparados. Las conexiones y la
+lectura de respuestas comerciales pueden comprobarse; no se borran las colas.
+Detener con Ctrl+C antes de abrir el iniciador normal para reanudar la operación
+autónoma autorizada. El modo diagnóstico no cambia la pausa ni los límites
+guardados. No activar inicio automático hasta concluir esta verificación.
+
+La publicación y la vista previa de AI Studio pasan a supervisión: no ejecuta el programador
+ni acepta cambios comerciales ni asignaciones de ejecutores, incluso si un
+redespliegue pierde la marca antigua de traslado. Conserva los datos previos
+para exportación/traslado. El primer traslado debe completarse ANTES de
+reemplazar un contenedor efímero que contiene los únicos registros actuales.
+No hay PostgreSQL ni una segunda base que deba sincronizarse. La base de
+trabajo y sus copias quedan fuera del código, en la PC. Esta decisión depende
+de conservar ese disco; las copias en el mismo equipo no cubren su pérdida.
+
+El iniciador conserva la dirección HTTPS original y reporta cada 20 segundos
+por la clave existente únicamente estados, conexiones confirmadas, modelo,
+RAM y versión del código; no sube contactos, mensajes, claves ni sesiones.
+La web admite esos reportes después del traslado. Vencen a los 90 segundos y
+se pierden al reiniciar el servidor web, hasta recibir el siguiente. La caída
+de la supervisión no detiene los ejecutores locales. No ofrece control remoto.
+El archivo local runtime/estado.json contiene el mismo estado sin claves.
+
+/api/status informa versión y huella SHA-256 de los archivos realmente en
+uso. La huella permite contrastar publicación y paquete sin depender del
+texto antiguo 1.0.0; una coincidencia de interfaz sola no prueba el backend.

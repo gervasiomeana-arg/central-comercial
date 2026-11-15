@@ -1,6 +1,6 @@
 import type { Application, PlanItem } from '../src/types.js';
 
-export const COMMERCIAL_CATALOG_VERSION = '2026-11-12.2';
+export const COMMERCIAL_CATALOG_VERSION = '2026-11-15.1';
 const at = '2026-11-12T18:00:00.000Z';
 const openSource = 'https://openvoley.com';
 const visibilitySource = 'https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts';
@@ -32,7 +32,7 @@ export function commercialCatalog(): Application[] {
         plan('vai-agency', 'Agency', 350, 'USD', 'mensual', visibilitySource, 'Todos', ['Multi-cliente', 'Informes', 'Administración centralizada', 'Hasta 30 negocios'])
       ] },
     { ...base('app-neuroplaneta', 'NeuroPlaneta', 'neuroplaneta', neuroSource), description: 'Actividades y juegos para niños con acompañamiento adulto y registro de uso.', targetAudience: 'Familias, educadores e instituciones que acompañan a niños.', countries: ['Argentina', 'Chile', 'Uruguay', 'México', 'Colombia', 'España'], verifiedFeatures: ['Actividades de atención, calma, rutinas y comunicación visual', 'Acompañamiento adulto y registro de uso'], trialAvailable: true, trialVerified: true, trialDurationDays: 2, medicalDisclaimer: 'NeuroPlaneta ofrece actividades y juegos. No diagnostica ni trata condiciones médicas o psicológicas.', commercialNotes: 'Plan Familia USD 20 mensuales. Prueba de 2 días sin tarjeta ni PayPal y sin cobro automático al finalizar. La suscripción es opcional y requiere autorización en PayPal. Central Comercial no acredita pagos automáticamente.', plans: [plan('np-family', 'Plan Familia', 20, 'USD', 'mensual', neuroSource, 'Todos', ['Actividades y juegos acompañados', 'Herramientas para el adulto y registro de uso'])] },
-    { ...base('app-funeraria', 'Funeraria', 'funeraria', ''), description: 'Gestión operativa para empresas funerarias. Aplicación en desarrollo.', targetAudience: 'Empresas funerarias, salas velatorias y cooperativas de servicios funerarios.', countries: ['Argentina', 'Uruguay', 'Chile', 'España'], status: 'en_desarrollo', campaignsAllowed: false, commercialNotes: 'Incorporada al catálogo. No se publican precios ni se habilitan campañas hasta su lanzamiento; el propietario indicó que la cuarta aplicación sigue en desarrollo.' }
+    { ...base('app-funeraria', 'Funeraria Control', 'funeraria', 'https://funeraria-control.ai.studio/'), description: 'Gestión operativa y administrativa para empresas funerarias: expedientes, etapas del servicio, recursos, agenda e inventario.', targetAudience: 'Empresas funerarias, salas velatorias y cooperativas de servicios funerarios.', countries: ['México', 'Argentina', 'Uruguay', 'Chile', 'España'], paymentUrl: '', commercialNotes: 'Lanzamiento habilitado por el propietario el 15/11/2026. Invitar a conocer la aplicación. Precio, planes, prueba y condiciones de contratación a consultar; no inventar tarifas, duración de prueba ni enlaces de pago.' }
   ];
 }
 
@@ -59,6 +59,12 @@ export function mergeCommercialCatalog(existing: Application[]): { applications:
     const found = applications.find(a => a.id === official.id || key(a.slug || '') === key(official.slug) || key(a.name || '') === key(official.name));
     if (!found) { applications.push(official); changed = true; continue; }
     if (found.commercialCatalogVersion === COMMERCIAL_CATALOG_VERSION) continue;
+    if(official.id==='app-funeraria') {
+      found.name=official.name;found.description=official.description;found.status='lista';found.campaignsAllowed=true;
+      found.countries=[...new Set([...(found.countries||[]),...official.countries])];
+      found.verifiedFeatures=(found.verifiedFeatures||[]).filter(f=>!f.includes('(en desarrollo)'));
+      if(found.internalNotes?.includes('BLOQUEO ACTIVO:'))found.internalNotes+='\nActualización 15/11/2026: bloqueo de lanzamiento levantado por autorización del propietario.';
+    }
     // Preserve IDs, relationships, custom records and historical prices. Archive known seed examples.
     found.plans ||= [];
     for (const previous of found.plans) {

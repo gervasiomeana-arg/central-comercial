@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
-import { retryDelay, upgradeWorker } from './recovery.mjs';
+import { retryDelay, upgradeWorker, atomicJSON } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords } from './local-app.mjs';
 
@@ -15,6 +15,8 @@ const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(),
 fs.mkdirSync(runtimeDir, { recursive: true });
 const config = findConfig(root);
 if (!config) { console.error('No se encontró la conexión ya guardada del correo. Inicie desde la computadora vinculada. No ingrese claves en el chat.'); process.exit(78); }
+const publicationUrl = new URL(config.url);
+const diagnosticMode = process.env.CENTRAL_DIAGNOSTIC_MODE === 'true';
 const lock = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
 await new Promise((resolve, reject) => { lock.once('error', () => reject(new Error('Ya hay un iniciador de Central Comercial abierto o el puerto local está ocupado. No se inició otro.'))); lock.listen(37379, '127.0.0.1', resolve); });
 const idFile = path.join(runtimeDir, 'id');
@@ -56,15 +58,16 @@ function launch(name, command, args, options = {}) {
   return child;
 }
 console.log('CENTRAL COMERCIAL — Inicio único');
+if(diagnosticMode)console.log('VERIFICACIÓN SIN ENVÍOS: las colas de email, WhatsApp y pruebas están bloqueadas.');
 console.log('Correo, WhatsApp y motor local se coordinan desde esta ventana.');
 console.log('Este inicio no crea campañas, no confirma pagos y no repite tareas anteriores.');
 console.log('Las campañas ya autorizadas conservan sus reglas y límites.');
 process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
 const records=await prepareLocalRecords(root,runtimeDir,config);
 config.url=new URL('http://127.0.0.1:39300');
-launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,PORT:'39300'}});
+launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DIAGNOSTIC_MODE:String(diagnosticMode),CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,PORT:'39300'}});
 let backendReady=false;
-for(let attempt=0;attempt<30;attempt++){try{const status=await fetch(new URL('/api/status',config.url),{signal:AbortSignal.timeout(1000)}).then(r=>r.json());if(status.appName==='Central Comercial'&&status.localMode){backendReady=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,1000));}
+for(let attempt=0;attempt<30;attempt++){try{const status=await fetch(new URL('/api/status',config.url),{signal:AbortSignal.timeout(1000)}).then(r=>r.json());if(status.appName==='Central Comercial'&&status.localMode&&status.diagnosticMode===diagnosticMode){backendReady=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,1000));}
 if(!backendReady)throw new Error('El servidor local no inició. Se conservan los registros para el próximo intento.');
 function profileDirectory(){return path.join(runtimeDir,'intelligence');}
 const emailWorker = path.join(config.directory, 'worker.mjs');
@@ -117,10 +120,23 @@ await backup();backupTimer=setInterval(()=>void backup(),60000);
 async function heartbeat() {
   if (reporting) return; reporting = true;
   try {
+    let report={};
+    try {
+      const response=await fetch(new URL('/api/local-runtime/report',config.url),{headers:{Authorization:`Bearer ${config.key}`},redirect:'error',signal:AbortSignal.timeout(4000)});
+      if(response.ok)report=await response.json();
+    }catch{}
+    const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections:(!stopping&&report.connections)||{email:false,whatsapp:false,intelligence:false},sourceFingerprint:report.release?.sourceFingerprint};
+    atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections:payload.connections,components,issues:[...issues],backupAt,release:report.release});
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
-      body: JSON.stringify({ workerId, startedAt, ramGB, model, components, issues: [...issues], backupAt }), signal: AbortSignal.timeout(12000) });
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(12000) });
     if (!response.ok) log('central', `Estado de la computadora pendiente de registrar (HTTP ${response.status}).`);
+    if(publicationUrl.protocol==='https:') {
+      try {
+        const remote=await fetch(new URL('/api/local-runtime/heartbeat',publicationUrl),{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${config.key}`},body:JSON.stringify(payload),signal:AbortSignal.timeout(5000)});
+        if(!remote.ok)log('central',`Supervisión web pendiente (HTTP ${remote.status}). La operación y los datos siguen en esta PC.`);
+      }catch{log('central','Supervisión web sin conexión. La operación y los datos siguen en esta PC.');}
+    }
   } catch { log('central', 'Conexión pendiente; no se puede confirmar el estado desde la app.'); }
   finally { reporting = false; }
 }

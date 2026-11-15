@@ -6,7 +6,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 function run(directory:string,code:string){
- const result=spawnSync(process.execPath,['--import','tsx','--input-type=module','-e',code],{cwd:process.cwd(),env:{...process.env,CENTRAL_DATA_DIR:directory},encoding:'utf8',timeout:15000});
+ const result=spawnSync(process.execPath,['--import','tsx','--input-type=module','-e',code],{cwd:process.cwd(),env:{...process.env,CENTRAL_LOCAL_MODE:'true',CENTRAL_DATA_DIR:directory},encoding:'utf8',timeout:15000});
  assert.equal(result.status,0,result.stderr+'\n'+result.stdout);
 }
 const imports=`import assert from 'node:assert/strict';import {db} from './server/db.ts';import {claimCommercialEmail,completeCommercialEmail} from './server/commercial-email.ts';`;
@@ -62,7 +62,7 @@ test('base ausente con respaldos o escritura interrumpida, y JSON sin coleccione
    if(mode==='backup'){fs.mkdirSync(path.join(directory,'backups'));fs.writeFileSync(path.join(directory,'backups','db_backup_previous.json'),'{"contacts":[{"id":"preserve"}]}');}
    if(mode==='temporary')fs.writeFileSync(filename+'.tmp','{"contacts":[{"id":"preserve"}]}');
    if(mode==='invalid-schema')fs.writeFileSync(filename,'{}');
-   const result=spawnSync(process.execPath,['--import','tsx','--input-type=module','-e',"await import('./server/db.ts')"],{cwd:process.cwd(),env:{...process.env,CENTRAL_DATA_DIR:directory},encoding:'utf8',timeout:10000});
+   const result=spawnSync(process.execPath,['--import','tsx','--input-type=module','-e',"await import('./server/db.ts')"],{cwd:process.cwd(),env:{...process.env,CENTRAL_LOCAL_MODE:'true',CENTRAL_DATA_DIR:directory},encoding:'utf8',timeout:10000});
    assert.notEqual(result.status,0);assert.match(result.stderr,/Se conservó el archivo/);
    assert.equal(fs.existsSync(filename),mode==='invalid-schema');
    if(mode==='backup')assert.match(fs.readFileSync(path.join(directory,'backups','db_backup_previous.json'),'utf8'),/preserve/);
