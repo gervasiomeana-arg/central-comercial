@@ -226,7 +226,7 @@ Detener con Ctrl+C antes de abrir el iniciador normal para reanudar la operació
 autónoma autorizada. El modo diagnóstico no cambia la pausa ni los límites
 guardados. No activar inicio automático hasta concluir esta verificación.
 
-En producción, la publicación pasa a supervisión: no ejecuta el programador
+La publicación y la vista previa de AI Studio pasan a supervisión: no ejecuta el programador
 ni acepta cambios comerciales ni asignaciones de ejecutores, incluso si un
 redespliegue pierde la marca antigua de traslado. Conserva los datos previos
 para exportación/traslado. El primer traslado debe completarse ANTES de

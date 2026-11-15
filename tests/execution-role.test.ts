@@ -58,3 +58,11 @@ test('Funeraria participates in autonomous research, preserving IDs, history, co
  const contact=extractContact('<h1>Servicios funerarios México</h1><a href="mailto:contacto@funeraria-fixture.test">Contacto</a>','https://funeraria-fixture.test/contacto',app,'México');assert.equal(contact?.email,'contacto@funeraria-fixture.test');
  assert.ok(!promotionalTemplate(app,'Brasil').includes('crianças'));
 });
+
+
+test('preview and development are monitors too; only explicit local mode can execute',async()=>{
+ const {cloudMonitorMode}=await import('../server/execution-role.js');
+ const previous=process.env.CENTRAL_LOCAL_MODE,mode=process.env.NODE_ENV;
+ try{for(const env of ['production','development','test']){process.env.NODE_ENV=env;delete process.env.CENTRAL_LOCAL_MODE;assert.equal(cloudMonitorMode(),true);process.env.CENTRAL_LOCAL_MODE='true';assert.equal(cloudMonitorMode(),false);}}
+ finally{if(previous===undefined)delete process.env.CENTRAL_LOCAL_MODE;else process.env.CENTRAL_LOCAL_MODE=previous;if(mode===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=mode;}
+});
