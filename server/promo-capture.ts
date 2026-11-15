@@ -22,7 +22,7 @@ export function registerPromoCaptureRoutes(app:Express){
    for(const link of links){try{await page.goto(link,{waitUntil:'domcontentloaded',timeout:12000});await page.waitForTimeout(2500)}catch{}}
    await context.close();const videoPath=await video?.path();if(!videoPath)throw Error('No se genero video.');
    res.setHeader('Content-Type','video/webm');res.setHeader('Cache-Control','no-store');res.sendFile(videoPath,async()=>{await rm(dir,{recursive:true,force:true})});
-  }catch(e:any){await rm(dir,{recursive:true,force:true});res.status(503).json({error:'No fue posible capturar la aplicacion. Comproba que Chromium este instalado en el ejecutor.'});}
+  }catch(e:any){await rm(dir,{recursive:true,force:true});res.status(503).json({error:'No fue posible capturar la aplicacion. La instalacion automatica de Chromium no se completo en este entorno; revisa el registro de despliegue.'});}
   finally{await browser?.close();busy=false;}
  });
 }
