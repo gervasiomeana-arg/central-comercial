@@ -11,7 +11,7 @@ export function validateGoal(input: MonthlySalesGoal) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error('Mes no válido.');
   if (!Number.isInteger(input.targetClients) || input.targetClients < 0 || input.targetClients > 10000) throw new Error('La meta debe ser un entero entre 0 y 10.000 clientes.');
   if (!Number.isInteger(input.dailyEmailLimit) || input.dailyEmailLimit < 1 || input.dailyEmailLimit > 50) throw new Error('Elegí un límite diario de 1 a 50 correos.');
-  if (!Number.isInteger(input.dailyResearchLimit) || input.dailyResearchLimit < 1 || input.dailyResearchLimit > 40) throw new Error('Elegí de 1 a 40 páginas de investigación por día.');
+  if (!Number.isInteger(input.dailyResearchLimit) || input.dailyResearchLimit < 0) throw new Error('Configuración de investigación inválida.');
   if (!Array.isArray(input.countries) || !input.countries.length || input.countries.length > 10 || input.countries.some(c => typeof c !== 'string' || !c.trim() || c.length > 60)) throw new Error('Indicá hasta diez países de búsqueda.');
   for (const field of ['enabled', 'discoverContacts', 'sendEmail', 'answerEmail'] as const) if (typeof input[field] !== 'boolean') throw new Error('Configuración de autonomía no válida.');
 }
