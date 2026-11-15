@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { GoogleGenAI } from '@google/genai';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Express } from 'express';
@@ -49,6 +50,8 @@ export function currentAssistantReport(appId = 'all') {
 }
 
 type StoredEntry = AssistantEntry & { report: AssistantReport; workerId?: string; leaseHash?: string };
+const geminiModel = process.env.CENTRAL_GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const geminiEnabled = () => process.env.CENTRAL_GEMINI_FREE_ONLY === 'true' && Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
 const hash = (s: string) => createHash('sha256').update(s).digest();
 export class AssistantQueue {
   private entries: StoredEntry[];
@@ -71,10 +74,10 @@ export class AssistantQueue {
   }
   status() {
     this.expire(); const jarvis = this.jarvis.status();
-    return { ready: jarvis.assistantReady === true, model: jarvis.model,
+    return { ready: jarvis.assistantReady === true || geminiEnabled(), model: jarvis.assistantReady ? jarvis.model : geminiEnabled() ? `Gemini (${geminiModel})` : '',
       entries: this.entries.slice(-40).map(({ workerId, leaseHash, report, ...entry }) => entry) };
   }
-  ask(question: unknown, report: AssistantReport, kind: unknown = 'question') {
+  async ask(question: unknown, report: AssistantReport, kind: unknown = 'question') {
     this.expire();
     if (typeof question !== 'string' || !question.trim() || question.length > 1200) throw new Error('Escribí una consulta de hasta 1200 caracteres.');
     const q = question.trim(), normalized = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -83,12 +86,27 @@ export class AssistantQueue {
     const same = this.entries.find(e => e.question === q && e.report.appId === report.appId && e.report.text === report.text && e.state !== 'failed' && this.now() - e.createdAt < 30000);
     if (same) return same.id;
     const source = command || records ? 'records' : 'openjarvis';
-    if (source === 'openjarvis' && !this.status().ready) throw new Error('OpenJarvis todavía no está listo para conversar. Podés pedir un informe de los registros con el botón Informe actual.');
+    if (source === 'openjarvis' && !this.status().ready) throw new Error('OpenJarvis y Gemini todavía no están configurados para conversar.');
     if (source === 'openjarvis' && this.entries.filter(e => e.source === 'openjarvis' && this.now() - e.createdAt < 86400000).length >= 20) throw new Error('Límite de veinte consultas diarias a OpenJarvis para cuidar los recursos.');
     const entry: StoredEntry = { id: randomUUID(), question: q, appId: report.appId, appName: report.appName, report, source,
       state: source === 'records' ? 'completed' : 'queued', createdAt: this.now(), updatedAt: this.now() };
     if (source === 'records') entry.answer = command ? 'No ejecuté esa acción. En esta etapa, el asistente conversa, recomienda y da informes. Para iniciar campañas, enviar o registrar pagos, usá los controles correspondientes de Central Comercial.' : report.text;
-    this.entries.push(entry); this.save(); return entry.id;
+    this.entries.push(entry); this.save();
+    if (source === 'openjarvis' && !this.jarvis.status().assistantReady && geminiEnabled()) {
+      entry.state = 'running'; entry.model = geminiModel; this.save();
+      try {
+        const history = this.entries.filter(e => e.id !== entry.id && e.appId === entry.appId && e.state === 'completed' && e.answer).slice(-6).map(e => `Usuario: ${e.question.slice(0,400)}\nCentral: ${e.answer!.slice(0,600)}`).join('\n\n');
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+        const response = await ai.models.generateContent({ model: geminiModel, contents: JSON.stringify({ question: q, history, report }), config: { maxOutputTokens: 600, temperature: 0.3, systemInstruction: 'Sos Central Comercial, director comercial consultivo. Conversá naturalmente en español y respondé preguntas de seguimiento usando el historial. Basate solo en los registros fechados y el catálogo adjunto; no inventes clientes, resultados, precios ni envíos. No ejecutes acciones ni afirmes que las ejecutaste. No reveles claves. No envíes mensajes ni confirmes pagos. Si falta información, decilo.' } });
+        const answer = response.text?.trim();
+        if (!answer || answer.length > 3000) throw new Error('Gemini no devolvió una respuesta válida.');
+        entry.answer = answer; entry.state = 'completed';
+      } catch (error: any) {
+        entry.state = 'failed'; entry.error = /429|quota|RESOURCE_EXHAUSTED/i.test(String(error?.message)) ? 'Cuota Gemini agotada: se detuvieron las consultas, sin reintentos automáticos.' : 'No se pudo obtener respuesta de Gemini. Revisá la configuración y la cuota gratuita.';
+      }
+      entry.updatedAt = this.now(); this.save();
+    }
+    return entry.id;
   }
   claim(workerId: string) {
     this.expire();
