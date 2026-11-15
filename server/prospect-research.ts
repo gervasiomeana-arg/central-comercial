@@ -17,7 +17,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
   running=true;
   try {
     const report=db.getSalesGoalReport(), goal=report.goal, state=db.getResearchState(), day=accountingDay();
-    if(!goal.enabled||!goal.discoverContacts||goal.targetClients<1||!report.remaining||report.paused)return;
+    if(!goal.enabled||!goal.discoverContacts||report.paused)return;
     if(state.month!==goal.month)Object.assign(state,{month:goal.month,day,requests:0,visited:[],status:'pending',detail:undefined,lastError:undefined});
     if(state.day!==day)Object.assign(state,{day,requests:0,status:'pending',detail:undefined});
     // A spent quota is a scheduling condition, never a network failure.
@@ -31,10 +31,10 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       if(c.researchDay!==day){c.researchDay=day;c.researchCount=0;c.researchQueriesToday=0;}
       if((c.researchNextAttemptAt||0)>Date.now())return false;
       const used=new Set(db.getConversations().filter(thread=>thread.campaignId===c.id).map(thread=>thread.contactId));
-      const needed=c.maxContacts===undefined?Number.POSITIVE_INFINITY:Math.max(0,c.maxContacts-used.size);
+      const needed=Number.POSITIVE_INFINITY; // Max contacts governs outreach, not discovery.
       if(!needed)return false;
       const available=db.getContacts().filter(contact=>!used.has(contact.id)&&contact.interestedAppIds?.includes(c.appId)&&normalize(contact.country||'')===normalize(c.country)&&normalize(contact.language||'')===normalize(c.language)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email||'')&&contact.source&&Number.isFinite(Date.parse(contact.sourceReviewDate))&&(contact.permission==='autorizado'||(contact.permission==='desconocido'&&c.allowPublicEmail&&contact.outreachBasis==='public_business_contact'))&&Date.parse(contact.sourceReviewDate)<=Date.now()&&!['cliente','descartado','baja_solicitada'].includes(contact.status));
-      return available.length<needed;
+      return true; // Research continues independently of existing outreach-ready contacts.
     }).sort((a,b)=>(a.lastResearchAt||'').localeCompare(b.lastResearchAt||''));
     const campaign=eligible[0];
     if(!campaign){state.status='waiting';state.detail=`Sin tarea elegible: ${campaigns.filter(c=>(c.researchNextAttemptAt||0)>Date.now()).length} campañas en espera. Páginas revisadas hoy: ${state.requests}, sin límite interno.`;db.save();return;}
