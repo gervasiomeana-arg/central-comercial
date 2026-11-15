@@ -5,7 +5,7 @@ import {whatsappAuthorized} from '../src/whatsapp-policy.js';
 
 export const normalize = (value: string) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 export function defaultGoal(month: string): MonthlySalesGoal {
-  return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: 12, updatedAt: new Date().toISOString() };
+  return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: 40, updatedAt: new Date().toISOString() };
 }
 export function validateGoal(input: MonthlySalesGoal) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error('Mes no válido.');

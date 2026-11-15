@@ -725,7 +725,7 @@ class DatabaseManager {
     validateGoal(current);
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
-    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(process.env.CENTRAL_LOCAL_MODE !== 'true' ? { sendEmail: false, answerEmail: false } : {}),
+    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(process.env.CENTRAL_LOCAL_MODE !== 'true' ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
       directorChannels: ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
