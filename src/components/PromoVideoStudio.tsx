@@ -30,8 +30,9 @@ export function PromoVideoStudio({applications}:{applications:Application[]}){
    ctx.fillStyle='#fff';ctx.font='24px sans-serif';ctx.fillText('Borrador para revisión · Sin publicación',56,1200);
  };
  useEffect(()=>{const c=canvas.current;if(c){const ctx=c.getContext('2d');if(ctx)draw(ctx,preview);}},[app?.id,draft?.headline,draft?.cta,preview]);
+ const captureAutomatic=async()=>{if(!app)return;setRecording(true);setError('');try{const response=await fetch('/api/promo/capture',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({url:app.website})});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||'No se pudo capturar la web.');}const blob=await response.blob();if(footageUrl)URL.revokeObjectURL(footageUrl);setFootageUrl(URL.createObjectURL(blob));}catch(e:any){setError(e.message||'No se pudo capturar la aplicación.');}finally{setRecording(false);}};
  const exportVideo=async()=>{const c=canvas.current;if(!c||!app||!draft)return;setError('');if(!('MediaRecorder'in window)||!c.captureStream){setError('Este navegador no permite grabar el video. Probá Chrome actualizado.');return;}
- if(!footageUrl){setError('La captura automática de la aplicación todavía no está conectada. Central debe obtener las escenas desde la web; no necesitás grabarlas vos.');return;}
+ if(!footageUrl){setError('No se obtuvo todavía una captura real. Utilizá «Capturar automáticamente la aplicación»; si falla, se mostrará el motivo.');return;}
  const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
  if(!mime){setError('No se encontró un formato WebM compatible.');return;}
  setRecording(true);
@@ -52,8 +53,9 @@ export function PromoVideoStudio({applications}:{applications:Application[]}){
  <div style={{display:'flex',gap:16,flexWrap:'wrap',marginTop:20}}>
  <div style={{flex:'1 1 280px',display:'grid',gap:12,alignContent:'start'}}>
  <label>Aplicación<select value={app.id} onChange={e=>{setSelected(e.target.value);setPreview(0);}}>{ready.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
- <p><strong>Fuente de demostración:</strong> {app.website}. La captura automática de la navegación real está pendiente de integración; no se utilizarán pantallas inventadas.</p>
- <label>Grabación real de la aplicación (opcional, mientras se integra la captura automática)<input type="file" accept="video/*" onChange={e=>{const f=e.target.files?.[0];if(f){if(footageUrl)URL.revokeObjectURL(footageUrl);setFootageUrl(URL.createObjectURL(f));edit({});}}}/></label>
+ <p><strong>Fuente de demostración:</strong> {app.website}. La captura automática visita páginas públicas de la aplicación; las funciones que requieren ingreso no se mostrarán sin autorización.</p>
+ <button className="cc-button cc-button-secondary" disabled={recording} onClick={captureAutomatic}>{recording?'Capturando la web…':'Capturar automáticamente la aplicación'}</button>
+ <label>Grabación real de la aplicación (alternativa opcional)<input type="file" accept="video/*" onChange={e=>{const f=e.target.files?.[0];if(f){if(footageUrl)URL.revokeObjectURL(footageUrl);setFootageUrl(URL.createObjectURL(f));edit({});}}}/></label>
  <label>Música instrumental con derechos de uso (opcional)<input type="file" accept="audio/*" onChange={e=>{const f=e.target.files?.[0];if(f){if(audioUrl)URL.revokeObjectURL(audioUrl);setAudioUrl(URL.createObjectURL(f));edit({});}}}/></label>
  <p><small>Los archivos permanecen en este navegador. Cada aplicación requiere su propia grabación auténtica; el generador no inventa pantallas.</small></p>
  <label>Mensaje principal<textarea rows={4} value={draft.headline} onChange={e=>edit({headline:e.target.value})}/></label>
