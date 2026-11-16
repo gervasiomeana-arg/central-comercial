@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
 import { retryDelay, upgradeWorker, atomicJSON } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
-import { prepareLocalRecords } from './local-app.mjs';
+import { prepareLocalRecords, dependenciesReady, installDependencies } from './local-app.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -63,6 +63,27 @@ console.log('Correo, WhatsApp y motor local se coordinan desde esta ventana.');
 console.log('Este inicio no crea campañas, no confirma pagos y no repite tareas anteriores.');
 console.log('Las campañas ya autorizadas conservan sus reglas y límites.');
 process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
+// Self-heal the application build before touching the authoritative local records.
+if (!dependenciesReady(root) || !fs.existsSync(path.join(root, 'dist', 'index.html'))) {
+  console.log('Preparando la versión local desde los archivos del repositorio; se conservan los registros y sesiones.');
+  try {
+    await installDependencies(root);
+    if (!fs.existsSync(path.join(root, 'dist', 'index.html'))) {
+      const npm = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+      if (!fs.existsSync(npm)) throw new Error('No se encontró npm junto a Node.js.');
+      const code = await new Promise(resolve => {
+        const child = spawn(process.execPath, [npm, 'run', 'build'], { cwd: root, stdio: 'inherit' });
+        child.once('error', () => resolve(-1));
+        child.once('exit', resolve);
+      });
+      if (code !== 0 || !fs.existsSync(path.join(root, 'dist', 'index.html'))) throw new Error('La compilación local no terminó correctamente.');
+    }
+  } catch (error) {
+    console.error('No se pudo preparar la aplicación: ' + error.message);
+    console.error('No se alteraron registros ni conexiones. Revisar requisitos y volver a iniciar.');
+    process.exit(78);
+  }
+}
 const records=await prepareLocalRecords(root,runtimeDir,config);
 config.url=new URL('http://127.0.0.1:39300');
 launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DIAGNOSTIC_MODE:String(diagnosticMode),CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,PORT:'39300'}});
