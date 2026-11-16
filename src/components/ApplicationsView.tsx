@@ -323,11 +323,13 @@ export const ApplicationsView: React.FC<ApplicationsViewProps> = ({
                       Planes y Precios
                     </span>
                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                      app.trialVerified
+                      !app.trialAvailable
+                        ? 'bg-slate-100 text-slate-700'
+                        : app.trialVerified
                         ? 'bg-emerald-100 text-emerald-800'
                         : 'bg-amber-50 text-amber-900 border border-amber-200'
                     }`}>
-                      {app.trialVerified ? `✓ Prueba verificada: ${app.trialDurationDays}d` : '⚠️ Prueba NO verificada'}
+                      {!app.trialAvailable ? 'Prueba gratuita: No aplica' : app.trialVerified ? `✓ Prueba verificada: ${app.trialDurationDays}d` : '⚠️ Prueba NO verificada'}
                     </span>
                   </div>
 
