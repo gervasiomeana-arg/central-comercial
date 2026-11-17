@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { retryDelay } from './recovery.mjs';
 import {activeRoot, latestCommit, stageRelease, activateRelease} from './auto-update.mjs';
@@ -21,6 +21,7 @@ let stopped = false, child, timer, attempts = 0;
 const updateStatus = path.join(state,'auto-update-status.json');
 const writeUpdate=(status,detail)=>{try{fs.writeFileSync(updateStatus+'.tmp',JSON.stringify({at:new Date().toISOString(),status,detail}));fs.renameSync(updateStatus+'.tmp',updateStatus);}catch{}};
 let updating=false;
+let pendingSha=null;
 async function checkGitHubUpdate() {
  if(process.env.CENTRAL_AUTO_UPDATE==='false'||stopped||updating||fs.existsSync(manualStop))return;
  updating=true;
@@ -32,6 +33,7 @@ async function checkGitHubUpdate() {
    await stageRelease(sha);
    // Do not replace files while the backend, Gmail or WhatsApp are running.
    // Activate the prepared release only at the next natural start.
+   pendingSha=sha;
    writeUpdate('ready_for_restart',sha);
  }catch(error){writeUpdate('error',String(error.message).slice(0,240));}
  finally{updating=false;}
@@ -41,6 +43,7 @@ setInterval(()=>void checkGitHubUpdate(),30*60*1000).unref();
 
 function start() {
   if (stopped || fs.existsSync(manualStop)) return finish();
+  if(pendingSha){try{activateRelease(pendingSha);writeUpdate('activated',pendingSha);pendingSha=null;}catch(error){writeUpdate('activation_failed',String(error.message));pendingSha=null;}}
   const at = Date.now();
   const currentRoot=activeRoot(root);
   child = spawn(process.execPath, [path.join(currentRoot, 'desktop', 'start.mjs')], { cwd: currentRoot, stdio: 'inherit', windowsHide: false });
