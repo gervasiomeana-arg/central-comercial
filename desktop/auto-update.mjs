@@ -45,6 +45,9 @@ export async function stageRelease(sha){
   const src=path.join(unpack,entries[0].name);
   if(!fs.existsSync(path.join(src,'desktop','start.mjs'))||!fs.existsSync(path.join(src,'package-lock.json')))throw new Error('Release incompleto');
   const npm=process.platform==='win32'?'npm.cmd':'npm';
+  // Some published commits have a package-lock.json missing a declared dev dependency.
+  // Repair the lock only inside this isolated staged release; never touch the user's records.
+  await run(npm,['install','--package-lock-only','--ignore-scripts','--no-audit','--no-fund'],src,180000);
   await run(npm,['ci','--include=dev','--ignore-scripts','--no-audit','--no-fund'],src,600000);
   await run(npm,['run','build'],src,180000);
   if(!fs.existsSync(path.join(src,'dist','index.html')))throw new Error('Build incompleto');
