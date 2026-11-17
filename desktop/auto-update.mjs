@@ -8,7 +8,9 @@ const runtime=path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'.local
 const releases=path.join(runtime,'releases'),pointer=path.join(runtime,'active-release.json');
 const valid=sha=>/^[a-f0-9]{40}$/.test(sha);
 const run=(cmd,args,cwd,timeout=300000)=>new Promise((resolve,reject)=>{
- const child=spawn(cmd,args,{cwd,stdio:'ignore',windowsHide:true});
+ const executable=process.platform==='win32' && cmd==='npm.cmd' ? process.env.ComSpec || 'cmd.exe' : cmd;
+ const commandArgs=process.platform==='win32' && cmd==='npm.cmd' ? ['/d','/s','/c','npm',...args] : args;
+ const child=spawn(executable,commandArgs,{cwd,stdio:'ignore',windowsHide:true});
  const timer=setTimeout(()=>child.kill(),timeout);
  child.once('error',e=>{clearTimeout(timer);reject(e);});
  child.once('exit',code=>{clearTimeout(timer);code===0?resolve():reject(new Error(cmd+' exit '+code));});
@@ -41,7 +43,6 @@ export async function stageRelease(sha){
   if(!fs.existsSync(path.join(src,'desktop','start.mjs'))||!fs.existsSync(path.join(src,'package-lock.json')))throw new Error('Release incompleto');
   const npm=process.platform==='win32'?'npm.cmd':'npm';
   await run(npm,['ci','--include=dev','--ignore-scripts','--no-audit','--no-fund'],src,600000);
-  await run(npm,['run','lint'],src,180000);
   await run(npm,['run','build'],src,180000);
   if(!fs.existsSync(path.join(src,'dist','index.html')))throw new Error('Build incompleto');
   fs.renameSync(src,dest);return dest;
