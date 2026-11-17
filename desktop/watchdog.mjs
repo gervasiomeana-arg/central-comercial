@@ -5,6 +5,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { retryDelay } from './recovery.mjs';
+import {activeRoot, latestCommit, stageRelease, activateRelease} from './auto-update.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const state = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
 fs.mkdirSync(state, { recursive: true });
@@ -16,10 +17,36 @@ catch { console.log('Central Comercial ya tiene un guardián activo.'); process.
 fs.rmSync(manualStop, { force: true });
 if (process.argv.includes('--login')) await new Promise(resolve => setTimeout(resolve, 20000));
 let stopped = false, child, timer, attempts = 0;
+
+const updateStatus = path.join(state,'auto-update-status.json');
+const writeUpdate=(status,detail)=>{try{fs.writeFileSync(updateStatus+'.tmp',JSON.stringify({at:new Date().toISOString(),status,detail}));fs.renameSync(updateStatus+'.tmp',updateStatus);}catch{}};
+let updating=false;
+let pendingSha=null;
+async function checkGitHubUpdate() {
+ if(process.env.CENTRAL_AUTO_UPDATE==='false'||stopped||updating||fs.existsSync(manualStop))return;
+ updating=true;
+ try{
+   const sha=await latestCommit();
+   const current=activeRoot(root);
+   if(current===path.join(state,'releases',sha)){writeUpdate('current',sha);return;}
+   writeUpdate('preparing',sha);
+   await stageRelease(sha);
+   // Do not replace files while the backend, Gmail or WhatsApp are running.
+   // Activate the prepared release only at the next natural start.
+   pendingSha=sha;
+   writeUpdate('ready_for_restart',sha);
+ }catch(error){writeUpdate('error',String(error.message).slice(0,240));}
+ finally{updating=false;}
+}
+setTimeout(()=>void checkGitHubUpdate(),20000).unref();
+setInterval(()=>void checkGitHubUpdate(),30*60*1000).unref();
+
 function start() {
   if (stopped || fs.existsSync(manualStop)) return finish();
+  if(pendingSha){try{activateRelease(pendingSha);writeUpdate('activated',pendingSha);pendingSha=null;}catch(error){writeUpdate('activation_failed',String(error.message));pendingSha=null;}}
   const at = Date.now();
-  child = spawn(process.execPath, [path.join(root, 'desktop', 'start.mjs')], { cwd: root, stdio: 'inherit', windowsHide: false });
+  const currentRoot=activeRoot(root);
+  child = spawn(process.execPath, [path.join(currentRoot, 'desktop', 'start.mjs')], { cwd: currentRoot, stdio: 'inherit', windowsHide: false });
   let handled = false;
   const ended = code => {
     if (handled) return; handled = true;
