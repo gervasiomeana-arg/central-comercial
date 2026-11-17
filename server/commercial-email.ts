@@ -105,6 +105,33 @@ export function importCommercialReply(input: any) {
   }
   db.save(); return { success:true, decision:decision.kind };
 }
+// Daily owner-only activity digest, sourced exclusively from persisted records.
+function dailyCommercialDigest(day: string, sender: string) {
+  const tz = 'America/Argentina/Buenos_Aires';
+  const localDay = (value: string) => {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('en-CA', {timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+  };
+  const apps = db.getApplications(), contacts = db.getContacts(), conversations = db.getConversations();
+  const lines = ['CENTRAL COMERCIAL — INFORME DIARIO ' + day, '', 'Registro de actividad comprobable. Aceptación SMTP no equivale a entrega o lectura.', ''];
+  for (const app of apps) {
+    const related = conversations.filter(c => c.appId === app.id);
+    const found = contacts.filter(c => c.interestedAppIds?.includes(app.id) && localDay(c.createdAt) === day);
+    const sent = related.flatMap(c => c.messages.filter(m => m.direction === 'outbound' && ['aceptado_proveedor','entrega_confirmada'].includes(m.status) && localDay(m.acceptedAt || m.deliveredAt || m.sentAt || '') === day).map(m => ({c,m})));
+    const received = related.flatMap(c => c.messages.filter(m => m.direction === 'inbound' && localDay(m.createdAt) === day));
+    const pending = related.filter(c => c.requiresHumanIntervention);
+    lines.push(app.name.toUpperCase(), 'Contactos registrados hoy: ' + found.length);
+    for (const c of found) lines.push('  - ' + c.orgName + ' | ' + (c.contactPerson || 'Sin persona') + ' | ' + (c.email || 'Sin email') + ' | ' + c.country);
+    lines.push('Mensajes con aceptación confirmada hoy: ' + sent.length);
+    for (const {c,m} of sent) {
+      const contact = contacts.find(x => x.id === c.contactId);
+      lines.push('  - ' + (contact?.orgName || 'Contacto') + ' | ' + (contact?.email || 'Sin email') + ' | ' + m.channel + ' | ' + (m.emailSubject || m.content.slice(0,100)));
+    }
+    lines.push('Respuestas registradas hoy: ' + received.length, 'Conversaciones que requieren intervención: ' + pending.length, '');
+  }
+  lines.push('Este informe se genera con datos guardados en Central Comercial. No incluye envíos sin confirmación.');
+  return {recipient:sender,subject:'Central Comercial | Resumen diario ' + day,content:lines.join('\\n'),day};
+}
 export function registerCommercialEmailRoutes(app: Express) {
   app.post('/api/commercial-email/worker/:action', (req,res) => {
     if (!workerAuthorized(req.headers.authorization)) return res.status(401).json({ error:'Ejecutor no autorizado.' });
@@ -113,6 +140,11 @@ export function registerCommercialEmailRoutes(app: Express) {
       switch(req.params.action) {
         case 'heartbeat': db.commercialEmailHeartbeat(data.workerId, data.send === true, data.read === true, data.sender); return res.json({success:true});
         case 'claim': return res.json({job:claimCommercialEmail(data.workerId)});
+        case 'daily-report': {
+          const status = worker(data.workerId);
+          if (!status.send || !status.sender || !/^\\d{4}-\\d{2}-\\d{2}$/.test(data.day)) return res.status(409).json({error:'Correo o fecha no disponibles.'});
+          return res.json(dailyCommercialDigest(data.day,status.sender));
+        }
         case 'complete': return res.json(completeCommercialEmail(data));
         case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada')).map(m => ({id:m.providerMessageId, from:db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
         case 'inbound': worker(data.workerId); return res.json(importCommercialReply(data));
