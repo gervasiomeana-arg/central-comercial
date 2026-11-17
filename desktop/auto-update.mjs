@@ -8,8 +8,11 @@ const runtime=path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'.local
 const releases=path.join(runtime,'releases'),pointer=path.join(runtime,'active-release.json');
 const valid=sha=>/^[a-f0-9]{40}$/.test(sha);
 const run=(cmd,args,cwd,timeout=300000)=>new Promise((resolve,reject)=>{
- const executable=process.platform==='win32' && cmd==='npm.cmd' ? process.env.ComSpec || 'cmd.exe' : cmd;
- const commandArgs=process.platform==='win32' && cmd==='npm.cmd' ? ['/d','/s','/c','npm',...args] : args;
+ const windowsNpm=process.platform==='win32' && cmd==='npm.cmd';
+ const npmCli=path.join(path.dirname(process.execPath),'node_modules','npm','bin','npm-cli.js');
+ if(windowsNpm && !fs.existsSync(npmCli))throw new Error('npm-cli.js no encontrado junto a Node.js');
+ const executable=windowsNpm?process.execPath:cmd;
+ const commandArgs=windowsNpm?[npmCli,...args]:args;
  const child=spawn(executable,commandArgs,{cwd,stdio:'ignore',windowsHide:true});
  const timer=setTimeout(()=>child.kill(),timeout);
  child.once('error',e=>{clearTimeout(timer);reject(e);});
