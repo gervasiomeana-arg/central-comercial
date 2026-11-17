@@ -30,6 +30,7 @@ import type {
 
 interface ConversationsViewProps {
   conversations: Conversation[];
+  focusedConversationId?: string | null;
   contacts: Contact[];
   applications: Application[];
   campaigns: Campaign[];
@@ -53,6 +54,7 @@ interface ConversationsViewProps {
 
 export const ConversationsView: React.FC<ConversationsViewProps> = ({
   conversations,
+  focusedConversationId,
   contacts,
   applications,
   campaigns,
@@ -68,6 +70,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     conversations[0]?.id || null
   );
+  useEffect(() => { if (focusedConversationId) setSelectedConvId(focusedConversationId); }, [focusedConversationId]);
   const [replyDrafts, setReplyDrafts] = useState<Record<string,string>>({});
   const [search, setSearch] = useState('');
   const [attentionOnly, setAttentionOnly] = useState(false);

@@ -72,6 +72,7 @@ export default function App() {
   // Modals
   const [focusedClientId,setFocusedClientId] = useState<string|null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [focusedConversationId, setFocusedConversationId] = useState<string | null>(null);
 
   // Fetch all initial data
   const loadData = useCallback(async () => {
@@ -411,6 +412,7 @@ export default function App() {
             {currentTab === 'conversations' && (
               <ConversationsView
                 conversations={conversations}
+                focusedConversationId={focusedConversationId}
                 contacts={contacts}
                 applications={applications}
                 campaigns={campaigns}
@@ -479,6 +481,13 @@ export default function App() {
         tasks={tasks}
         onUpdateTask={handleUpdateTask}
         onCreateTask={handleCreateTask}
+        onReplyToTask={(task) => {
+          const conversation = conversations.find(conv => conv.id === task.relatedId) || conversations.find(conv => conv.messages?.some(msg => msg.direction === 'inbound' && task.description?.includes(msg.content)));
+          setFocusedConversationId(conversation?.id || null);
+          setSelectedAppFilter('all');
+          setTasksModalOpen(false);
+          setCurrentTab('conversations');
+        }}
       />
 
       {/* Footer */}
