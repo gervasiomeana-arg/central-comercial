@@ -12,6 +12,7 @@ if((env.CHANNEL_TEST_WORKER_KEY||'').length<32 || !env.EMAIL_ADDRESS || !env.SMT
 const stateFile=new URL('./email-state.json',import.meta.url);
 const state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile,'utf8')):{workerId:randomUUID(),outcomes:{},uid:0,validity:''};
 initializeJournal(state);
+state.dailyReports ||= {};
 const save=()=>{const temporary=new URL('./email-state.tmp',import.meta.url);const fd=fs.openSync(temporary,'w',0o600);try{fs.writeFileSync(fd,JSON.stringify(state));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,stateFile);};save();
 const api=async(action,data={})=>{const response=await fetch(new URL(`/api/commercial-email/worker/${action}`,base),{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${env.CHANNEL_TEST_WORKER_KEY}`},body:JSON.stringify({workerId:state.workerId,...data}),signal:AbortSignal.timeout(15000)});if(!response.ok){const error=new Error(`Central Comercial rechazó ${action}: ${response.status}`);error.status=response.status;throw error;}return response.json();};
 const smtp=nodemailer.createTransport({host:env.SMTP_HOST||'smtp.gmail.com',port:Number(env.SMTP_PORT||465),secure:env.SMTP_SECURE!=='false',requireTLS:true,auth:{user:env.SMTP_USER||env.EMAIL_ADDRESS,pass:env.SMTP_PASSWORD},connectionTimeout:15000,socketTimeout:30000,logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true});
@@ -48,6 +49,27 @@ async function send(){
   }catch(error){result.outcome=error.responseCode>=500?'rejected':'unknown';result.response=String(error.response||error.code||'Resultado SMTP desconocido');if([534,535].includes(error.responseCode)){authBlocked=true;reconnect=true;process.send?.({type:'attention',code:'email_auth'});setTimeout(()=>process.exit(78),2000);}}
   finishMessage(state,job,result);save();await flush();
 }
+// Owner-only report: one attempt per Argentina calendar day, never a commercial campaign.
+async function dailyReport() {
+  if (env.CENTRAL_DIAGNOSTIC_MODE === 'true') return;
+  const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+  const get = name => parts.find(p => p.type === name)?.value || '';
+  const day = get('year')+'-'+get('month')+'-'+get('day');
+  if (Number(get('hour')) < 20 || state.dailyReports[day]) return;
+  const report = await api('daily-report',{day});
+  if (report.recipient?.trim().toLowerCase() !== env.EMAIL_ADDRESS.trim().toLowerCase()) throw new Error('El informe solo puede enviarse al correo vinculado.');
+  const messageId = '<cc-daily-'+day+'@'+env.EMAIL_ADDRESS.split('@')[1]+'>';
+  // Persist the attempt BEFORE SMTP: unknown delivery must not cause duplicates.
+  state.dailyReports[day] = {status:'resultado_desconocido',at:new Date().toISOString()};
+  save();
+  try {
+    const receipt = await smtp.sendMail({from:env.EMAIL_ADDRESS,to:env.EMAIL_ADDRESS,subject:report.subject,text:report.content,messageId,disableFileAccess:true,disableUrlAccess:true});
+    state.dailyReports[day] = {status:receipt.accepted?.some(a=>String(a).toLowerCase()===env.EMAIL_ADDRESS.toLowerCase())?'aceptado_proveedor':'rechazado',at:new Date().toISOString()};
+  } catch(error) {
+    state.dailyReports[day] = {status:'resultado_desconocido',at:new Date().toISOString(),error:String(error.code||'SMTP').slice(0,80)};
+  }
+  save();
+}
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
   const validity=String(imap.mailbox.uidValidity);if(state.validity!==validity){state.validity=validity;state.uid=Math.max(0,Number(imap.mailbox.uidNext)-51);save();}
@@ -63,7 +85,7 @@ async function read(){
   for(const entry of pending){const message=await imap.fetchOne(entry.uid,{source:true},{uid:true});if(!message?.source)throw new Error('No se pudo leer una respuesta vinculada.');const mail=await simpleParser(message.source,{skipHtmlToText:true,skipTextToHtml:true});if(mail.messageId&&mail.text?.trim())await api('inbound',{from:entry.from,messageId:mail.messageId,references:entry.refs,text:mail.text.slice(0,30000),automatic:false});}
   state.uid=upper;save();
 }
-let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();await read();await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
+let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();await read();await send();await dailyReport();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
 const stop=()=>{imap?.close();smtp.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 if(process.send)process.on('disconnect',stop);
 await tick();setInterval(()=>void tick(),20000);
