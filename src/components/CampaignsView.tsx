@@ -108,7 +108,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6">\n      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700"><strong>Resumen diario por correo</strong><p className="mt-1">Central Comercial prepara cada día a las 20:00 (hora argentina) un informe para el Gmail vinculado: aplicaciones trabajadas, contactos nuevos con sus datos, mensajes aceptados por el proveedor, respuestas e intervenciones pendientes. Solo se informan envíos comprobados. El informe no activa campañas y se envía si la PC y Gmail están conectados.</p></div>
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div>
