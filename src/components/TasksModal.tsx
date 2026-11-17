@@ -16,6 +16,7 @@ interface TasksModalProps {
   tasks: CommercialTask[];
   onUpdateTask: (id: string, updates: Partial<CommercialTask>) => Promise<void>;
   onCreateTask: (task: Partial<CommercialTask>) => Promise<void>;
+  onReplyToTask?: (task: CommercialTask) => void;
 }
 
 export const TasksModal: React.FC<TasksModalProps> = ({
@@ -24,6 +25,7 @@ export const TasksModal: React.FC<TasksModalProps> = ({
   tasks,
   onUpdateTask,
   onCreateTask,
+  onReplyToTask,
 }) => {
   const [filterStatus, setFilterStatus] = useState<'pendiente' | 'completada' | 'all'>('pendiente');
   const [isCreating, setIsCreating] = useState(false);
@@ -245,6 +247,9 @@ export const TasksModal: React.FC<TasksModalProps> = ({
                       <p className="text-slate-600 text-[11px] leading-relaxed">
                         {task.description}
                       </p>
+                      {!isDone && task.category === 'intervencion_ia' && onReplyToTask && (
+                        <button type="button" onClick={() => onReplyToTask(task)} className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700">Responder</button>
+                      )}
 
                       <div className="flex items-center space-x-3 text-[10px] text-slate-400 pt-1">
                         <span className="uppercase font-bold">{task.category.replace('_', ' ')}</span>
