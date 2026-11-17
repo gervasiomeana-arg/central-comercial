@@ -130,7 +130,7 @@ function dailyCommercialDigest(day: string, sender: string) {
     lines.push('Respuestas registradas hoy: ' + received.length, 'Conversaciones que requieren intervención: ' + pending.length, '');
   }
   lines.push('Este informe se genera con datos guardados en Central Comercial. No incluye envíos sin confirmación.');
-  return {recipient:sender,subject:'Central Comercial | Resumen diario ' + day,content:lines.join('\\n'),day};
+  return {recipient:sender,subject:'Central Comercial | Resumen diario ' + day,content:lines.join('\n'),day};
 }
 export function registerCommercialEmailRoutes(app: Express) {
   app.post('/api/commercial-email/worker/:action', (req,res) => {
