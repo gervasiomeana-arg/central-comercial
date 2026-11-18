@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import { chromium } from 'playwright';
+import type { Browser } from 'playwright';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,13 +16,29 @@ const publicHosts = new Set([
 const assetHosts = new Set(['fonts.googleapis.com', 'fonts.gstatic.com', 'www.gstatic.com']);
 let busy = false;
 
-function executablePath() {
+function configuredChromium() {
   const candidates = [process.env.CHROME_PATH, process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     ...(process.platform === 'win32'
       ? [path.join(process.env.PROGRAMFILES || 'C:/Program Files', 'Google/Chrome/Application/chrome.exe'),
         path.join(process.env['PROGRAMFILES(X86)'] || 'C:/Program Files (x86)', 'Microsoft/Edge/Application/msedge.exe')]
-      : ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'])];
+      : [])];
   return candidates.find(candidate => candidate && fs.existsSync(candidate));
+}
+
+async function launchChromium() {
+  process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0';
+  const { chromium } = await import('playwright');
+  const executablePath = configuredChromium();
+  if (executablePath) return chromium.launch({ executablePath, headless: true });
+  if (process.platform === 'linux' && process.arch === 'x64') {
+    const { default: packaged } = await import('@sparticuz/chromium');
+    return chromium.launch({
+      executablePath: await packaged.executablePath(),
+      args: packaged.args,
+      headless: true,
+    });
+  }
+  return chromium.launch({ headless: true });
 }
 
 export function registerPromoCaptureRoutes(app: Express) {
@@ -41,11 +57,11 @@ export function registerPromoCaptureRoutes(app: Express) {
     if (busy) return res.status(429).json({ error: 'Ya hay un video en preparación. Volvé a intentar cuando termine.' });
     busy = true;
     let directory: string | undefined;
-    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    let browser: Browser | undefined;
     let transferring = false;
     try {
       directory = await mkdtemp(path.join(os.tmpdir(), 'central-promo-'));
-      browser = await chromium.launch({ executablePath: executablePath(), headless: true });
+      browser = await launchChromium();
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
         recordVideo: { dir: directory, size: { width: 1280, height: 720 } },
