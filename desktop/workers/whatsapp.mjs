@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner} from './commercial.mjs';
+import {commercialWhatsAppRunner,sendWithAck} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -33,6 +33,29 @@ async function api(action,body={},area='channel-tests'){
 }
 const {Client,LocalAuth}=wwebjs;
 const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),puppeteer:{headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}});
+const ownerReportFile=path.join(stateDir,'owner-reports.json');
+const ownerReports=fs.existsSync(ownerReportFile)?JSON.parse(fs.readFileSync(ownerReportFile,'utf8')):{};
+const saveOwnerReports=()=>{const tmp=ownerReportFile+'.tmp';fs.writeFileSync(tmp,JSON.stringify(ownerReports),{mode:0o600});fs.renameSync(tmp,ownerReportFile);};
+async function ownerReportTick(){
+ if(!whatsappReady||process.env.CENTRAL_DIAGNOSTIC_MODE==='true')return;
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+ const part=k=>parts.find(x=>x.type===k)?.value||'';
+ const day=part('year')+'-'+part('month')+'-'+part('day'),minute=Number(part('hour'))*60+Number(part('minute'));
+ const test=day==='2026-11-17'&&minute>=23*60+30;
+ const daily=day>='2026-11-18'&&minute>=20*60;
+ if(!test&&!daily)return;
+ const key=(test?'test-':'daily-')+day;
+ if(ownerReports[key])return;
+ const report=await api('owner-report',{day},'commercial-whatsapp');
+ // Reserve before sending; never duplicate an uncertain WhatsApp delivery.
+ ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString()};saveOwnerReports();
+ try{
+  const message=(test?'PRUEBA DE WHATSAPP — CENTRAL COMERCIAL\n\n':'')+report.content;
+  const result=await sendWithAck(client,{recipient:phone,content:message},async()=>{},60000);
+  ownerReports[key]={status:result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',at:new Date().toISOString(),providerId:result.providerId||''};
+ }catch(error){ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
+ saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
+}
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',qr=>{console.log('\nEn el telefono: WhatsApp > Dispositivos vinculados > Vincular un dispositivo.');console.log('Escanee este QR. No lo comparta por chat.');qrcode.generate(qr,{small:true});});
 client.on('ready',()=>{
@@ -49,6 +72,7 @@ async function tick(){
   await api('heartbeat',{ready:whatsappReady,account:client.info?.wid?.user||''},'commercial-whatsapp');
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
   if(!whatsappReady)return;
+  await ownerReportTick();
   await commercial.tick();
   const {job}=await api('claim');if(!job)return;
   if(job.channel!=='whatsapp'||job.recipient!==phone)throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
