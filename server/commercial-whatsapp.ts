@@ -4,7 +4,7 @@ import type {Express} from 'express';
 import {db} from './db.js';
 import {workerAuthorized,TEST_RECIPIENTS} from './channelTests.js';
 import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
-import {replyDecision,currentReplyText} from './commercial-email.js';
+import {replyDecision,currentReplyText,dailyCommercialDigest} from './commercial-email.js';
 import {accountingDay} from '../src/ledger.js';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const canonical=(s:string)=>whatsappPhone(s).replace(/^549/,'54');
@@ -71,4 +71,4 @@ export function importWhatsAppReply(input:any){
 }
 export function registerCommercialWhatsAppRoutes(app:Express){app.post('/api/commercial-whatsapp/worker/:action',(req,res)=>{
  if(!workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Ejecutor no autorizado.'});
- try{const d=req.body;switch(req.params.action){case'heartbeat':whatsappHeartbeat(d.workerId,d.ready===true,d.account||'');return res.json({success:true});case'claim':return res.json({job:claimWhatsApp(d.workerId)});case'complete':return res.json(completeWhatsApp(d));case'routing':worker(d.workerId);return res.json({routes:whatsappRouting()});case'inbound':worker(d.workerId);return res.json(importWhatsAppReply(d));default:return res.status(404).json({error:'Operación desconocida.'});}}catch(error:any){res.status(409).json({error:error.message});}});}
+ try{const d=req.body;switch(req.params.action){case'owner-report':{worker(d.workerId);if(!/^\d{4}-\d{2}-\d{2}$/.test(d.day))return res.status(400).json({error:'Fecha inválida'});const report=dailyCommercialDigest(d.day,'');return res.json({content:report.content,day:d.day});}case'heartbeat':whatsappHeartbeat(d.workerId,d.ready===true,d.account||'');return res.json({success:true});case'claim':return res.json({job:claimWhatsApp(d.workerId)});case'complete':return res.json(completeWhatsApp(d));case'routing':worker(d.workerId);return res.json({routes:whatsappRouting()});case'inbound':worker(d.workerId);return res.json(importWhatsAppReply(d));default:return res.status(404).json({error:'Operación desconocida.'});}}catch(error:any){res.status(409).json({error:error.message});}});}
