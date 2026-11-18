@@ -27,7 +27,29 @@ export function registerPromoCaptureRoutes(app:Express){
     'neuroplaneta.ai.studio':{name:'NEUROPLANETA',tagline:'Un espacio para aprender jugando',scenes:['Juegos y actividades para acompañar el foco','Rutinas y herramientas visuales','Acompañamiento para familias y educadores','Descubrí NeuroPlaneta']},
     'openvoley.com':{name:'OPEN VOLEY',tagline:'Cada jugada cuenta',scenes:['Registrá acciones y rotaciones','Analizá el rendimiento de tu equipo','Video y estadísticas para entrenar mejor','Descubrí Open Voley']}
    };
-   const story=stories[url.hostname]||stories['openvoley.com'];
+   const story=structuredClone(stories[url.hostname]||stories['openvoley.com']);
+   // The local OpenJarvis model directs the four-scene edit when available.
+   // AI Studio/cloud uses the reviewed script: no cloud access to a private PC.
+   if(process.env.CENTRAL_LOCAL_MODE==='true' && process.env.CENTRAL_DIAGNOSTIC_MODE!=='true'){
+     try{
+       const model=process.env.OPENJARVIS_MODEL||'qwen3.5:2b';
+       const response=await fetch('http://127.0.0.1:8765/v1/chat/completions',{
+         method:'POST',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({model,temperature:0.3,max_tokens:600,stream:false,tools:null,messages:[
+           {role:'system',content:'Sos el director creativo de Central Comercial. Redactá cuatro titulares cortos para un video comercial de 12 segundos, en español. Respondé exclusivamente JSON {"scenes":["...","...","...","..."]}. Cada titular máximo 75 caracteres. No inventes funciones, precios, resultados ni promesas. Solo usá la información verificada que se proporciona.'},
+           {role:'user',content:JSON.stringify({app:story.name,tagline:story.tagline,verifiedScenes:story.scenes})}
+         ]}),signal:AbortSignal.timeout(18000)});
+       if(response.ok){
+         const result=await response.json();
+         const raw=String(result.choices?.[0]?.message?.content||'').replace(/^<think>[\\s\\S]*?<\\/think>\\s*/,'').replace(/^\`\`\`(?:json)?\\s*|\\s*\`\`\`$/g,'').trim();
+         const draft=JSON.parse(raw);
+         if(Array.isArray(draft.scenes)&&draft.scenes.length===4&&draft.scenes.every((v:unknown)=>typeof v==='string'&&v.trim().length>0&&v.length<=75)){
+           story.scenes=draft.scenes;
+           console.log('[promo-capture] Guion preparado por OpenJarvis local:',story.name);
+         }
+       }
+     }catch(error){console.warn('[promo-capture] OpenJarvis no disponible; se usa guion verificado.',String(error).slice(0,100));}
+   }
    await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});
    await page.waitForTimeout(1000);
    // Narrative cards are promotional claims, not a simulated product demonstration.
