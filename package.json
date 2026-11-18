@@ -13,7 +13,7 @@
     "test:channels": "node --import tsx --test tests/channel-tests.test.ts && npm --prefix channel-worker test",
     "test:campaigns": "node --import tsx --test tests/campaign-preparation.test.ts tests/draft-review.test.ts tests/commercial-catalog.test.ts",
     "test:ledger": "node --import tsx --test tests/ledger.test.ts",
-    "test:sales": "node --import tsx --test tests/sales-director.test.ts tests/commercial-email.test.ts",
+    "test:sales": "node --import tsx --test tests/sales-director.test.ts tests/commercial-email.test.ts tests/daily-statistics.test.ts",
     "capture:demos": "node scripts/capture-public-demos.mjs",
     "postinstall": "node scripts/install-video-runtime.mjs"
   },

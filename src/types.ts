@@ -568,3 +568,11 @@ export interface StartAutonomousInput {
   appId: string; country: string; maxContacts: number;
   targetClients: number; sendWindowStart: string; sendWindowEnd: string;
 }
+
+export interface DailyStatistics {
+  dates: string[];
+  series: Array<Pick<Application, 'id' | 'slug' | 'name'> & {
+    contacts: number[];
+    promotions: number[];
+  }>;
+}
