@@ -47,11 +47,13 @@ test('diagnostic PC confirms connections but never gives any email, WhatsApp or 
   const report=await fetch(base+'/api/local-runtime/report',{headers:{Authorization:`Bearer ${key}`}}).then(r=>r.json());assert.deepEqual(report.connections,{email:false,whatsapp:false,intelligence:false});assert.ok(!JSON.stringify(report).includes(key));
  });
 });
-test('Funeraria participates in autonomous research, preserving IDs, history, countries and price uncertainty',()=>{
+test('Funeraria participates in autonomous research, preserving IDs, history, countries and commercial terms',()=>{
  const app=commercialCatalog().find(a=>a.slug==='funeraria')!;
  const historical={...app,id:'preserved-id',commercialCatalogVersion:'2026-11-12.2',status:'en_desarrollo' as const,campaignsAllowed:false,internalNotes:'Nota del propietario',countries:['Chile']};
  const merged=mergeCommercialCatalog([historical]).applications.find(a=>a.id===historical.id)!;
- assert.equal(merged.status,'lista');assert.equal(merged.campaignsAllowed,true);assert.equal(merged.internalNotes,'Nota del propietario');assert.ok(merged.countries.includes('Chile'));assert.ok(merged.countries.includes('México'));assert.deepEqual(merged.plans,[]);
+ assert.equal(merged.status,'lista');assert.equal(merged.campaignsAllowed,true);assert.equal(merged.internalNotes,'Nota del propietario');assert.ok(merged.countries.includes('Chile'));assert.ok(merged.countries.includes('México'));assert.deepEqual(merged.plans,app.plans);
+ assert.equal(merged.trialVerified,false);
+ assert.equal(merged.paymentUrl,'');
  assert.equal(mergeCommercialCatalog(mergeCommercialCatalog([historical]).applications).changed,false);
  const goal={...defaultGoal('2026-11'),countries:['México']};const campaigns=goalCampaigns(goal,[app],[],new Date('2026-11-15T12:00:00Z'));assert.equal(campaigns.length,1);
  assert.ok(researchQueriesFor(app,'México').every(q=>prospectQuery(q,app,'México')));
