@@ -1,0 +1,7 @@
+**
+!client.mjs
+!worker.mjs
+!cloud/
+cloud/*
+!cloud/Dockerfile
+!cloud/openjarvis.toml

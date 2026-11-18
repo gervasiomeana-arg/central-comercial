@@ -1,0 +1,14 @@
+[engine]
+default = "ollama"
+
+[engine.ollama]
+host = "http://127.0.0.1:11434"
+
+[server]
+host = "127.0.0.1"
+port = 8000
+agent = ""
+
+[analytics]
+enabled = false
+choice_recorded = true
