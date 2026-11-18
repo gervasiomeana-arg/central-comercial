@@ -43,5 +43,7 @@ jobs:
         run: npm run test:ledger
       - name: Pruebas de director y correo simulado
         run: npm run test:sales
+      - name: Instalar dependencias del ejecutor de canales
+        run: npm --prefix channel-worker ci --ignore-scripts
       - name: Pruebas de canales simulados
         run: npm run test:channels
