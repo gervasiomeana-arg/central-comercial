@@ -352,7 +352,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            {currentTab === 'statistics' && <StatisticsView appFilter={selectedAppFilter} monitor={deployment.monitor} />}
+            {currentTab === 'statistics' && <StatisticsView appFilter={selectedAppFilter} monitor={deployment.monitor} migrated={deployment.migrated} />}
 
             {currentTab === 'dashboard' && (
               <DashboardView

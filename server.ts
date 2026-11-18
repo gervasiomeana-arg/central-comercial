@@ -46,7 +46,8 @@ app.use((req,res,next)=>{
   if(cloudMonitorMode() && !cloudIntelligenceRoute && req.path.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(req.method) && !['/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/auth/login','/api/auth/logout','/api/auth/setup','/api/auth/recover','/api/automation/director/start','/api/assistant/messages','/api/promo/capture','/api/clients/convert-from-contact','/api/automation/pause','/api/automation/resume'].includes(req.path))return res.status(409).json({error:'La publicación supervisa la PC y conserva los registros previos para su traslado. Operá las campañas desde Central Comercial en tu PC.'});
   if(localMode){
     if(!localRequestAllowed(req.headers.host||'',req.headers.origin,String(req.headers['sec-fetch-site']||''),req.path.startsWith('/api'),PORT))return res.status(403).json({error:'La API local solo admite la interfaz de esta computadora.'});
-  }else if(db.getRaw().localMigration&&req.path.startsWith('/api')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
+  }else if(db.getRaw().localMigration&&req.path.startsWith('/api')
+    && !(req.method === 'GET' && req.path === '/api/statistics/daily' && req.query.source === 'pc')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
   next();
 });
 
