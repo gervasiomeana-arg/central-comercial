@@ -21,9 +21,33 @@ export function registerPromoCaptureRoutes(app:Express){
    browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:{})});
    const context=await browser.newContext({viewport:{width:720,height:1280},recordVideo:{dir,size:{width:720,height:1280}}});
    const page=await context.newPage();const video=page.video();
-   await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});await page.waitForTimeout(2500);
-   const links=await page.locator('a[href]').evaluateAll((nodes,origin)=>nodes.map(n=>(n as HTMLAnchorElement).href).filter(x=>{try{const u=new URL(x);return u.origin===origin&&!/login|auth|admin|checkout|pago|delete|eliminar/i.test(u.pathname)}catch{return false}}).slice(0,3),url.origin);
-   for(const link of links){try{await page.goto(link,{waitUntil:'domcontentloaded',timeout:12000});await page.waitForTimeout(2500)}catch{}}
+   const stories:Record<string,{name:string;tagline:string;scenes:string[]}>={
+    'visibility-ia.ai.studio':{name:'VISIBILITY AI',tagline:'Tu negocio merece ser encontrado',scenes:['Auditoría SEO y diagnóstico digital','Detectá oportunidades para mejorar tu presencia','Seguimiento, informes y planes de acción','Consultá por nuestros servicios']},
+    'funeraria-control.ai.studio':{name:'FUNERARIA CONTROL',tagline:'Gestión que acompaña cada momento',scenes:['Expedientes y seguimiento de servicios','Agenda, recursos y personal coordinados','Inventario, administración y control','Conocé una gestión funeraria más organizada']},
+    'neuroplaneta.ai.studio':{name:'NEUROPLANETA',tagline:'Un espacio para aprender jugando',scenes:['Juegos y actividades para acompañar el foco','Rutinas y herramientas visuales','Acompañamiento para familias y educadores','Descubrí NeuroPlaneta']},
+    'openvoley.com':{name:'OPEN VOLEY',tagline:'Cada jugada cuenta',scenes:['Registrá acciones y rotaciones','Analizá el rendimiento de tu equipo','Video y estadísticas para entrenar mejor','Descubrí Open Voley']}
+   };
+   const story=stories[url.hostname]||stories['openvoley.com'];
+   await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});
+   await page.waitForTimeout(1000);
+   // Narrative cards are promotional claims, not a simulated product demonstration.
+   await page.evaluate(({name,tagline})=>{
+     const overlay=document.createElement('div');overlay.id='central-promo-story';
+     overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;pointer-events:none;display:flex;align-items:end;justify-content:center;padding:0 35px 115px;background:linear-gradient(180deg,transparent 20%,rgba(7,15,29,.86) 100%);font-family:Arial,sans-serif;color:white;box-sizing:border-box';
+     overlay.innerHTML='<div style="width:100%;text-align:center"><div id="central-promo-brand" style="font-size:19px;font-weight:800;letter-spacing:3px;margin-bottom:22px"></div><div id="central-promo-line" style="font-size:42px;line-height:1.13;font-weight:800;text-shadow:0 3px 12px #000"></div><div id="central-promo-tag" style="font-size:17px;margin-top:20px"></div></div>';
+     document.body.appendChild(overlay);
+     document.getElementById('central-promo-brand')!.textContent=name;
+     document.getElementById('central-promo-tag')!.textContent=tagline;
+   },{name:story.name,tagline:story.tagline});
+   for(let i=0;i<story.scenes.length;i++){
+     await page.evaluate(({line,i})=>{
+       const label=document.getElementById('central-promo-line');if(label)label.textContent=line;
+       const overlay=document.getElementById('central-promo-story');
+       if(overlay)overlay.style.background=i%2===0?'linear-gradient(180deg,transparent 12%,rgba(7,15,29,.9) 100%)':'linear-gradient(180deg,rgba(7,15,29,.22),rgba(16,49,80,.95))';
+       window.scrollTo({top:Math.round(document.body.scrollHeight*i/4),behavior:'smooth'});
+     },{line:story.scenes[i],i});
+     await page.waitForTimeout(2600);
+   }
    await context.close();const videoPath=await video?.path();if(!videoPath)throw Error('No se genero video.');
    res.setHeader('Content-Type','video/webm');res.setHeader('Cache-Control','no-store');res.sendFile(videoPath,async()=>{await rm(dir,{recursive:true,force:true})});
   }catch(e:any){await rm(dir,{recursive:true,force:true});const reason=String(e?.message||e).slice(0,350);console.error('[promo-capture]',reason);if(!res.headersSent)res.status(503).json({error:'No fue posible capturar la aplicación.',detail:reason});}
