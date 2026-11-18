@@ -43,5 +43,7 @@ jobs:
         run: npm run test:ledger
       - name: Pruebas de director y correo simulado
         run: npm run test:sales
+      - name: Pruebas OpenJarvis y conversaciones simuladas
+        run: node --import tsx --test tests/openjarvis.test.ts tests/assistant.test.ts
       - name: Pruebas de canales simulados
         run: npm run test:channels
