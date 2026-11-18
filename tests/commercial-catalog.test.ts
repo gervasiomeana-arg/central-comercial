@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { commercialCatalog, mergeCommercialCatalog, verifiedPriceSummary } from '../server/commercial-catalog.js';
 
-test('empty databases receive all four products with source-backed prices for the three published apps', () => {
+test('empty databases receive all four products with source-backed prices for each product', () => {
   const result = mergeCommercialCatalog([]);
   assert.equal(result.applications.length, 4);
   const [voley, visibility, neuro, funeraria] = result.applications;
@@ -15,8 +15,13 @@ test('empty databases receive all four products with source-backed prices for th
   assert.deepEqual(visibility.plans.map(p => p.price), [30, 50, 100, 200, 350]);
   assert.equal(visibility.plans[0].interval, 'unico');
   assert.equal(neuro.plans[0].price, 20); assert.equal(neuro.trialDurationDays, 2);
-  for (const app of [voley, visibility, neuro]) for (const p of app.plans) { assert.ok(p.sourceUrl?.startsWith('https://')); assert.ok(p.verifiedAt); assert.equal(p.verified, true); }
-  assert.equal(funeraria.status, 'lista'); assert.equal(funeraria.campaignsAllowed, true); assert.equal(funeraria.plans.length, 0);
+  for (const app of [voley, visibility, neuro, funeraria]) for (const p of app.plans) { assert.ok(p.sourceUrl?.startsWith('https://')); assert.ok(p.verifiedAt); assert.equal(p.verified, true); }
+  assert.equal(funeraria.status, 'lista');
+  assert.equal(funeraria.campaignsAllowed, true);
+  assert.deepEqual(funeraria.plans.map(({ price, currency, interval }) => ({ price, currency, interval })),
+    [{ price: 50, currency: 'USD', interval: 'mensual' }]);
+  assert.equal(funeraria.trialVerified, false);
+  assert.equal(funeraria.paymentUrl, '');
 });
 test('migration keeps existing IDs, custom tariffs, websites, notes and relationships', () => {
   const source = commercialCatalog()[0];
