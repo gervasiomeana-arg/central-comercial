@@ -23,6 +23,8 @@ GitHub sigue siendo el origen del código. Google AI Studio y Publish siguen sie
 
 El puente admite un modo de prueba en la nube con `CENTRAL_CLOUD_OPENJARVIS=true`, `REQUIRE_ADMIN_AUTH=true` y `OPENJARVIS_WORKER_KEY` de al menos 32 caracteres. Usar esa clave también en el entorno del puente, junto con `CENTRAL_URL`, `OPENJARVIS_STATE_DIR` en un volumen persistente y `OPENJARVIS_MODEL`. El estado de la cola del servidor debe estar en almacenamiento duradero antes del corte. Esta conexión abre consultas y planificación. La ejecución de envíos sigue bloqueada en el modo de supervisión publicado.
 
+El [despliegue del ejecutor de OpenJarvis](../openjarvis-worker/cloud/README.md) incluye la descarga del modelo, comprobaciones de salud, la conexión privada con Central Comercial y el volumen para conservar el estado del puente en un servidor Linux.
+
 Los planes gratuitos de Cloud Run, Cloud Scheduler y Firestore tienen límites y condiciones por región, cuenta y consumo. El coste más incierto es mantener OpenJarvis y su modelo disponibles 24 horas. Medir el consumo primero y solicitar autorización antes de activar facturación o usar servicios pagos.
 
 - [Google AI Studio y despliegue](https://ai.google.dev/gemini-api/docs/aistudio-build-mode)
