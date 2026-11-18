@@ -1,3 +1,4 @@
+import { validateActivity } from './runtime-activity.js';
 import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
 import type { LocalRuntimeState } from '../src/runtime-types.js';
@@ -21,7 +22,8 @@ export class LocalRuntime {
     if(input.sourceFingerprint!==undefined && !/^[a-f0-9]{64}$/.test(input.sourceFingerprint))throw new Error('Versión inválida.');
     if(input.diagnosticMode!==undefined && typeof input.diagnosticMode!=='boolean')throw new Error('Modo inválido.');
     if (this.current && this.now() - this.current.at < 90000 && this.current.id !== input.workerId) throw new Error('Ya hay otra computadora de Central Comercial conectada.');
-    this.current = { id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
+    const activity = input.activity === undefined ? undefined : validateActivity(input.activity);
+    this.current = { activity, id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
       components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)],
       connections:input.connections ? {email:input.connections.email,whatsapp:input.connections.whatsapp,intelligence:input.connections.intelligence}:undefined,
       diagnosticMode:input.diagnosticMode,sourceFingerprint:input.sourceFingerprint };

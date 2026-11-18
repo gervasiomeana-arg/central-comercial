@@ -42,7 +42,15 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{connections[item.id] ? 'Conexión confirmada por el ejecutor' : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
     <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>
     {runtime?.diagnosticMode && <p className="text-amber-200" role="status">Verificación sin envíos: los ejecutores pueden conectarse, pero las colas no entregan mensajes.</p>}
-    {remote && <p className="text-sm text-slate-300">Esta web solo recibe estado del iniciador. No ejecuta campañas ni conserva una segunda base comercial. Si deja de recibir estado durante 90 segundos, muestra la PC sin conexión. Un despliegue reinicia la supervisión hasta el próximo reporte.</p>}
+    {remote && <p className="text-sm text-slate-300">La publicación recibe el estado y los totales de la PC. La PC ejecuta los envíos y conserva sus registros. El reporte vence a los 90 segundos.</p>}
+    {runtime?.activity && <dl className="grid gap-2 text-sm text-slate-200 sm:grid-cols-3">
+      <div><dt>Estrategias recientes completadas</dt><dd className="text-lg">{runtime.activity.completedPlans}</dd></div>
+      <div><dt>Campañas que usan OpenJarvis</dt><dd className="text-lg">{runtime.activity.campaignsUsingOpenJarvis}</dd></div>
+      <div><dt>Promociones preparadas</dt><dd className="text-lg">{runtime.activity.pendingPromotions}</dd></div>
+      <div className="sm:col-span-3"><dt>Automatizaciones {runtime.activity.paused ? 'pausadas' : 'habilitadas'}</dt>
+        {runtime.activity.lastCycleAt && <dd>Último ciclo: {new Date(runtime.activity.lastCycleAt).toLocaleString('es-AR')}.</dd>}
+      </div>
+    </dl>}
     {runtime?.receivedAt && <p className="text-xs text-slate-400">Último reporte recibido: {new Date(runtime.receivedAt).toLocaleString('es-AR')}.</p>}
     {runtime?.sourceFingerprint && <p className="text-xs text-slate-400">Versión de la PC: {runtime.sourceFingerprint.slice(0,12)}.</p>}
     {runtime?.issues.length ? <ul className="space-y-2 text-sm text-amber-200">{runtime.issues.map(issue => <li key={issue}>{issueLabels[issue] || 'Revisá la ventana de Central Comercial.'}</li>)}</ul> : null}
