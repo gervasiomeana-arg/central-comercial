@@ -1,3 +1,4 @@
+import { openJarvisWorkerKey } from './execution-role.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -130,7 +131,7 @@ export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: u
 export function registerJarvisWorkerRoutes(app: Express, queue: JarvisQueue) {
   app.post('/api/openjarvis/worker/:action', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (!workerAuthorized(req.headers.authorization)) return res.status(401).json({ error: 'Puente no autorizado.' });
+    if (!workerAuthorized(req.headers.authorization, openJarvisWorkerKey())) return res.status(401).json({ error: 'Puente no autorizado.' });
     try {
       const { workerId } = req.body || {};
       if (!text(workerId, 100)) throw new Error('Identificador de puente inválido.');

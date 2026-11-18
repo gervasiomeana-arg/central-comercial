@@ -23,6 +23,7 @@ export interface JarvisPlan {
 }
 export interface JarvisStatus {
   assistantReady?: boolean;
+  cloud?: boolean;
   configured: boolean;
   online: boolean;
   ready: boolean;

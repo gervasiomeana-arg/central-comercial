@@ -11,18 +11,26 @@ const cached = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'C
 const config = process.argv[2] || process.env.CENTRAL_CONFIG_FILE ||
   (fs.existsSync(path.join(here, '.env')) ? path.join(here, '.env') :
     cached && fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8').trim() : '');
-if (!config || !fs.existsSync(config)) throw new Error('No se encontró la conexión de Central Comercial. Indique la ruta de su .env de correo como argumento; no comparta su contenido.');
-const shared = parseEnv(fs.readFileSync(config, 'utf8'));
+const cloudKey = process.env.OPENJARVIS_WORKER_KEY;
+if (cloudKey && !process.env.CENTRAL_URL) throw new Error('Indicá CENTRAL_URL para el ejecutor en la nube.');
+if (!cloudKey && (!config || !fs.existsSync(config))) {
+  throw new Error('Falta configurar la conexión privada de OpenJarvis.');
+}
+const shared = !cloudKey && config ? parseEnv(fs.readFileSync(config, 'utf8')) : {};
 const central = new URL(process.env.CENTRAL_URL || shared.CENTRAL_URL || 'https://central-comercial.ai.studio');
 if (central.username || central.password || central.search || central.hash || central.pathname !== '/' ||
     (central.protocol !== 'https:' && !(central.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(central.hostname)))) throw new Error('La conexión de Central Comercial requiere HTTPS o servidor local.');
-const key = shared.CHANNEL_TEST_WORKER_KEY;
+const key = cloudKey || shared.CHANNEL_TEST_WORKER_KEY;
 if (!key || key.length < 32) throw new Error('Falta la conexión privada existente de Central Comercial.');
 // Deliberately do not load SMTP/IMAP passwords into process.env or pass them to OpenJarvis.
 const base = localJarvisURL(process.env.OPENJARVIS_URL);
 const model = process.env.OPENJARVIS_MODEL || 'qwen3.5:2b';
 const jarvisKey = process.env.OPENJARVIS_API_KEY || '';
-const stateFile = path.join(here, 'private-state', 'bridge.json');
+const stateDir = process.env.OPENJARVIS_STATE_DIR || path.join(here, 'private-state');
+if (cloudKey && (!process.env.OPENJARVIS_STATE_DIR || !path.isAbsolute(stateDir))) {
+  throw new Error('Indicá OPENJARVIS_STATE_DIR en un volumen persistente.');
+}
+const stateFile = path.join(stateDir, 'bridge.json');
 fs.mkdirSync(path.dirname(stateFile), { recursive: true });
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { workerId: randomUUID(), pending: null };
 function save() { fs.writeFileSync(stateFile + '.tmp', JSON.stringify(state), { mode: 0o600 }); fs.renameSync(stateFile + '.tmp', stateFile); }
@@ -95,7 +103,7 @@ async function tick() {
 console.log('CENTRAL COMERCIAL — Puente OpenJarvis');
 if(process.send)process.on('disconnect',()=>process.exit(75));
 console.log(`Equipo: ${Math.round(os.totalmem() / 1024 ** 3)} GB RAM; ${os.cpus()[0]?.model || 'procesador sin identificar'}.`);
-console.log('Planificación y consultas locales. No envía promociones ni registra pagos.');
+console.log(cloudKey ? 'Planificación y consultas mediante OpenJarvis en la nube.' : 'Planificación y consultas mediante OpenJarvis local.');
 await pulse();
 console.log(ready ? 'OpenJarvis y modelo disponibles. Prepará una estrategia en Conexiones.' : 'Pendiente: iniciar OpenJarvis con el modelo elegido. Consulte README.md.');
 setInterval(() => void pulse(), 20000);

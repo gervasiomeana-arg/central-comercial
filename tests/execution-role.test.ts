@@ -66,3 +66,33 @@ test('preview and development are monitors too; only explicit local mode can exe
  try{for(const env of ['production','development','test']){process.env.NODE_ENV=env;delete process.env.CENTRAL_LOCAL_MODE;assert.equal(cloudMonitorMode(),true);process.env.CENTRAL_LOCAL_MODE='true';assert.equal(cloudMonitorMode(),false);}}
  finally{if(previous===undefined)delete process.env.CENTRAL_LOCAL_MODE;else process.env.CENTRAL_LOCAL_MODE=previous;if(mode===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=mode;}
 });
+
+test('the cloud OpenJarvis bridge requires admin authentication and its own key', async () => {
+  const { cloudOpenJarvisEnabled, openJarvisWorkerKey } = await import('../server/execution-role.js');
+  const saved = { ...process.env };
+  try {
+    process.env.CENTRAL_LOCAL_MODE = 'false';
+    process.env.CENTRAL_DIAGNOSTIC_MODE = 'false';
+    process.env.CENTRAL_CLOUD_OPENJARVIS = 'true';
+    process.env.CHANNEL_TEST_WORKER_KEY = 'c'.repeat(32);
+    process.env.OPENJARVIS_WORKER_KEY = 'j'.repeat(32);
+    delete process.env.REQUIRE_ADMIN_AUTH;
+    assert.equal(cloudOpenJarvisEnabled(), false);
+    assert.equal(openJarvisWorkerKey(), '');
+
+    process.env.REQUIRE_ADMIN_AUTH = 'true';
+    assert.equal(cloudOpenJarvisEnabled(), true);
+    assert.equal(openJarvisWorkerKey(), 'j'.repeat(32));
+
+    process.env.CENTRAL_DIAGNOSTIC_MODE = 'true';
+    assert.equal(cloudOpenJarvisEnabled(), false);
+    process.env.CENTRAL_LOCAL_MODE = 'true';
+    assert.equal(openJarvisWorkerKey(), 'c'.repeat(32));
+  } finally {
+    for (const key of ['CENTRAL_LOCAL_MODE', 'CENTRAL_DIAGNOSTIC_MODE', 'CENTRAL_CLOUD_OPENJARVIS',
+      'CHANNEL_TEST_WORKER_KEY', 'OPENJARVIS_WORKER_KEY', 'REQUIRE_ADMIN_AUTH']) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  }
+});
