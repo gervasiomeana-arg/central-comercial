@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {LocalRuntimePanel} from './components/LocalRuntimePanel.js';
 import {PromoVideoStudio} from './components/PromoVideoStudio.js';
 import { Header } from './components/Header.js';
 import { DashboardView } from './components/DashboardView.js';
@@ -449,9 +448,9 @@ export default function App() {
             {currentTab === 'videos' && <PromoVideoStudio applications={applications} />}
             {currentTab === 'assistant' && <AssistantView selectedAppFilter={selectedAppFilter} applications={applications} />}
 
-            {currentTab === 'system' && deployment.monitor && <LocalRuntimePanel remote />}
             {currentTab === 'system' && (
               <ConnectorsAndSystemView
+                remoteRuntime={deployment.monitor}
                 connectors={connectors}
                 logs={logs}
                 scheduler={scheduler}

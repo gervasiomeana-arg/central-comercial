@@ -23,6 +23,7 @@ import {
 import type { ConnectorInfo, AuditLog, SchedulerState, PersistenceStatus } from '../types.js';
 
 interface ConnectorsAndSystemViewProps {
+  remoteRuntime: boolean;
   connectors: ConnectorInfo[];
   logs: AuditLog[];
   scheduler: SchedulerState;
@@ -33,6 +34,7 @@ interface ConnectorsAndSystemViewProps {
 }
 
 export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = ({
+  remoteRuntime,
   connectors,
   logs,
   scheduler,
@@ -77,7 +79,7 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
 
   return (
     <div className="space-y-6">
-      <LocalRuntimePanel />
+      <LocalRuntimePanel key={String(remoteRuntime)} remote={remoteRuntime} />
       <OpenJarvisPanel />
       <RealChannelTests />
       {/* Top Banner */}
