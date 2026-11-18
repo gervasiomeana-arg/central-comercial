@@ -106,7 +106,7 @@ export function importCommercialReply(input: any) {
   db.save(); return { success:true, decision:decision.kind };
 }
 // Daily owner-only activity digest, sourced exclusively from persisted records.
-function dailyCommercialDigest(day: string, sender: string) {
+export function dailyCommercialDigest(day: string, sender: string) {
   const tz = 'America/Argentina/Buenos_Aires';
   const localDay = (value: string) => {
     const d = new Date(value);
