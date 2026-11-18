@@ -37,21 +37,21 @@ test('informe filtra por app, cuenta solo evidencia y no expone mensajes o ident
   assert.throws(() => buildAssistantReport(data, { month: '2026-11', targetClients: 5, remaining: 4 }, 'missing'), /no encontrada/);
 });
 
-test('informes funcionan sin modelo y una orden no se presenta como ejecutada', () => {
+test('informes funcionan sin modelo y una orden no se presenta como ejecutada', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-assistant-'));
   try {
     const jarvis = new JarvisQueue(path.join(dir, 'plans.json'));
     const queue = new AssistantQueue(path.join(dir, 'history.json'), jarvis);
-    queue.ask('Informe actual', report, 'report');
+    await queue.ask('Informe actual', report, 'report');
     assert.equal(queue.status().entries[0].answer, report.text);
-    queue.ask('Envia promociones', report);
+    await queue.ask('Envia promociones', report);
     assert.match(queue.status().entries[1].answer!, /No ejecuté/);
-    assert.throws(() => queue.ask('Recomendame otro segmento', report), /no está listo/);
+    await assert.rejects(() => queue.ask('Recomendame otro segmento', report), /no están configurados/);
     assert.equal(new AssistantQueue(path.join(dir, 'history.json'), jarvis).status().entries.length, 2);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('conversación exige puente actualizado y asignación; una confirmación duplicada no regenera', () => {
+test('conversación exige puente actualizado y asignación; una confirmación duplicada no regenera', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-assistant-'));
   try {
     const jarvis = new JarvisQueue(path.join(dir, 'plans.json'));
@@ -59,7 +59,7 @@ test('conversación exige puente actualizado y asignación; una confirmación du
     jarvis.heartbeat('worker', true, 'local');
     assert.equal(queue.status().ready, false);
     jarvis.heartbeat('worker', true, 'local', true);
-    const id = queue.ask('Recomendame otro segmento', report), job = queue.claim('worker')!;
+    const id = await queue.ask('Recomendame otro segmento', report), job = queue.claim('worker')!;
     assert.equal(queue.claim('worker'), null);
     assert.throws(() => queue.complete(id, 'other', job.lease, { answer: 'Un consejo' }), /no asignada/);
     queue.complete(id, 'worker', job.lease, { answer: 'Un consejo' });

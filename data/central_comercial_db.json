@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-11T22:10:57.859Z",
+  "updatedAt": "2026-11-18T14:09:45.527Z",
   "scheduler": {
     "isRunning": true,
     "automationsPaused": false,
@@ -37,10 +37,13 @@
         "Scouting de rotaciones y mapas de calor de saques y ataques",
         "Sincronización de video y clips por jugada",
         "Reportes tácticos exportables en PDF para charlas de equipo",
-        "Modo offline para partidos sin conexión con sincronización posterior"
+        "Modo offline para partidos sin conexión con sincronización posterior",
+        "Registro de acciones y rotaciones de ambos equipos",
+        "Análisis estadístico del partido",
+        "Video y entrenamiento conectados al trabajo del equipo"
       ],
       "trialAvailable": true,
-      "trialDurationDays": 14,
+      "trialDurationDays": 7,
       "plans": [
         {
           "id": "ov-plan-club-basico",
@@ -55,7 +58,8 @@
             "Soporte vía email"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
         },
         {
           "id": "ov-plan-club-pro",
@@ -71,7 +75,8 @@
             "Soporte prioritario"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
         },
         {
           "id": "ov-plan-federacion",
@@ -86,11 +91,135 @@
             "Capacitación presencial/remota"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-ov-dt-ars",
+          "name": "DT / Entrenador · Argentina",
+          "price": 30000,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-club-ars",
+          "name": "Club Pro & Liga · Argentina",
+          "price": 52500,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-federacion-ars",
+          "name": "Federación / Torneo · Argentina",
+          "price": 148500,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-dt-usd",
+          "name": "DT / Entrenador · USD general",
+          "price": 20,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-club-usd",
+          "name": "Club Pro & Liga · USD general",
+          "price": 35,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-federacion-usd",
+          "name": "Federación / Torneo · USD general",
+          "price": 99,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-br-dt",
+          "name": "Brasil · Treinador",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
+        },
+        {
+          "id": "catalog-ov-br-club",
+          "name": "Brasil · Clube Pro",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
+        },
+        {
+          "id": "catalog-ov-br-federacion",
+          "name": "Brasil · Federação / Torneio",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
         }
       ],
       "registerUrl": "https://openvoley.com/registro",
-      "paymentUrl": "Pendiente de configurar",
+      "paymentUrl": "https://openvoley.com",
       "faqs": [
         {
           "id": "ov-faq-1",
@@ -129,8 +258,10 @@
       "campaignsAllowed": true,
       "internalNotes": "Priorizar clubes de vóley de Brasil (Superliga y ligas estaduales) y federaciones de Argentina y España.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z",
-      "trialVerified": false
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": true,
+      "commercialNotes": "La tabla general ofrece ARS y USD. Para Brasil hay una tabla independiente en USD: actualmente publica «Preço sob consulta». No aplicar la tarifa general a Brasil ni convertir a BRL. El pago se realiza en Open Voley, no en Central Comercial.",
+      "commercialCatalogVersion": "2026-11-15.2"
     },
     {
       "id": "app-visibility-ai",
@@ -150,13 +281,17 @@
         "es",
         "en"
       ],
-      "website": "Pendiente de configurar",
+      "website": "https://visibility-ia.ai.studio/",
       "verifiedFeatures": [
         "Auditoría técnica de Core Web Vitals y velocidad móvil",
         "Diagnóstico de indexación y estructura de rastreo",
         "Evaluación de preparación para motores de búsqueda de IA (AI Search Readiness)",
         "Reportes marca blanca para agencias exportables en PDF",
-        "Alertas de caídas de rendimiento y enlaces rotos"
+        "Alertas de caídas de rendimiento y enlaces rotos",
+        "Auditoría técnica de sitios web",
+        "Historial e informes de seguimiento",
+        "Oportunidades y plan de acción",
+        "Integración de Search Console según el plan"
       ],
       "trialAvailable": true,
       "trialDurationDays": 7,
@@ -174,7 +309,8 @@
             "Soporte email"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
         },
         {
           "id": "vai-plan-agency",
@@ -190,11 +326,101 @@
             "Soporte prioritario"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-vai-diagnostic",
+          "name": "Diagnóstico",
+          "price": 30,
+          "currency": "USD",
+          "interval": "unico",
+          "features": [
+            "Auditoría puntual",
+            "Resumen ejecutivo",
+            "Problemas y oportunidades principales"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-monitor",
+          "name": "Visibility Monitor",
+          "price": 50,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Auditoría mensual",
+            "Historial",
+            "PageSpeed",
+            "Informe mensual"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-growth",
+          "name": "Visibility Growth",
+          "price": 100,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Search Console",
+            "Keywords reales",
+            "Oportunidades",
+            "Plan de acción",
+            "IA"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-pro",
+          "name": "Visibility PRO Gestionado",
+          "price": 200,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Seguimiento gestionado",
+            "Optimización y contenido asistido",
+            "Hasta 3 negocios"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-agency",
+          "name": "Agency",
+          "price": 350,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Multi-cliente",
+            "Informes",
+            "Administración centralizada",
+            "Hasta 30 negocios"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
         }
       ],
-      "registerUrl": "Pendiente de configurar",
-      "paymentUrl": "Pendiente de configurar",
+      "registerUrl": "https://visibility-ia.ai.studio/",
+      "paymentUrl": "https://visibility-ia.ai.studio/",
       "faqs": [
         {
           "id": "vai-faq-1",
@@ -218,8 +444,10 @@
       "campaignsAllowed": true,
       "internalNotes": "Enfocar prospección en agencias digitales medianas con cartera activa de clientes que busquen automatizar sus auditorías mensuales.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z",
-      "trialVerified": false
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": false,
+      "commercialNotes": "Tarifas contrastadas con src/config/markets.ts y la elección del propietario: Diagnóstico se cobra una vez; los demás son mensuales. La web publicada actualmente tiene acceso privado del operador. Los informes se entregan al cliente; no prometer registro público de clientes ni una prueba gratuita.",
+      "commercialCatalogVersion": "2026-11-15.2"
     },
     {
       "id": "app-neuroplaneta",
@@ -237,16 +465,18 @@
       "languages": [
         "es"
       ],
-      "website": "Pendiente de configurar",
+      "website": "https://neuroplaneta.ai.studio/",
       "verifiedFeatures": [
         "Catálogo de juegos interactivos de atención, memoria, lógica y creatividad",
         "Panel de control parental para adultos con configuración de límites de tiempo",
         "Registro de actividades realizadas y evolución lúdica",
         "Actividades guiadas para realizar juntos adultos y niños",
-        "Entorno seguro sin publicidad ni compras integradas para menores"
+        "Entorno seguro sin publicidad ni compras integradas para menores",
+        "Actividades de atención, calma, rutinas y comunicación visual",
+        "Acompañamiento adulto y registro de uso"
       ],
       "trialAvailable": true,
-      "trialDurationDays": 7,
+      "trialDurationDays": 2,
       "plans": [
         {
           "id": "np-plan-familia-mensual",
@@ -261,7 +491,8 @@
             "Cancelación en cualquier momento"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
         },
         {
           "id": "np-plan-familia-anual",
@@ -276,11 +507,28 @@
             "Nuevos juegos mensuales"
           ],
           "verified": false,
-          "verificationNotes": "Plan inicial no verificado por la dirección. Conservado para revisión administrativa; excluido de automatizaciones."
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-np-family",
+          "name": "Plan Familia",
+          "price": 20,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Actividades y juegos acompañados",
+            "Herramientas para el adulto y registro de uso"
+          ],
+          "verified": true,
+          "sourceUrl": "https://neuroplaneta.ai.studio/",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://neuroplaneta.ai.studio/. Mercado: Todos."
         }
       ],
-      "registerUrl": "Pendiente de configurar",
-      "paymentUrl": "Pendiente de configurar",
+      "registerUrl": "https://neuroplaneta.ai.studio/",
+      "paymentUrl": "https://neuroplaneta.ai.studio/",
       "faqs": [
         {
           "id": "np-faq-1",
@@ -303,35 +551,50 @@
       "medicalDisclaimer": "ADVERTENCIA ESTRICTA: NeuroPlaneta no es ni debe presentarse como herramienta de diagnóstico ni tratamiento médico o psicológico.",
       "internalNotes": "Nunca asociar con claims médicos ni diagnósticos en ninguna comunicación o mensaje de prospección.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z",
-      "trialVerified": false
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": true,
+      "commercialNotes": "Plan Familia USD 20 mensuales. Prueba de 2 días sin tarjeta ni PayPal y sin cobro automático al finalizar. La suscripción es opcional y requiere autorización en PayPal. Central Comercial no acredita pagos automáticamente.",
+      "commercialCatalogVersion": "2026-11-15.2"
     },
     {
       "id": "app-funeraria",
-      "name": "Funeraria",
+      "name": "Funeraria Control",
       "slug": "funeraria",
-      "description": "Sistema integral de gestión operativa y administrativa para empresas de servicios funerarios, salas velatorias, traslados y cementerios parque. Actualmente en desarrollo activo.",
+      "description": "Gestión operativa y administrativa para empresas funerarias: expedientes, etapas del servicio, recursos, agenda e inventario.",
       "targetAudience": "Empresas de servicios fúnebres, salas velatorias independientes, mutuales y cooperativas de previsión social funeraria.",
       "countries": [
         "Argentina",
         "Uruguay",
         "Chile",
-        "España"
+        "España",
+        "México"
       ],
       "languages": [
         "es"
       ],
-      "website": "Pendiente de configurar (En desarrollo)",
-      "verifiedFeatures": [
-        "Gestión de expedientes de servicios y actas de defunción (en desarrollo)",
-        "Control de inventario de ataúdes, urnas y suministros (en desarrollo)",
-        "Agenda de salas velatorias y coordinación de traslados (en desarrollo)"
-      ],
+      "website": "https://funeraria-control.ai.studio/",
+      "verifiedFeatures": [],
       "trialAvailable": false,
       "trialDurationDays": 0,
-      "plans": [],
-      "registerUrl": "Pendiente de configurar",
-      "paymentUrl": "Pendiente de configurar",
+      "plans": [
+        {
+          "id": "catalog-funeraria-mensual",
+          "name": "Funeraria Control · mensual",
+          "price": 50,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Gestión de expedientes, etapas, recursos, agenda e inventario"
+          ],
+          "verified": true,
+          "sourceUrl": "https://funeraria-control.ai.studio/",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://funeraria-control.ai.studio/. Mercado: Todos."
+        }
+      ],
+      "registerUrl": "https://funeraria-control.ai.studio/",
+      "paymentUrl": "",
       "faqs": [
         {
           "id": "fun-faq-1",
@@ -343,14 +606,39 @@
         }
       ],
       "promotionalMaterials": [],
-      "status": "en_desarrollo",
-      "campaignsAllowed": false,
-      "internalNotes": "BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.",
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.\nActualización 15/11/2026: bloqueo de lanzamiento levantado por autorización del propietario.",
       "createdAt": "2026-11-11T00:00:00.000Z",
-      "updatedAt": "2026-11-11T00:00:00.000Z",
-      "trialVerified": false
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": false,
+      "commercialNotes": "Lanzamiento habilitado por el propietario el 15/11/2026. Plan comercial de referencia USD 50 mensuales, indicado por el propietario; confirmar condiciones de contratación antes de cobrar. Prueba y enlaces de pago no verificados; no inventarlos.",
+      "commercialCatalogVersion": "2026-11-15.2"
     }
   ],
+  "accountCharges": [],
+  "monthlySalesGoals": [
+    {
+      "month": "2026-11",
+      "targetClients": 5,
+      "enabled": true,
+      "discoverContacts": true,
+      "sendEmail": true,
+      "answerEmail": true,
+      "countries": [
+        "Argentina"
+      ],
+      "dailyEmailLimit": 10,
+      "dailyResearchLimit": 40,
+      "updatedAt": "2026-11-18T14:09:45.525Z"
+    }
+  ],
+  "researchState": {
+    "month": "",
+    "day": "",
+    "requests": 0,
+    "visited": []
+  },
   "contacts": [],
   "campaigns": [
     {
@@ -408,13 +696,14 @@
       "clientName": "Club Deportivo Voley",
       "amount": 150,
       "currency": "USD",
-      "status": "confirmado",
+      "status": "rechazado",
       "reference": "TRANSFER-TEST-9988",
       "channel": "transferencia_bancaria",
       "id": "pay-1794435057839",
-      "reviewedBy": "gervasiomeana@gmail.com",
-      "reviewedAt": "2026-11-11T22:10:57.856Z",
-      "createdAt": "2026-11-11T22:10:57.839Z"
+      "reviewedBy": "Migración: corrección de datos de prueba",
+      "reviewedAt": "2026-11-18T14:09:45.525Z",
+      "createdAt": "2026-11-11T22:10:57.839Z",
+      "auditorNote": "Registro de prueba identificado por el propietario: no corresponde a un cobro real. Se conserva importe y referencia para auditoría."
     }
   ],
   "tasks": [
@@ -681,6 +970,13 @@
       "details": {
         "campaignId": "camp-open-voley-brasil-clubes"
       }
+    },
+    {
+      "id": "audit-fixture-payment-150",
+      "timestamp": "2026-11-18T14:09:45.525Z",
+      "level": "warning",
+      "module": "pagos",
+      "message": "Excluido de ingresos el registro de prueba TRANSFER-TEST-9988 (USD 150). No se eliminó el registro."
     }
   ]
 }

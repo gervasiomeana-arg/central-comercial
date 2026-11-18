@@ -41,7 +41,7 @@ export function registerPromoCaptureRoutes(app:Express){
          ]}),signal:AbortSignal.timeout(18000)});
        if(response.ok){
          const result=await response.json();
-         const raw=String(result.choices?.[0]?.message?.content||'').replace(/^<think>[\\s\\S]*?<\\/think>\\s*/,'').replace(/^\`\`\`(?:json)?\\s*|\\s*\`\`\`$/g,'').trim();
+         const raw=String(result.choices?.[0]?.message?.content||'').replace(/^<think>[\s\S]*?<\/think>\s*/,'').replace(/^```(?:json)?\s*|\s*```$/g,'').trim();
          const draft=JSON.parse(raw);
          if(Array.isArray(draft.scenes)&&draft.scenes.length===4&&draft.scenes.every((v:unknown)=>typeof v==='string'&&v.trim().length>0&&v.length<=75)){
            story.scenes=draft.scenes;

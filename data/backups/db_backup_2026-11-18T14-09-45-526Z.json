@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-11T22:10:45.065Z",
+  "updatedAt": "2026-11-11T22:10:57.859Z",
   "scheduler": {
     "isRunning": true,
     "automationsPaused": false,
-    "lastRunAt": "2026-11-11T22:10:23.486Z",
-    "nextRunAt": "2026-11-11T22:10:53.486Z",
+    "lastRunAt": "2026-11-11T22:10:53.487Z",
+    "nextRunAt": "2026-11-11T22:11:23.487Z",
     "activeJobsCount": 0,
     "environmentNote": "El motor programado del backend procesará tareas cuando el proceso Node.js esté activo. Mantener abierta la pestaña del navegador no es necesario si se ejecuta como servicio o tarea en segundo plano.",
     "windowsExecutionGuide": "Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Abrir PowerShell o CMD en la carpeta del proyecto y ejecutar \"npm run start\" o instalar PM2 con \"npm install -g pm2\" y \"pm2 start server.ts --name central-comercial\".\n3. Alternativamente, configurar el script scripts/run-scheduler-windows.bat en el Programador de Tareas de Windows (Task Scheduler) para que se ejecute al iniciar sesión."
@@ -401,8 +401,35 @@
   "conversations": [],
   "clients": [],
   "subscriptions": [],
-  "payments": [],
+  "payments": [
+    {
+      "appId": "app-open-voley",
+      "clientId": "client-test-1",
+      "clientName": "Club Deportivo Voley",
+      "amount": 150,
+      "currency": "USD",
+      "status": "confirmado",
+      "reference": "TRANSFER-TEST-9988",
+      "channel": "transferencia_bancaria",
+      "id": "pay-1794435057839",
+      "reviewedBy": "gervasiomeana@gmail.com",
+      "reviewedAt": "2026-11-11T22:10:57.856Z",
+      "createdAt": "2026-11-11T22:10:57.839Z"
+    }
+  ],
   "tasks": [
+    {
+      "id": "task-pay-review-pay-1794435057839",
+      "title": "Revisar y auditar pago de USD 150",
+      "description": "Comprobante / Referencia: Sin número. Revisar extracto bancario y confirmar manualmente.",
+      "priority": "alta",
+      "category": "revision_pago",
+      "relatedType": "pago",
+      "relatedId": "pay-1794435057839",
+      "dueDate": null,
+      "status": "completada",
+      "createdAt": "2026-11-11T22:10:57.841Z"
+    },
     {
       "id": "task-ai-escalate-1794433772211",
       "title": "Intervención requerida: Consulta de Coach Silva (Open Voley)",
@@ -510,6 +537,48 @@
     }
   ],
   "logs": [
+    {
+      "id": "log-1794435057859-zxb5v",
+      "timestamp": "2026-11-11T22:10:57.859Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Auditoría de pago ID pay-1794435057839: CONFIRMADO por gervasiomeana@gmail.com",
+      "details": {
+        "paymentId": "pay-1794435057839",
+        "amount": 150,
+        "currency": "USD",
+        "status": "confirmado",
+        "auditor": "gervasiomeana@gmail.com"
+      }
+    },
+    {
+      "id": "log-1794435057856-ah8rc",
+      "timestamp": "2026-11-11T22:10:57.856Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Pago ID pay-1794435057839 modificado. Estado: confirmado"
+    },
+    {
+      "id": "log-1794435057841-q6714",
+      "timestamp": "2026-11-11T22:10:57.841Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Nueva tarea comercial: Revisar y auditar pago de USD 150"
+    },
+    {
+      "id": "log-1794435057839-eoa46",
+      "timestamp": "2026-11-11T22:10:57.839Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Nuevo cobro registrado: USD 150 (Estado: Pendiente de confirmación manual)"
+    },
+    {
+      "id": "log-1794435045065-o50bt",
+      "timestamp": "2026-11-11T22:10:45.065Z",
+      "level": "warning",
+      "module": "conectores",
+      "message": "Fallo al verificar conector Servidor de Correo Saliente (SMTP / Resend): Verificación fallida: Servidor SMTP no configurado."
+    },
     {
       "id": "log-1794435014701-6ziz0",
       "timestamp": "2026-11-11T22:10:14.701Z",
