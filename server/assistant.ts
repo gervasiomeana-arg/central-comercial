@@ -1,3 +1,4 @@
+import { cloudOpenJarvisEnabled, openJarvisWorkerKey } from './execution-role.js';
 import fs from 'node:fs';
 import { GoogleGenAI } from '@google/genai';
 import path from 'node:path';
@@ -51,7 +52,7 @@ export function currentAssistantReport(appId = 'all') {
 
 type StoredEntry = AssistantEntry & { report: AssistantReport; workerId?: string; leaseHash?: string };
 const geminiModel = process.env.CENTRAL_GEMINI_MODEL || 'gemini-2.5-flash-lite';
-const geminiEnabled = () => process.env.CENTRAL_GEMINI_FREE_ONLY === 'true' && Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+const geminiEnabled = () => !cloudOpenJarvisEnabled() && process.env.CENTRAL_GEMINI_FREE_ONLY === 'true' && Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
 const hash = (s: string) => createHash('sha256').update(s).digest();
 export class AssistantQueue {
   private entries: StoredEntry[];
@@ -86,7 +87,7 @@ export class AssistantQueue {
     const same = this.entries.find(e => e.question === q && e.report.appId === report.appId && e.report.text === report.text && e.state !== 'failed' && this.now() - e.createdAt < 30000);
     if (same) return same.id;
     const source = command || records ? 'records' : 'openjarvis';
-    if (source === 'openjarvis' && !this.status().ready) throw new Error('OpenJarvis y Gemini todavía no están configurados para conversar.');
+    if (source === 'openjarvis' && !this.status().ready) throw new Error(cloudOpenJarvisEnabled() ? 'OpenJarvis en la nube está pendiente de conexión.' : 'OpenJarvis y Gemini todavía no están configurados para conversar.');
     if (source === 'openjarvis' && this.entries.filter(e => e.source === 'openjarvis' && this.now() - e.createdAt < 86400000).length >= 20) throw new Error('Límite de veinte consultas diarias a OpenJarvis para cuidar los recursos.');
     const entry: StoredEntry = { id: randomUUID(), question: q, appId: report.appId, appName: report.appName, report, source,
       state: source === 'records' ? 'completed' : 'queued', createdAt: this.now(), updatedAt: this.now() };
@@ -135,7 +136,7 @@ export class AssistantQueue {
 export function registerAssistantWorkerRoutes(app: Express, queue: AssistantQueue) {
   app.post('/api/assistant/worker/:action', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    if (!workerAuthorized(req.headers.authorization)) return res.status(401).json({ error: 'Puente no autorizado.' });
+    if (!workerAuthorized(req.headers.authorization, openJarvisWorkerKey())) return res.status(401).json({ error: 'Puente no autorizado.' });
     try {
       const { workerId } = req.body || {};
       if (typeof workerId !== 'string' || !workerId || workerId.length > 100) throw new Error('Identificador de puente inválido.');

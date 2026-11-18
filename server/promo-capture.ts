@@ -1,78 +1,112 @@
-import type {Express} from 'express';
-import {chromium} from 'playwright';
-import {mkdtemp,rm} from 'node:fs/promises';
+import type { Express } from 'express';
+import { chromium } from 'playwright';
+import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import {requireAdminAuth} from './auth.js';
-let busy=false;
-export function registerPromoCaptureRoutes(app:Express){
- app.post('/api/promo/capture',requireAdminAuth,async(req,res)=>{
-  if(busy)return res.status(429).json({error:'Ya hay una captura en proceso.'});
-  const raw=String(req.body?.url||'');
-  let url:URL;try{url=new URL(raw);if(url.protocol!=='https:'||url.username||url.password)throw Error();}catch{return res.status(400).json({error:'URL HTTPS invalida.'});}
-  // Prevent arbitrary requests to private addresses and unrelated websites.
-  if(!['openvoley.com','www.openvoley.com','visibility-ia.ai.studio','funeraria-control.ai.studio','neuroplaneta.ai.studio',...String(process.env.NEUROPLANETA_PUBLIC_URL||'').split(' ').filter(Boolean).map(x=>{try{return new URL(x).hostname}catch{return ''}})].includes(url.hostname))return res.status(403).json({error:'Solo se permiten las webs publicas verificadas de las aplicaciones.'});
-  busy=true;let browser;const dir=await mkdtemp(path.join(os.tmpdir(),'central-promo-'));
-  try{
-   const candidates=[process.env.CHROME_PATH,process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-     ...(process.platform==='win32'?[path.join(process.env.PROGRAMFILES||'C:/Program Files','Google/Chrome/Application/chrome.exe'),path.join(process.env['PROGRAMFILES(X86)']||'C:/Program Files (x86)','Microsoft/Edge/Application/msedge.exe')]:['/usr/bin/chromium','/usr/bin/chromium-browser','/usr/bin/google-chrome','/usr/bin/google-chrome-stable'])];
-   const executablePath=candidates.find(p=>p&&fs.existsSync(p));
-   browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:{})});
-   const context=await browser.newContext({viewport:{width:720,height:1280},recordVideo:{dir,size:{width:720,height:1280}}});
-   const page=await context.newPage();const video=page.video();
-   const stories:Record<string,{name:string;tagline:string;scenes:string[]}>={
-    'visibility-ia.ai.studio':{name:'VISIBILITY AI',tagline:'Tu negocio merece ser encontrado',scenes:['Auditoría SEO y diagnóstico digital','Detectá oportunidades para mejorar tu presencia','Seguimiento, informes y planes de acción','Consultá por nuestros servicios']},
-    'funeraria-control.ai.studio':{name:'FUNERARIA CONTROL',tagline:'Gestión que acompaña cada momento',scenes:['Expedientes y seguimiento de servicios','Agenda, recursos y personal coordinados','Inventario, administración y control','Conocé una gestión funeraria más organizada']},
-    'neuroplaneta.ai.studio':{name:'NEUROPLANETA',tagline:'Un espacio para aprender jugando',scenes:['Juegos y actividades para acompañar el foco','Rutinas y herramientas visuales','Acompañamiento para familias y educadores','Descubrí NeuroPlaneta']},
-    'openvoley.com':{name:'OPEN VOLEY',tagline:'Cada jugada cuenta',scenes:['Registrá acciones y rotaciones','Analizá el rendimiento de tu equipo','Video y estadísticas para entrenar mejor','Descubrí Open Voley']}
-   };
-   const story=structuredClone(stories[url.hostname]||stories['openvoley.com']);
-   // The local OpenJarvis model directs the four-scene edit when available.
-   // AI Studio/cloud uses the reviewed script: no cloud access to a private PC.
-   if(process.env.CENTRAL_LOCAL_MODE==='true' && process.env.CENTRAL_DIAGNOSTIC_MODE!=='true'){
-     try{
-       const model=process.env.OPENJARVIS_MODEL||'qwen3.5:2b';
-       const response=await fetch('http://127.0.0.1:8765/v1/chat/completions',{
-         method:'POST',headers:{'Content-Type':'application/json'},
-         body:JSON.stringify({model,temperature:0.3,max_tokens:600,stream:false,tools:null,messages:[
-           {role:'system',content:'Sos el director creativo de Central Comercial. Redactá cuatro titulares cortos para un video comercial de 12 segundos, en español. Respondé exclusivamente JSON {"scenes":["...","...","...","..."]}. Cada titular máximo 75 caracteres. No inventes funciones, precios, resultados ni promesas. Solo usá la información verificada que se proporciona.'},
-           {role:'user',content:JSON.stringify({app:story.name,tagline:story.tagline,verifiedScenes:story.scenes})}
-         ]}),signal:AbortSignal.timeout(18000)});
-       if(response.ok){
-         const result=await response.json();
-         const raw=String(result.choices?.[0]?.message?.content||'').replace(/^<think>[\s\S]*?<\/think>\s*/,'').replace(/^```(?:json)?\s*|\s*```$/g,'').trim();
-         const draft=JSON.parse(raw);
-         if(Array.isArray(draft.scenes)&&draft.scenes.length===4&&draft.scenes.every((v:unknown)=>typeof v==='string'&&v.trim().length>0&&v.length<=75)){
-           story.scenes=draft.scenes;
-           console.log('[promo-capture] Guion preparado por OpenJarvis local:',story.name);
-         }
-       }
-     }catch(error){console.warn('[promo-capture] OpenJarvis no disponible; se usa guion verificado.',String(error).slice(0,100));}
-   }
-   await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:25000});
-   await page.waitForTimeout(1000);
-   // Narrative cards are promotional claims, not a simulated product demonstration.
-   await page.evaluate(({name,tagline})=>{
-     const overlay=document.createElement('div');overlay.id='central-promo-story';
-     overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;pointer-events:none;display:flex;align-items:end;justify-content:center;padding:0 35px 115px;background:linear-gradient(180deg,transparent 20%,rgba(7,15,29,.86) 100%);font-family:Arial,sans-serif;color:white;box-sizing:border-box';
-     overlay.innerHTML='<div style="width:100%;text-align:center"><div id="central-promo-brand" style="font-size:19px;font-weight:800;letter-spacing:3px;margin-bottom:22px"></div><div id="central-promo-line" style="font-size:42px;line-height:1.13;font-weight:800;text-shadow:0 3px 12px #000"></div><div id="central-promo-tag" style="font-size:17px;margin-top:20px"></div></div>';
-     document.body.appendChild(overlay);
-     document.getElementById('central-promo-brand')!.textContent=name;
-     document.getElementById('central-promo-tag')!.textContent=tagline;
-   },{name:story.name,tagline:story.tagline});
-   for(let i=0;i<story.scenes.length;i++){
-     await page.evaluate(({line,i})=>{
-       const label=document.getElementById('central-promo-line');if(label)label.textContent=line;
-       const overlay=document.getElementById('central-promo-story');
-       if(overlay)overlay.style.background=i%2===0?'linear-gradient(180deg,transparent 12%,rgba(7,15,29,.9) 100%)':'linear-gradient(180deg,rgba(7,15,29,.22),rgba(16,49,80,.95))';
-       window.scrollTo({top:Math.round(document.body.scrollHeight*i/4),behavior:'smooth'});
-     },{line:story.scenes[i],i});
-     await page.waitForTimeout(2600);
-   }
-   await context.close();const videoPath=await video?.path();if(!videoPath)throw Error('No se genero video.');
-   res.setHeader('Content-Type','video/webm');res.setHeader('Cache-Control','no-store');res.sendFile(videoPath,async()=>{await rm(dir,{recursive:true,force:true})});
-  }catch(e:any){await rm(dir,{recursive:true,force:true});const reason=String(e?.message||e).slice(0,350);console.error('[promo-capture]',reason);if(!res.headersSent)res.status(503).json({error:'No fue posible capturar la aplicación.',detail:reason});}
-  finally{await browser?.close();busy=false;}
- });
+import { passwordlessTestingEnabled, requireAdminAuth } from './auth.js';
+import { commercialCatalog } from './commercial-catalog.js';
+import { cloudMonitorMode } from './execution-role.js';
+import { renderPromoMp4 } from './promo-mp4.js';
+
+const publicHosts = new Set([
+  'openvoley.com', 'www.openvoley.com', 'open-voley-2026.ai.studio',
+  'visibility-ia.ai.studio', 'funeraria-control.ai.studio', 'neuroplaneta.ai.studio',
+]);
+const assetHosts = new Set(['fonts.googleapis.com', 'fonts.gstatic.com', 'www.gstatic.com']);
+let busy = false;
+
+function executablePath() {
+  const candidates = [process.env.CHROME_PATH, process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    ...(process.platform === 'win32'
+      ? [path.join(process.env.PROGRAMFILES || 'C:/Program Files', 'Google/Chrome/Application/chrome.exe'),
+        path.join(process.env['PROGRAMFILES(X86)'] || 'C:/Program Files (x86)', 'Microsoft/Edge/Application/msedge.exe')]
+      : ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'])];
+  return candidates.find(candidate => candidate && fs.existsSync(candidate));
+}
+
+export function registerPromoCaptureRoutes(app: Express) {
+  app.post('/api/promo/capture', requireAdminAuth, async (req, res) => {
+    if (cloudMonitorMode() && passwordlessTestingEnabled()) {
+      return res.status(409).json({ error: 'Activá la autenticación de administración para generar videos en la publicación.' });
+    }
+    const product = commercialCatalog().find(product => product.id === req.body?.appId ||
+      product.website === req.body?.url);
+    const { headline, cta, duration } = req.body ?? {};
+    if (!product || ![15, 20, 30].includes(duration) ||
+        typeof headline !== 'string' || !headline.trim() || headline.length > 95 ||
+        typeof cta !== 'string' || !cta.trim() || cta.length > 100) {
+      return res.status(400).json({ error: 'Elegí una aplicación y completá el título y el cierre del video.' });
+    }
+    if (busy) return res.status(429).json({ error: 'Ya hay un video en preparación. Volvé a intentar cuando termine.' });
+    busy = true;
+    let directory: string | undefined;
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    let transferring = false;
+    try {
+      directory = await mkdtemp(path.join(os.tmpdir(), 'central-promo-'));
+      browser = await chromium.launch({ executablePath: executablePath(), headless: true });
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+        recordVideo: { dir: directory, size: { width: 1280, height: 720 } },
+        serviceWorkers: 'block',
+      });
+      // No signed-in browser state is used. Only public pages and approved assets may load.
+      await context.route('**/*', route => {
+        const request = route.request();
+        const url = new URL(request.url());
+        const externalAsset = !request.isNavigationRequest() && assetHosts.has(url.hostname);
+        const allowed = url.protocol === 'https:' && !url.port && !url.username && !url.password &&
+          (publicHosts.has(url.hostname) || externalAsset) && ['GET', 'HEAD'].includes(request.method());
+        return allowed ? route.continue() : route.abort();
+      });
+      const page = await context.newPage();
+      const recording = page.video();
+      const recordingStartedAt = performance.now();
+      const response = await page.goto(product.website, { waitUntil: 'domcontentloaded', timeout: 18000 });
+      if (!response?.ok() || !publicHosts.has(new URL(page.url()).hostname)) {
+        return res.status(422).json({ error: 'La página pública de la aplicación no respondió correctamente.' });
+      }
+      await page.locator('body').waitFor({ state: 'visible', timeout: 6000 });
+      await page.waitForFunction(() => (document.body.innerText || '').trim().length >= 60, { timeout: 6500 });
+      const sections = await page.evaluate(() => {
+        const scrollHeight = document.scrollingElement?.scrollHeight ?? innerHeight;
+        return [...document.querySelectorAll('h2, h3')]
+          .filter(element => element.getBoundingClientRect().height > 0)
+          .map(element => Math.min(scrollHeight - innerHeight, element.getBoundingClientRect().top + scrollY - 90))
+          .filter((offset, index, offsets) => offset >= 280 &&
+            offsets.findIndex(previous => Math.abs(previous - offset) < 315) === index)
+          .slice(0, 3);
+      });
+      if (!sections.length) {
+        return res.status(422).json({ error: 'La página pública no ofrece distintas secciones para mostrar. Hace falta una grabación autorizada de la aplicación.' });
+      }
+      const startOffset = (performance.now() - recordingStartedAt) / 1000;
+      const sceneLength = (duration + 1) * 1000 / (sections.length + 1);
+      await page.waitForTimeout(sceneLength);
+      for (const section of sections) {
+        await page.evaluate(top => window.scrollTo({ top, behavior: 'smooth' }), section);
+        await page.waitForTimeout(sceneLength);
+      }
+      await context.close();
+      if (!recording) throw new Error('Chromium no devolvió una grabación.');
+      const output = await renderPromoMp4(directory, await recording.path(), {
+        appName: product.name, headline, cta, duration, startOffset
+      });
+      const cleanupDirectory = directory;
+      res.set({ 'Content-Type': 'video/mp4', 'Cache-Control': 'private, no-store', 'X-Promo-Scenes': String(sections.length + 1) });
+      transferring = true;
+      res.sendFile(output, error => {
+        void rm(cleanupDirectory, { recursive: true, force: true }).catch(console.error);
+        if (error && !res.headersSent) res.status(503).end();
+      });
+    } catch (error) {
+      console.error('[promo-capture]', error instanceof Error ? error.message : error);
+      if (!res.headersSent) res.status(503).json({ error: 'No se pudo generar el MP4. Revisá que Chromium y FFmpeg estén disponibles y que la página pública cargue.' });
+    } finally {
+      await browser?.close().catch(console.error);
+      if (directory && !transferring) await rm(directory, { recursive: true, force: true }).catch(console.error);
+      busy = false;
+    }
+  });
 }
