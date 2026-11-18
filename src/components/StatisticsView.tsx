@@ -62,7 +62,7 @@ function DailyChart({ title, metric, dates, series, selected }: {
   </section>;
 }
 
-export function StatisticsView({ appFilter, monitor }: { appFilter: string; monitor: boolean }) {
+export function StatisticsView({ appFilter, monitor, migrated }: { appFilter: string; monitor: boolean; migrated: boolean }) {
   const [source, setSource] = useState<'pc' | 'web'>('pc');
   const [days, setDays] = useState(30);
   const [data, setData] = useState<DailyStatistics | null>(null);
@@ -74,13 +74,13 @@ export function StatisticsView({ appFilter, monitor }: { appFilter: string; moni
     let active = true;
     setData(null);
     setError('');
-    api.getDailyStatistics(days, monitor ? source : 'web').then(result => {
+    api.getDailyStatistics(days, monitor && migrated ? 'pc' : monitor ? source : 'web').then(result => {
       if (active) setData(result);
     }).catch(error => {
       if (active) setError(error.message);
     });
     return () => { active = false; };
-  }, [days, monitor, refresh, source]);
+  }, [days, migrated, monitor, refresh, source]);
 
   const series = data?.series.map((app, i) => ({
     ...app, color: appColors[app.slug] || extraColors[i % extraColors.length],
@@ -94,7 +94,7 @@ export function StatisticsView({ appFilter, monitor }: { appFilter: string; moni
         <p className="mt-1 text-sm text-slate-600">Actividad diaria · hora argentina</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        {monitor && <label className="flex items-center gap-2 text-sm">Origen
+        {monitor && !migrated && <label className="flex items-center gap-2 text-sm">Origen
           <select value={source} onChange={event => setSource(event.target.value === 'pc' ? 'pc' : 'web')} className="rounded-lg border border-slate-300 bg-white p-2">
             <option value="pc">PC dedicada</option>
             <option value="web">Publicación web</option>
