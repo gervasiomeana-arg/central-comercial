@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command, AudioLines, Video } from 'lucide-react';
+import { LayoutDashboard, ChartLine, Layers, Users, Send, MessageSquare, CreditCard, Settings2, Pause, Play, ArrowUpRight, Menu, X, Bell, ChevronRight, Command, AudioLines, Video } from 'lucide-react';
 
 interface HeaderProps {
   currentTab: string; setCurrentTab: (tab: string) => void;
@@ -16,6 +16,7 @@ export function Header(props: HeaderProps) {
   const [open, setOpen] = useState(false);
   const items = [
     { id: 'dashboard', label: 'Resumen', icon: LayoutDashboard },
+    { id: 'statistics', label: 'Estadísticas', icon: ChartLine },
     { id: 'assistant', label: 'Hablar con Central', icon: AudioLines },
     { id: 'applications', label: 'Aplicaciones', icon: Layers },
     { id: 'contacts', label: 'Contactos', icon: Users },
@@ -39,7 +40,7 @@ export function Header(props: HeaderProps) {
       <nav className="cc-nav">
         {items.map((item, index) => <button key={item.id} onClick={() => navigate(item.id)} aria-current={props.currentTab === item.id ? 'page' : undefined} className={'cc-nav-item ' + (props.currentTab === item.id ? 'is-active' : '')}>
           <item.icon size={18} strokeWidth={1.6}/><span>{item.label}</span>
-          {item.id === 'system' && props.errorLogsCount > 0 ? <span className="cc-nav-count">{props.errorLogsCount}</span> : <span className="cc-nav-number">0{index + 1}</span>}
+          {item.id === 'system' && props.errorLogsCount > 0 ? <span className="cc-nav-count">{props.errorLogsCount}</span> : <span className="cc-nav-number">{String(index + 1).padStart(2, '0')}</span>}
         </button>)}
       </nav>
       <div className="cc-sidebar-bottom">

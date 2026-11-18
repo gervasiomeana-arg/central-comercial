@@ -11,6 +11,7 @@ import type {
   ConnectorInfo,
   AuditLog,
   DashboardMetrics,
+  DailyStatistics,
   SchedulerState,
   AuthStatusResponse,
   AutomationPipelineStatus,
@@ -77,6 +78,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getDailyStatistics: (days: number) => fetchJson<DailyStatistics>(`/api/statistics/daily?days=${days}`),
   getLocalRuntime: () => fetchJson<import('./runtime-types.js').LocalRuntimeState>('/api/local-runtime'),
   getAssistant: () => fetchJson<import('./assistant-types.js').AssistantState>('/api/assistant'),
   askAssistant: (question: string, appId: string, kind: 'question' | 'report' = 'question') => fetchJson<import('./assistant-types.js').AssistantState & { id: string }>('/api/assistant/messages', { method: 'POST', body: JSON.stringify({ question, appId, kind }) }),

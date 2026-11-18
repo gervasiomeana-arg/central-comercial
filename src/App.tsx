@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {PromoVideoStudio} from './components/PromoVideoStudio.js';
 import { Header } from './components/Header.js';
+import { StatisticsView } from './components/StatisticsView.js';
 import { DashboardView } from './components/DashboardView.js';
 import { ApplicationsView } from './components/ApplicationsView.js';
 import { ContactsView } from './components/ContactsView.js';
@@ -351,6 +352,8 @@ export default function App() {
           </div>
         ) : (
           <>
+            {currentTab === 'statistics' && <StatisticsView appFilter={selectedAppFilter} monitor={deployment.monitor} />}
+
             {currentTab === 'dashboard' && (
               <DashboardView
                 onRefresh={loadData}

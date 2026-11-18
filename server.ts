@@ -1,3 +1,4 @@
+import { dailyStatistics } from './server/daily-statistics.js';
 import {registerPromoCaptureRoutes} from './server/promo-capture.js';
 import { registerCommercialEmailRoutes,replyDecision } from './server/commercial-email.js';
 import {cloudMonitorMode,diagnosticMode,cloudOpenJarvisEnabled,openJarvisWorkerKey} from './server/execution-role.js';
@@ -307,6 +308,15 @@ adminRouter.get('/dashboard', (req, res) => {
   const period = (req.query.period as string) || 'all';
   const metrics = db.getDashboardMetrics(appFilter, period);
   res.json(metrics);
+});
+
+adminRouter.get('/statistics/daily', (req, res) => {
+  const days = Number(req.query.days ?? 30);
+  if (![7, 30, 90].includes(days)) {
+    return res.status(400).json({ error: 'Seleccioná un período de 7, 30 o 90 días.' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json(dailyStatistics(db.getApplications(), db.getContacts(), db.getConversations(), days));
 });
 
 // Executive Summary: answering What is it doing, What did it achieve, What does it need from me
