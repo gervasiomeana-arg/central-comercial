@@ -51,6 +51,8 @@ async function send(){
 }
 // Owner-only report: one attempt per Argentina calendar day, never a commercial campaign.
 async function dailyReport() {
+  // Daily owner report is now delivered only through the linked WhatsApp.
+  return;
   if (env.CENTRAL_DIAGNOSTIC_MODE === 'true') return;
   const parts = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
   const get = name => parts.find(p => p.type === name)?.value || '';
