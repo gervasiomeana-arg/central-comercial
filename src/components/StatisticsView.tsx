@@ -63,6 +63,7 @@ function DailyChart({ title, metric, dates, series, selected }: {
 }
 
 export function StatisticsView({ appFilter, monitor }: { appFilter: string; monitor: boolean }) {
+  const [source, setSource] = useState<'pc' | 'web'>('pc');
   const [days, setDays] = useState(30);
   const [data, setData] = useState<DailyStatistics | null>(null);
   const [date, setDate] = useState('');
@@ -73,13 +74,13 @@ export function StatisticsView({ appFilter, monitor }: { appFilter: string; moni
     let active = true;
     setData(null);
     setError('');
-    api.getDailyStatistics(days).then(result => {
+    api.getDailyStatistics(days, monitor ? source : 'web').then(result => {
       if (active) setData(result);
     }).catch(error => {
       if (active) setError(error.message);
     });
     return () => { active = false; };
-  }, [days, refresh]);
+  }, [days, monitor, refresh, source]);
 
   const series = data?.series.map((app, i) => ({
     ...app, color: appColors[app.slug] || extraColors[i % extraColors.length],
@@ -93,6 +94,12 @@ export function StatisticsView({ appFilter, monitor }: { appFilter: string; moni
         <p className="mt-1 text-sm text-slate-600">Actividad diaria · hora argentina</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
+        {monitor && <label className="flex items-center gap-2 text-sm">Origen
+          <select value={source} onChange={event => setSource(event.target.value === 'pc' ? 'pc' : 'web')} className="rounded-lg border border-slate-300 bg-white p-2">
+            <option value="pc">PC dedicada</option>
+            <option value="web">Publicación web</option>
+          </select>
+        </label>}
         <label className="flex items-center gap-2 text-sm">Período
           <select value={days} onChange={event => setDays(Number(event.target.value))} className="rounded-lg border border-slate-300 bg-white p-2">
             <option value={7}>Últimos 7 días</option>
@@ -103,7 +110,6 @@ export function StatisticsView({ appFilter, monitor }: { appFilter: string; moni
         <button type="button" onClick={() => setRefresh(value => value + 1)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">Actualizar</button>
       </div>
     </header>
-    {monitor && <p className="text-sm text-slate-600">Ves los registros de la publicación. La PC dedicada conserva sus propios registros.</p>}
     {error ? <p role="alert">No se pudieron cargar las estadísticas. {error}</p>
       : !data ? <p role="status">Cargando estadísticas…</p>
       : !series.length ? <p>No hay aplicaciones para mostrar con este filtro.</p>

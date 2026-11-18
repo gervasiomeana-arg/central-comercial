@@ -65,8 +65,30 @@ registerLocalRuntimeRoutes(app, localRuntime);
 app.get('/api/local-runtime/report',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!localMode || !workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
-  const worker=db.getSalesGoalReport().worker;
-  res.json({connections:{email:worker.online&&worker.send&&worker.read,whatsapp:whatsappStatus().ready,intelligence:jarvis.status().ready},diagnosticMode:diagnosticMode(),release});
+  const worker = db.getSalesGoalReport().worker;
+  const jarvisState = jarvis.status();
+  const schedulerState = db.getSchedulerState();
+  const campaigns = db.getCampaigns().filter(c => db.campaignInActiveRun(c.id));
+  const activeCampaignIds = new Set(campaigns.map(c => c.id));
+  const conversations = db.getConversations();
+  const pendingPromotions = conversations.reduce((total, conversation) => {
+    if (!conversation.campaignId || !activeCampaignIds.has(conversation.campaignId)) return total;
+    return total + conversation.messages.filter(message => message.direction === 'outbound' &&
+      !message.replyToProviderId && ['preparado', 'pendiente'].includes(message.status) &&
+      message.reviewStatus !== 'rejected').length;
+  }, 0);
+  res.json({
+    connections: { email: worker.online && worker.send && worker.read, whatsapp: whatsappStatus().ready, intelligence: jarvisState.ready },
+    diagnosticMode: diagnosticMode(), release,
+    activity: {
+      paused: schedulerState.automationsPaused,
+      lastCycleAt: schedulerState.lastRunAt || null,
+      pendingPromotions,
+      completedPlans: jarvisState.plans.filter(plan => plan.state === 'completed').length,
+      campaignsUsingOpenJarvis: campaigns.filter(campaign => Boolean(campaign.intelligencePlanId)).length,
+      statistics: dailyStatistics(db.getApplications(), db.getContacts(), conversations, 90),
+    },
+  });
 });
 registerCheckpointRoute(app);
 
@@ -316,6 +338,18 @@ adminRouter.get('/statistics/daily', (req, res) => {
     return res.status(400).json({ error: 'Seleccioná un período de 7, 30 o 90 días.' });
   }
   res.setHeader('Cache-Control', 'no-store');
+  if (req.query.source === 'pc' && cloudMonitorMode()) {
+    const report = localRuntime.status();
+    if (!report.activity) {
+      return res.status(409).json({ error: report.online
+        ? 'La PC está conectada y todavía no comparte sus estadísticas. Actualizá su ejecutor.'
+        : 'No hay un reporte reciente de la PC dedicada.' });
+    }
+    const { dates, series } = report.activity.statistics;
+    return res.json({ dates: dates.slice(-days), series: series.map(app => ({
+      ...app, contacts: app.contacts.slice(-days), promotions: app.promotions.slice(-days),
+    })) });
+  }
   return res.json(dailyStatistics(db.getApplications(), db.getContacts(), db.getConversations(), days));
 });
 

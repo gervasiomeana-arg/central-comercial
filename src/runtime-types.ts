@@ -1,6 +1,18 @@
+import type { DailyStatistics } from './types.js';
+
+export interface RuntimeActivity {
+  paused: boolean;
+  lastCycleAt: string | null;
+  pendingPromotions: number;
+  completedPlans: number;
+  campaignsUsingOpenJarvis: number;
+  statistics: DailyStatistics;
+}
+
 export type LocalComponentState = 'running' | 'missing' | 'stopped';
 export interface LocalRuntimeState {
   online: boolean;
+  activity?: RuntimeActivity;
   startedAt?: number;
   ramGB?: number;
   model?: string;

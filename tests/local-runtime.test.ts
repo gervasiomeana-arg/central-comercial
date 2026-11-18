@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { dailyStatistics } from '../server/daily-statistics.js';
 import { LocalRuntime } from '../server/local-runtime.js';
 import { findConfig, findJarvis, selectedModel, jarvisEnvironment } from '../desktop/config.mjs';
 
@@ -49,4 +50,24 @@ test('encuentra la carpeta src del instalador oficial de Windows sin depender de
     fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, 'placeholder');
     assert.equal(findJarvis({ LOCALAPPDATA: dir, PATH: '' }), target);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('la publicación recibe totales de actividad y descarta campos privados del reporte', () => {
+  let now = Date.parse('2026-11-18T15:00:00Z');
+  const runtime = new LocalRuntime(() => now);
+  const statistics = dailyStatistics([{ id: 'app-a', slug: 'app-a', name: 'App A' }], [], [], 90, new Date(now));
+  const heartbeat = {
+    workerId: 'pc-privada', startedAt: now, ramGB: 8, model: 'qwen3.5:2b',
+    components: { email: 'running', whatsapp: 'running', intelligence: 'running' }, issues: [],
+    activity: { paused: false, lastCycleAt: new Date(now).toISOString(), pendingPromotions: 2,
+      completedPlans: 1, campaignsUsingOpenJarvis: 1, statistics: { ...statistics, messages: ['contenido privado'] } },
+  };
+  runtime.heartbeat(heartbeat);
+  assert.deepEqual(runtime.status().activity?.statistics, statistics);
+  assert.equal(runtime.status().activity?.pendingPromotions, 2);
+  assert.doesNotMatch(JSON.stringify(runtime.status()), /contenido privado|pc-privada/);
+  assert.throws(() => runtime.heartbeat({ ...heartbeat, activity: { ...heartbeat.activity, pendingPromotions: -1 } }), /inválido/);
+  assert.equal(runtime.status().activity?.pendingPromotions, 2);
+  now += 90000;
+  assert.equal(runtime.status().activity, undefined);
 });
