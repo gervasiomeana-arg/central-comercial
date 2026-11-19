@@ -9,10 +9,17 @@ export interface RuntimeActivity {
   statistics: DailyStatistics;
 }
 
+export interface OwnerReportStatus {
+  day: string;
+  status: 'sin_intento' | 'aceptado_proveedor' | 'rechazado' | 'resultado_desconocido' | 'registro_no_disponible';
+  at?: string;
+}
+
 export type LocalComponentState = 'running' | 'missing' | 'stopped';
 export interface LocalRuntimeState {
   online: boolean;
   activity?: RuntimeActivity;
+  ownerReport?: OwnerReportStatus;
   startedAt?: number;
   ramGB?: number;
   model?: string;

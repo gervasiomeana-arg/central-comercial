@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
-import { retryDelay, upgradeWorker, atomicJSON } from './recovery.mjs';
+import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies } from './local-app.mjs';
 
@@ -146,7 +146,7 @@ async function heartbeat() {
       const response=await fetch(new URL('/api/local-runtime/report',config.url),{headers:{Authorization:`Bearer ${config.key}`},redirect:'error',signal:AbortSignal.timeout(4000)});
       if(response.ok)report=await response.json();
     }catch{}
-    const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections:(!stopping&&report.connections)||{email:false,whatsapp:false,intelligence:false},sourceFingerprint:report.release?.sourceFingerprint,activity:stopping?undefined:report.activity};
+    const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections:(!stopping&&report.connections)||{email:false,whatsapp:false,intelligence:false},sourceFingerprint:report.release?.sourceFingerprint,activity:stopping?undefined:report.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
     atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections:payload.connections,components,issues:[...issues],backupAt,release:report.release});
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },

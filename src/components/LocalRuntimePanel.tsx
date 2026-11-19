@@ -16,6 +16,14 @@ const issueLabels: Record<string, string> = {
   component_stopped: 'Un componente se detuvo. Revisá la ventana de Central Comercial.',
   jarvis_port_busy: 'El puerto reservado para el motor local está ocupado; no se conectó a ese proceso.'
 };
+const ownerReportLabels = {
+  sin_intento: 'Sin intento registrado',
+  aceptado_proveedor: 'Aceptado por WhatsApp',
+  rechazado: 'Rechazado',
+  resultado_desconocido: 'Sin confirmación de WhatsApp',
+  registro_no_disponible: 'Registro no disponible',
+};
+
 export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   const [runtime, setRuntime] = useState<LocalRuntimeState | null>(null);
   const [connections, setConnections] = useState({ email: false, whatsapp: false, intelligence: false });
@@ -43,6 +51,12 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>
     {runtime?.diagnosticMode && <p className="text-amber-200" role="status">Verificación sin envíos: los ejecutores pueden conectarse, pero las colas no entregan mensajes.</p>}
     {remote && <p className="text-sm text-slate-300">La publicación recibe el estado y los totales de la PC. La PC ejecuta los envíos y conserva sus registros. El reporte vence a los 90 segundos.</p>}
+    {runtime?.ownerReport && <p className="text-sm text-slate-200">Informe de WhatsApp del {runtime.ownerReport.day.split('-').reverse().join('/')}.
+      {' '}{ownerReportLabels[runtime.ownerReport.status]}
+      {runtime.ownerReport.at && ' · ' + new Date(runtime.ownerReport.at).toLocaleTimeString('es-AR', {
+        timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit',
+      })}
+    </p>}
     {runtime?.activity && <dl className="grid gap-2 text-sm text-slate-200 sm:grid-cols-3">
       <div><dt>Estrategias recientes completadas</dt><dd className="text-lg">{runtime.activity.completedPlans}</dd></div>
       <div><dt>Campañas que usan OpenJarvis</dt><dd className="text-lg">{runtime.activity.campaignsUsingOpenJarvis}</dd></div>
