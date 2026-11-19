@@ -40,7 +40,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   for (const conv of db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
-    if (!usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
+    if (contact.undeliverableEmail === contact.email?.trim().toLowerCase() || !usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
     for (const msg of conv.messages) {
       if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
@@ -84,6 +84,34 @@ export function completeCommercialEmail(input: any) {
   } else msg.serviceError = String(input.response || 'Sin confirmación del proveedor').slice(0,500);
   db.addLog(accepted ? 'info' : 'warning', 'conversaciones', `Correo ${msg.status}`, { conversationId:conv.id, messageId:msg.id }); db.save(); return { success:true };
 }
+export function recordCommercialBounce(input: { references?: unknown; recipient?: unknown; status?: unknown }) {
+  if (!Array.isArray(input.references) || typeof input.recipient !== 'string' ||
+      typeof input.status !== 'string' || !/^5\.\d{1,3}\.\d{1,3}$/.test(input.status)) return { matched: false };
+  const recipient = input.recipient.trim().toLowerCase();
+  for (const conversation of db.getConversations()) {
+    const message = conversation.messages.find(m => m.direction === 'outbound' && m.channel === 'email' &&
+      m.status === 'aceptado_proveedor' && m.providerMessageId && input.references instanceof Array &&
+      input.references.includes(m.providerMessageId) && m.approvedRecipient === recipient);
+    if (!message) continue;
+    message.status = 'fallido';
+    message.serviceError = 'Rebote permanente confirmado: ' + input.status;
+    if (['5.1.1', '5.1.3', '5.1.10'].includes(input.status)) {
+      for (const contact of db.getContacts().filter(c => c.email?.trim().toLowerCase() === recipient)) {
+        contact.undeliverableEmail = recipient;
+      }
+    }
+    const campaign = conversation.campaignId ? db.getCampaignById(conversation.campaignId) : undefined;
+    if (campaign) {
+      campaign.stats.messagesSent = Math.max(0, campaign.stats.messagesSent - 1);
+      campaign.stats.messagesFailed++;
+    }
+    db.addLog('warning', 'conversaciones', 'Correo devuelto después de la aceptación SMTP', { messageId: message.id });
+    db.save();
+    return { matched: true };
+  }
+  return { matched: false };
+}
+
 export function importCommercialReply(input: any) {
   if (typeof input.messageId !== 'string' || input.messageId.length > 500 || !Array.isArray(input.references) || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 30000 || input.automatic) throw new Error('Respuesta no válida o automática.');
   input.text = currentReplyText(input.text);
@@ -146,7 +174,8 @@ export function registerCommercialEmailRoutes(app: Express) {
           return res.json(dailyCommercialDigest(data.day,status.sender));
         }
         case 'complete': return res.json(completeCommercialEmail(data));
-        case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada')).map(m => ({id:m.providerMessageId, from:db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
+        case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.channel === 'email' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada')).map(m => ({id:m.providerMessageId, from: m.approvedRecipient || db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
+        case 'bounce': worker(data.workerId); return res.json(recordCommercialBounce(data));
         case 'inbound': worker(data.workerId); return res.json(importCommercialReply(data));
         default: return res.status(404).json({error:'Operación desconocida.'});
       }

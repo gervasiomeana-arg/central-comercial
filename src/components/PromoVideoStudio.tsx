@@ -20,7 +20,14 @@ export function PromoVideoStudio({applications}:{applications:Application[]}){
  const [script,setScript]=useState('');
  const [scriptBusy,setScriptBusy]=useState(false);
  const app=ready.find(a=>a.id===selected)||ready[0];
- const draft=app?(drafts[app.id]||{appId:app.id,headline:app.verifiedFeatures[0]?.slice(0,95)||app.name,cta:'Conocé más en '+app.website,duration:20,approved:false}):undefined;
+ const saved=app?drafts[app.id]:undefined;
+ const draft=app?{
+   appId:app.id,
+   headline:(saved?.headline ?? (app.verifiedFeatures[0] || app.name)).slice(0,95),
+   cta:(saved?.cta ?? 'Conocé más en '+app.website).slice(0,100),
+   duration:saved && [15,20,30].includes(saved.duration)?saved.duration:20,
+   approved:saved?.approved===true,
+ }:undefined;
  useEffect(()=>{try{localStorage.setItem(key,JSON.stringify(drafts))}catch{}},[drafts]);
  useEffect(()=>()=>{if(generated)URL.revokeObjectURL(generated.url);},[generated]);
  const edit=(changes:Partial<Draft>)=>{if(!app||!draft)return;setVideoApproved(false);setGenerated(null);setDrafts(prev=>({...prev,[app.id]:{...draft,...changes,approved:false}}));};

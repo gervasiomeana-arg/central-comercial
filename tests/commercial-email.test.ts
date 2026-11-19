@@ -17,7 +17,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     await fs.copyFile(new URL('../src/email-policy.ts',import.meta.url),path.join(directory,'src','email-policy.ts'));
     await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
     const {db}=await import(pathToFileURL(path.join(directory,'server','db.ts')).href);
-    const {claimCommercialEmail,completeCommercialEmail,importCommercialReply,replyDecision,currentReplyText}=await import(pathToFileURL(path.join(directory,'server','commercial-email.ts')).href);
+    const {claimCommercialEmail,completeCommercialEmail,recordCommercialBounce,importCommercialReply,replyDecision,currentReplyText}=await import(pathToFileURL(path.join(directory,'server','commercial-email.ts')).href);
     const app=db.getApplications().find((a:any)=>/voley/i.test(a.name)), now=new Date();
     db.setAutomationsPaused(false);db.saveMonthlyGoal({...db.getMonthlyGoal(),enabled:true,targetClients:5});
     const campaign=db.getCampaigns().find((c:any)=>c.goalMonth&&c.appId===app.id);campaign.sendWindowStart='00:00';campaign.sendWindowEnd='23:59';campaign.startDate='2026-11-01';
@@ -43,6 +43,14 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     importCommercialReply({messageId:'<payment@test>',from:'info@club.test',references:[job.providerMessageId],text:'Ya pagué, adjunto comprobante.'});
     assert.ok(db.getTasks().some((t:any)=>t.relatedId===conv.id&&t.status==='pendiente'));assert.equal(db.getPayments().filter((p:any)=>p.status==='confirmado').length,0);assert.equal(db.getSalesGoalReport().achieved,0);
     importCommercialReply({messageId:'<stop@test>',from:'info@club.test',references:[job.providerMessageId],text:'BAJA'});assert.equal(db.getContactById('research-contact').permission,'revocado');assert.equal(claimCommercialEmail('test-worker',now),null);
+    assert.equal(recordCommercialBounce({ references: [job.providerMessageId], recipient: 'other@club.test', status: '5.1.1' }).matched, false);
+    assert.equal(recordCommercialBounce({ references: [job.providerMessageId], recipient: job.recipient, status: '4.2.2' }).matched, false);
+    const bounce = { references: [job.providerMessageId], recipient: job.recipient, status: '5.1.1' };
+    assert.equal(recordCommercialBounce(bounce).matched, true);
+    assert.equal(conv.messages.find((m:any) => m.id === job.messageId).status, 'fallido');
+    assert.equal(db.getContactById('research-contact').undeliverableEmail, job.recipient);
+    assert.equal(recordCommercialBounce(bounce).matched, false);
+
     assert.equal(replyDecision('Quiero un descuento',app,'Argentina').kind,'human');assert.equal(replyDecision('precio',app,'Brasil').kind,'human');
     assert.equal(replyDecision('Quiero contratar',app,'Argentina').kind,'purchase');
     assert.ok(!replyDecision('precio',commercialCatalog()[2],'Argentina').text?.includes('99'));
