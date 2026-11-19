@@ -3,11 +3,15 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 export async function sendWithAck(client,job,onChat,timeoutMs=60000){
  const chat=await client.getNumberId(job.recipient);if(!chat)return {outcome:'rejected'};
- await onChat(chat._serialized);
+ return sendToChatWithAck(client,chat._serialized,job.content,onChat,timeoutMs);
+}
+export async function sendToChatWithAck(client,recipient,content,onChat,timeoutMs=60000){
+ if(typeof recipient!=='string'||!(/^[\w.-]+@(?:c\.us|lid)$/).test(recipient))return {outcome:'rejected'};
+ await onChat(recipient);
  let id,resolveAck;const observed=new Map();const confirmation=new Promise(resolve=>{resolveAck=resolve;});
  const listener=(message,ack)=>{const key=message?.id?._serialized;if(!key)return;observed.set(key,ack);if(key===id&&(ack>=1||ack===-1))resolveAck(ack);};client.on('message_ack',listener);
  let timer;
- try{const sent=await client.sendMessage(chat._serialized,job.content);const chatId=typeof sent?.to==='string'&&/^[\w.-]+@(?:c\.us|lid)$/.test(sent.to)?sent.to:chat._serialized;await onChat(chatId);id=sent?.id?._serialized;let ack=observed.get(id)??sent?.ack;if(!(ack>=1||ack===-1))ack=await Promise.race([confirmation,new Promise(resolve=>{timer=setTimeout(()=>resolve(0),timeoutMs);})]);return {outcome:ack>=1?'accepted':ack===-1?'rejected':'unknown',ack,providerId:id,chatId};}
+ try{const sent=await client.sendMessage(recipient,content);const chatId=typeof sent?.to==='string'&&/^[\w.-]+@(?:c\.us|lid)$/.test(sent.to)?sent.to:recipient;await onChat(chatId);id=sent?.id?._serialized;let ack=observed.get(id)??sent?.ack;if(!(ack>=1||ack===-1))ack=await Promise.race([confirmation,new Promise(resolve=>{timer=setTimeout(()=>resolve(0),timeoutMs);})]);return {outcome:ack>=1?'accepted':ack===-1?'rejected':'unknown',ack,providerId:id,chatId};}
  finally{clearTimeout(timer);client.removeListener('message_ack',listener);}
 }
 export function commercialWhatsAppRunner({client,stateDir,call}){

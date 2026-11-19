@@ -17,3 +17,26 @@ export function finishMessage(state, job, result) {
   state.outcomes[job.messageId] = result;
   state.done[job.messageId] = { fingerprint: fingerprint(job), outcome: result.outcome, response: result.response };
 }
+
+export function collectBounces(mail, originalHeaders, threads) {
+  const deliveryParts = mail.attachments.filter(part => part.contentType === 'message/delivery-status');
+  const originalParts = mail.attachments.filter(part => ['text/rfc822-headers','message/rfc822'].includes(part.contentType));
+  const ids = new Set((originalHeaders.match(/<[^<>\r\n]+>/g) || []));
+  for (const part of [...deliveryParts, ...originalParts]) {
+    const content = part.content.toString('utf8');
+    const headers = part.contentType === 'message/rfc822' ? content.split(/\r?\n\r?\n/, 1)[0] : content;
+    const wanted = part.contentType === 'message/delivery-status' ? /^Original-Message-ID:\s*(<[^<>\r\n]+>)/gim : /^Message-ID:\s*(<[^<>\r\n]+>)/gim;
+    for (const match of headers.matchAll(wanted)) ids.add(match[1]);
+  }
+  const bounces = [];
+  for (const part of deliveryParts) {
+    for (const block of part.content.toString('utf8').split(/\r?\n[ \t]*\r?\n/)) {
+      const address = block.match(/^Final-Recipient:[ \t]*rfc822;[ \t]*([^\s<>]+)[ \t]*\r?$/im)?.[1]?.toLowerCase();
+      const status = block.match(/^Status:[ \t]*(5\.\d{1,3}\.\d{1,3})[ \t]*\r?$/im)?.[1];
+      if (!address || !status || !/^Action:[ \t]*failed[ \t]*\r?$/im.test(block)) continue;
+      const references = threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id);
+      if (references.length) bounces.push({ recipient: address, status, references });
+    }
+  }
+  return bounces;
+}

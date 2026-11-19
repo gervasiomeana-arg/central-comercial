@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,sendWithAck} from './commercial.mjs';
+import {commercialWhatsAppRunner,sendToChatWithAck} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -46,12 +46,18 @@ async function ownerReportTick(){
  if(!test&&!daily)return;
  const key=(test?'test-':'daily-')+day;
  if(ownerReports[key])return;
+ const owner = client.info?.wid;
+ if (canonicalPhone(owner?.user) !== canonicalPhone(phone) ||
+     !/^\d+@(?:c\.us|lid)$/.test(owner?._serialized || '')) {
+  console.log('WhatsApp no confirmó el identificador del chat personal. El informe queda pendiente.');
+  return;
+ }
  const report=await api('owner-report',{day},'commercial-whatsapp');
  // Reserve before sending; never duplicate an uncertain WhatsApp delivery.
  ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString()};saveOwnerReports();
  try{
   const message=(test?'PRUEBA DE WHATSAPP — CENTRAL COMERCIAL\n\n':'')+report.content;
-  const result=await sendWithAck(client,{recipient:phone,content:message},async()=>{},60000);
+  const result=await sendToChatWithAck(client,owner._serialized,message,async()=>{},60000);
   ownerReports[key]={status:result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',at:new Date().toISOString(),providerId:result.providerId||''};
  }catch(error){ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
