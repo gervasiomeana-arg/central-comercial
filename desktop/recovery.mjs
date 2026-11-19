@@ -17,3 +17,27 @@ export function upgradeWorker(source, target) {
   fs.writeFileSync(target + '.central-update', content, { mode: 0o600 }); fs.renameSync(target + '.central-update', target);
   return true;
 }
+
+const reportClock = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
+});
+
+export function readOwnerReport(file, now = new Date()) {
+  const parts = Object.fromEntries(reportClock.formatToParts(now).map(({ type, value }) => [type, value]));
+  const today = [parts.year, parts.month, parts.day].join('-');
+  const yesterday = new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10);
+  const day = Number(parts.hour) >= 20 ? today : yesterday;
+  if (!fs.existsSync(file)) return { day, status: 'sin_intento' };
+  try {
+    const entry = JSON.parse(fs.readFileSync(file, 'utf8'))['daily-' + day];
+    if (!entry) return { day, status: 'sin_intento' };
+    if (!['aceptado_proveedor', 'rechazado', 'resultado_desconocido'].includes(entry.status) ||
+        typeof entry.at !== 'string' || !Number.isFinite(Date.parse(entry.at))) {
+      return { day, status: 'registro_no_disponible' };
+    }
+    return { day, status: entry.status, at: entry.at };
+  } catch {
+    return { day, status: 'registro_no_disponible' };
+  }
+}

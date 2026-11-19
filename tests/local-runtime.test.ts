@@ -4,6 +4,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { dailyStatistics } from '../server/daily-statistics.js';
+import { readOwnerReport } from '../desktop/recovery.mjs';
 import { LocalRuntime } from '../server/local-runtime.js';
 import { findConfig, findJarvis, selectedModel, jarvisEnvironment } from '../desktop/config.mjs';
 
@@ -70,4 +71,29 @@ test('la publicación recibe totales de actividad y descarta campos privados del
   assert.equal(runtime.status().activity?.pendingPromotions, 2);
   now += 90000;
   assert.equal(runtime.status().activity, undefined);
+});
+
+
+test('el estado del informe conserva la fecha argentina y excluye datos del mensaje', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-owner-report-'));
+  try {
+    const file = path.join(dir, 'owner-reports.json');
+    const now = new Date('2026-11-19T02:30:00Z');
+    assert.deepEqual(readOwnerReport(file, now), { day: '2026-11-18', status: 'sin_intento' });
+    const at = '2026-11-19T02:25:00.000Z';
+    fs.writeFileSync(file, JSON.stringify({ 'daily-2026-11-18': {
+      status: 'aceptado_proveedor', at, providerId: 'privado', content: 'contenido privado',
+    } }));
+    assert.deepEqual(readOwnerReport(file, new Date('2026-11-19T03:10:00Z')),
+      { day: '2026-11-18', status: 'aceptado_proveedor', at });
+    const runtime = new LocalRuntime();
+    runtime.heartbeat({
+      workerId: 'fixture', startedAt: 2000, ramGB: 8, model: 'fixture',
+      components: { email: 'running', whatsapp: 'running', intelligence: 'running' }, issues: [],
+      ownerReport: { ...readOwnerReport(file, now), providerId: 'privado' },
+    });
+    assert.deepEqual(runtime.status().ownerReport, { day: '2026-11-18', status: 'aceptado_proveedor', at });
+    fs.writeFileSync(file, '{');
+    assert.deepEqual(readOwnerReport(file, now), { day: '2026-11-18', status: 'registro_no_disponible' });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
