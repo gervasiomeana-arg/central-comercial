@@ -17,3 +17,10 @@
 !deploy/
 !deploy/Dockerfile
 !deploy/run-batch.mjs
+!deploy/research.Dockerfile
+!deploy/research-runtime.mjs
+!openjarvis-worker/
+!openjarvis-worker/client.mjs
+!openjarvis-worker/worker.mjs
+!openjarvis-worker/cloud/
+!openjarvis-worker/cloud/openjarvis.toml

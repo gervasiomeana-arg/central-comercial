@@ -104,7 +104,7 @@ app.get('/api/local-runtime/report',(req,res)=>{
   });
 });
 registerCheckpointRoute(app);
-registerCommercialBatches(app, requireAdminAuth, () => jarvis.status().ready);
+registerCommercialBatches(app, requireAdminAuth, () => jarvis.status().ready, () => jarvis.pendingPlanning());
 
 // Start background task runner
 if (!publishedProxy) scheduler.start(30000);

@@ -68,6 +68,10 @@ export class JarvisQueue {
       detail: online ? this.worker!.detail : 'Pendiente de iniciar el puente y OpenJarvis en tu computadora.',
       plans: this.plans.slice(-30).reverse().map(({ workerId, leaseHash, ...plan }) => plan) };
   }
+  pendingPlanning() {
+    this.expire();
+    return this.plans.some(plan => plan.state === 'queued' || plan.state === 'running');
+  }
   assistantWorkerReady(id: string) { return this.status().assistantReady === true && this.worker?.id === id; }
   completed(id:string){const p=this.plans.find(p=>p.id===id);if(p?.state!=='completed'||!p.strategy)return null;return {id:p.id,context:p.context,strategy:p.strategy};}
   rejectStrategy(id:string) {

@@ -25,6 +25,7 @@ if (!key || key.length < 32) throw new Error('Falta la conexión privada existen
 // Deliberately do not load SMTP/IMAP passwords into process.env or pass them to OpenJarvis.
 const base = localJarvisURL(process.env.OPENJARVIS_URL);
 const model = process.env.OPENJARVIS_MODEL || 'qwen3.5:2b';
+const researchOnly = process.env.OPENJARVIS_BATCH_PHASE === 'buscar';
 const jarvisKey = process.env.OPENJARVIS_API_KEY || '';
 const stateDir = process.env.OPENJARVIS_STATE_DIR || path.join(here, 'private-state');
 if (cloudKey && (!process.env.OPENJARVIS_STATE_DIR || !path.isAbsolute(stateDir))) {
@@ -52,7 +53,7 @@ async function pulse() {
   checking = true;
   try {
     try { await inspectJarvis(base, model, jarvisKey); ready = true; } catch { ready = false; }
-    await api('heartbeat', { ready, model: ready ? model : '', assistant: true });
+    await api('heartbeat', { ready, model: ready ? model : '', assistant: !researchOnly });
     if(ready)process.send?.({type:'healthy'});
   } catch (e) { console.error(e.message); }
   finally { checking = false; }
@@ -75,7 +76,7 @@ async function tick() {
   try {
     await flush();
     if (!ready) return;
-    const assistantClaim = await api('claim', {}, 'assistant');
+    const assistantClaim = researchOnly ? {} : await api('claim', {}, 'assistant');
     const area = assistantClaim.job ? 'assistant' : 'openjarvis';
     const { job } = assistantClaim.job ? assistantClaim : await api('claim');
     if (!job) return;
