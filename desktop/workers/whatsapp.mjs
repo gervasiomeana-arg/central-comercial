@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,sendToChatWithAck} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,sendToChatWithAck} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -23,9 +23,8 @@ fs.writeFileSync(idFile,workerId,{mode:0o600});
 const journalFile=path.join(stateDir,'outbox.json');
 const journal=fs.existsSync(journalFile)?JSON.parse(fs.readFileSync(journalFile,'utf8')):{};
 const save=()=>{fs.writeFileSync(journalFile+'.tmp',JSON.stringify(journal),{mode:0o600});fs.renameSync(journalFile+'.tmp',journalFile);};
-const phone='5492235802743';
 const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('549')?'54'+digits.slice(3):digits;};
-let whatsappReady=false,running=false,stopping=false;
+let whatsappReady=false,running=false,stopping=false,verified=false;
 async function api(action,body={},area='channel-tests'){
  const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});
  if(!response.ok){const error=new Error(`Central Comercial respondio HTTP ${response.status}`);error.httpStatus=response.status;throw error;}
@@ -36,52 +35,61 @@ const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir
 const ownerReportFile=path.join(stateDir,'owner-reports.json');
 const ownerReports=fs.existsSync(ownerReportFile)?JSON.parse(fs.readFileSync(ownerReportFile,'utf8')):{};
 const saveOwnerReports=()=>{const tmp=ownerReportFile+'.tmp';fs.writeFileSync(tmp,JSON.stringify(ownerReports),{mode:0o600});fs.renameSync(tmp,ownerReportFile);};
-async function ownerReportTick(){
+client.on('message_ack', (message, ack) => {
+ if (ack < 2 || !message?.id?._serialized) return;
+ const report = Object.values(ownerReports).find(entry => entry.providerId === message.id._serialized);
+ if (report?.status !== 'aceptado_proveedor') return;
+ report.status = 'entrega_confirmada';
+ saveOwnerReports();
+});
+async function ownerReportTick(account){
  if(!whatsappReady||process.env.CENTRAL_DIAGNOSTIC_MODE==='true')return;
- const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
- const part=k=>parts.find(x=>x.type===k)?.value||'';
- const day=part('year')+'-'+part('month')+'-'+part('day'),minute=Number(part('hour'))*60+Number(part('minute'));
- const test=day==='2026-11-17'&&minute>=23*60+30;
- const daily=day>='2026-11-18'&&minute>=20*60;
- if(!test&&!daily)return;
- const key=(test?'test-':'daily-')+day;
- if(ownerReports[key])return;
+ const task = ownerReportSchedule(ownerReports, new Date(), process.env.CENTRAL_WHATSAPP_REPORT_DAY);
+ if (!task) return;
+ const {day,key,manual} = task;
  const owner = client.info?.wid;
- if (canonicalPhone(owner?.user) !== canonicalPhone(phone) ||
+ if (canonicalPhone(owner?.user) !== canonicalPhone(account) ||
      !/^\d+@(?:c\.us|lid)$/.test(owner?._serialized || '')) {
   console.log('WhatsApp no confirmó el identificador del chat personal. El informe queda pendiente.');
   return;
  }
  const report=await api('owner-report',{day},'commercial-whatsapp');
  // Reserve before sending; never duplicate an uncertain WhatsApp delivery.
- ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString()};saveOwnerReports();
+ ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString()};saveOwnerReports();
  try{
-  const message=(test?'PRUEBA DE WHATSAPP — CENTRAL COMERCIAL\n\n':'')+report.content;
-  const result=await sendToChatWithAck(client,owner._serialized,message,async()=>{},60000);
-  ownerReports[key]={status:result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',at:new Date().toISOString(),providerId:result.providerId||''};
- }catch(error){ownerReports[key]={status:'resultado_desconocido',at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
+  const result=await sendToChatWithAck(client,owner._serialized,report.content,async()=>{},60000);
+  ownerReports[key]={status:result.ack>=2?'entrega_confirmada':result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',manual,at:new Date().toISOString(),providerId:result.providerId||''};
+ }catch(error){ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',qr=>{console.log('\nEn el telefono: WhatsApp > Dispositivos vinculados > Vincular un dispositivo.');console.log('Escanee este QR. No lo comparta por chat.');qrcode.generate(qr,{small:true});});
 client.on('ready',()=>{
  const account=client.info?.wid?.user;
- if(!account||canonicalPhone(account)!==canonicalPhone(phone)){whatsappReady=false;console.log('La cuenta vinculada no coincide con el numero personal previsto. No se habilitaran envios. Desvincule este dispositivo desde el telefono y vuelva a iniciar.');void recover(78);return;}
- process.send?.({type:'healthy'});whatsappReady=true;console.log('WhatsApp personal vinculado a Central Comercial. No se inicio ninguna campana.');void tick();
+ if(!account){void recover(78);return;}
+ whatsappReady=true;void tick();
 });
 client.on('auth_failure',()=>{whatsappReady=false;console.log('WhatsApp requiere volver a vincular el dispositivo.');void recover(78);});
 client.on('disconnected',reason=>{whatsappReady=false;console.log('WhatsApp desconectado. Se conserva la sesión para recuperarla.');void recover(String(reason).toUpperCase()==='LOGOUT'?78:75);});
 async function tick(){
  if(running||stopping)return;running=true;
  try{
-  await api('heartbeat',{email:false,whatsapp:whatsappReady});
-  await api('heartbeat',{ready:whatsappReady,account:client.info?.wid?.user||''},'commercial-whatsapp');
+  const account = client.info?.wid?.user || '';
+  const ready = whatsappReady && Boolean(account);
+  // The authenticated commercial endpoint verifies the linked account against the owner.
+  await api('heartbeat',{ready,account},'commercial-whatsapp');
+  await api('heartbeat',{email:false,whatsapp:ready});
+  if (ready && !verified) {
+   verified=true;
+   process.send?.({type:'healthy'});
+   console.log('WhatsApp personal vinculado a Central Comercial.');
+  }
+  if (ready) await ownerReportTick(account);
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
-  if(!whatsappReady)return;
-  await ownerReportTick();
+  if(!ready || !whatsappReady)return;
   await commercial.tick();
   const {job}=await api('claim');if(!job)return;
-  if(job.channel!=='whatsapp'||job.recipient!==phone)throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
+  if(job.channel!=='whatsapp'||canonicalPhone(job.recipient)!==canonicalPhone(account))throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
   if(journal[job.id]){const previous=journal[job.id];await api('complete',{id:job.id,lease:job.lease,result:previous.result});previous.reported=true;save();return;}
   const entry=journal[job.id]={id:job.id,lease:job.lease,result:{state:'resultado_desconocido',evidence:'Intento iniciado; ante una interrupcion no se reenvia automaticamente.'}};save();
   try{entry.result=await sendWhatsAppTest(client,job);}catch{entry.result={state:'resultado_desconocido',evidence:'WhatsApp no confirmo el resultado. Revisar antes de reenviar.'};}

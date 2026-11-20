@@ -1,3 +1,4 @@
+import { ownerReportSchedule } from '../desktop/whatsapp-commercial.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -96,4 +97,21 @@ test('el estado del informe conserva la fecha argentina y excluye datos del mens
     fs.writeFileSync(file, '{');
     assert.deepEqual(readOwnerReport(file, now), { day: '2026-11-18', status: 'registro_no_disponible' });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test('recupera el informe al reconectar después de medianoche y admite un reenvío explícito', () => {
+  const now = new Date('2026-11-20T03:15:00Z');
+  const day = '2026-11-19';
+  const automatic = { day, key: 'daily-' + day, manual: false };
+  assert.deepEqual(ownerReportSchedule({}, now), automatic);
+  const reports = { [automatic.key]: { status: 'aceptado_proveedor' } };
+  assert.equal(ownerReportSchedule(reports, now), null);
+  const manual = { day, key: 'manual-' + day, manual: true };
+  assert.deepEqual(ownerReportSchedule(reports, now, day), manual);
+  assert.equal(ownerReportSchedule({ ...reports, [manual.key]: { status: 'resultado_desconocido' } }, now, day), null);
+  assert.deepEqual(ownerReportSchedule({}, now, day), { ...automatic, manual: true });
+  assert.equal(ownerReportSchedule({ [automatic.key]: { manual: true } }, now, day), null);
+  assert.deepEqual(ownerReportSchedule({}, new Date('2026-11-20T23:00:00Z')),
+    { day: '2026-11-20', key: 'daily-2026-11-20', manual: false });
 });

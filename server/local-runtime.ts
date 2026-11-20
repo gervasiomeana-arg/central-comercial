@@ -26,7 +26,7 @@ export class LocalRuntime {
     const activity = input.activity === undefined ? undefined : validateActivity(input.activity);
     const report = input.ownerReport;
     const ownerReport = report && typeof report.day === 'string' && validDay(report.day) &&
-      ['sin_intento', 'aceptado_proveedor', 'rechazado', 'resultado_desconocido', 'registro_no_disponible'].includes(report.status)
+      ['sin_intento', 'aceptado_proveedor', 'entrega_confirmada', 'rechazado', 'resultado_desconocido', 'registro_no_disponible'].includes(report.status)
       ? { day: report.day, status: report.status,
           at: typeof report.at === 'string' && Number.isFinite(Date.parse(report.at))
             ? new Date(report.at).toISOString() : undefined }

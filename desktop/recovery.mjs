@@ -30,9 +30,10 @@ export function readOwnerReport(file, now = new Date()) {
   const day = Number(parts.hour) >= 20 ? today : yesterday;
   if (!fs.existsSync(file)) return { day, status: 'sin_intento' };
   try {
-    const entry = JSON.parse(fs.readFileSync(file, 'utf8'))['daily-' + day];
+    const reports = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const entry = reports['manual-' + day] ?? reports['daily-' + day];
     if (!entry) return { day, status: 'sin_intento' };
-    if (!['aceptado_proveedor', 'rechazado', 'resultado_desconocido'].includes(entry.status) ||
+    if (!['aceptado_proveedor', 'entrega_confirmada', 'rechazado', 'resultado_desconocido'].includes(entry.status) ||
         typeof entry.at !== 'string' || !Number.isFinite(Date.parse(entry.at))) {
       return { day, status: 'registro_no_disponible' };
     }
