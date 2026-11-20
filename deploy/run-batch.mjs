@@ -12,9 +12,9 @@ if (phase !== 'buscar' && !process.env.CENTRAL_EMAIL_STATE_DIR) {
 }
 const key = process.env.CENTRAL_BATCH_KEY || '';
 if (key.length < 32) throw new Error('Falta la clave privada de las tandas.');
-async function batchRequest(action, payload = {}) {
+async function batchRequest(action, payload = {}, signal) {
   const result = await fetch(new URL('/api/batches/' + phase + '/' + action, base), {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(300000),
+    method: 'POST', redirect: 'error', signal: AbortSignal.any([AbortSignal.timeout(300000), ...(signal ? [signal] : [])]),
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -37,7 +37,14 @@ async function runEmail() {
     process.removeListener('SIGTERM', forward);
   }
 }
-const prepared = await batchRequest('prepare');
+async function prepare() {
+  if (phase !== 'buscar' || process.env.CENTRAL_BATCH_BOOT_JARVIS !== 'true') return batchRequest('prepare');
+  const check = await batchRequest('check');
+  if (check.state !== 'disponible') return check;
+  const { withOpenJarvis } = await import('./research-runtime.mjs');
+  return withOpenJarvis(signal => batchRequest('prepare', {}, signal));
+}
+const prepared = await prepare();
 if (prepared.state === 'preparada') {
   try {
     await runEmail();

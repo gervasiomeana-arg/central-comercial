@@ -11,10 +11,11 @@ import { DATA_DIR } from './data-directory.js';
 import { db } from './db.js';
 import { cloudBatchesEnabled, diagnosticMode, outboundEnabled } from './execution-role.js';
 import { scheduler } from './scheduler.js';
+import { intelligenceCycle } from './intelligence-cycle.js';
 
 type Receipt = { day: string; phase: CommercialBatch; startedAt: string; completedAt?: string; runToken?: string; report?: string };
 
-export function registerCommercialBatches(app: Express, admin: RequestHandler, openJarvisReady: () => boolean) {
+export function registerCommercialBatches(app: Express, admin: RequestHandler, openJarvisReady: () => boolean, planningPending: () => boolean) {
   const directory = path.join(DATA_DIR, 'batch-history');
   const record = (day: string, phase: CommercialBatch) => path.join(directory, day + '-' + phase + '.json');
   const read = (file: string): Receipt | undefined =>
@@ -33,7 +34,7 @@ export function registerCommercialBatches(app: Express, admin: RequestHandler, o
     const phase = batchWindow();
     if (!phase || req.params.phase !== phase) return res.json({ state: 'fuera_de_horario' });
     const action = req.params.action;
-    if (action !== 'prepare' && action !== 'complete' && action !== 'release') return res.sendStatus(404);
+    if (action !== 'prepare' && action !== 'complete' && action !== 'release' && action !== 'check') return res.sendStatus(404);
     if (action !== 'release' && phase === 'enviar' && !outboundEnabled()) return res.json({ state: 'envios_desactivados' });
     if (action !== 'release' && db.getSchedulerState().automationsPaused) return res.json({ state: 'pausado' });
     if (active) return res.status(409).json({ error: 'Ya se está preparando una tanda.' });
@@ -43,6 +44,7 @@ export function registerCommercialBatches(app: Express, admin: RequestHandler, o
     try {
       let receipt = read(file);
       if (receipt?.completedAt) return res.json({ state: 'completada', day, phase });
+      if (action === 'check') return res.json({ state: receipt?.runToken ? 'asignada' : 'disponible' });
       if (action === 'prepare') {
         if (receipt?.runToken) return res.status(409).json({ error: 'La tanda ya está asignada a un ejecutor.' });
         if (phase === 'buscar' && !openJarvisReady()) {
@@ -50,14 +52,32 @@ export function registerCommercialBatches(app: Express, admin: RequestHandler, o
         }
         receipt ??= { day, phase, startedAt: new Date().toISOString() };
         save(file, receipt);
+        const deadline = Date.now() + 240000;
         const cycles = phase === 'buscar' ? 8 : 1;
-        for (let index = 0; index < cycles && batchWindow() === phase; index++) {
+        for (let index = 0; index < cycles && batchWindow() === phase && !res.destroyed; index++) {
           if (!await scheduler.tick(phase)) return res.json({ state: 'pausado' });
           if (db.getResearchState().blocked || index + 1 === cycles) break;
           await wait(10000);
         }
         if (phase === 'buscar') {
           if (db.getResearchState().blocked) return res.status(503).json({ error: 'La fuente de investigación requiere revisión.' });
+          const waitingForPlans = planningPending();
+          while (planningPending() && Date.now() < deadline && batchWindow() === phase &&
+              !db.getSchedulerState().automationsPaused && !res.destroyed && openJarvisReady()) {
+            await wait(5000);
+          }
+          if (res.destroyed) return;
+          if (planningPending() || batchWindow() !== phase || !openJarvisReady()) {
+            return res.status(503).json({ error: 'Quedaron estrategias de OpenJarvis pendientes.' });
+          }
+          if (db.getSchedulerState().automationsPaused) return res.json({ state: 'pausado' });
+          if (waitingForPlans) {
+            // The bounded initial cycles may have run before the model produced usable queries.
+            if (!await scheduler.tick(phase)) return res.json({ state: 'pausado' });
+          } else await intelligenceCycle();
+          if (planningPending() || db.getResearchState().blocked || res.destroyed) {
+            return res.status(503).json({ error: 'La recuperación de la búsqueda quedó pendiente.' });
+          }
           save(file, { ...receipt, completedAt: new Date().toISOString() });
           return res.json({ state: 'completada', day, phase });
         }
