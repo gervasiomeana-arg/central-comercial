@@ -1,0 +1,9 @@
+[Unit]
+Description=Central Comercial - revisión diaria
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 America/Argentina/Buenos_Aires
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

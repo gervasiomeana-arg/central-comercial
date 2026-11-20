@@ -1,0 +1,13 @@
+[Unit]
+Description=Central Comercial - tanda de %i
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/central-comercial
+ExecStart=/usr/bin/flock -n /run/central-comercial-batch.lock /usr/bin/docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.batches.yaml run --rm --no-deps -T --name central-batch-%i %i
+RuntimeMaxSec=1h
+TimeoutStopSec=45s
+ExecStopPost=-/usr/bin/docker stop -t 20 central-batch-%i

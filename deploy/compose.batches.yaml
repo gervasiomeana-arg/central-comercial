@@ -1,0 +1,52 @@
+services:
+  buscar:
+    build:
+      context: ..
+      dockerfile: deploy/research.Dockerfile
+    network_mode: service:app
+    environment:
+      CENTRAL_URL: http://127.0.0.1:8080/
+      CENTRAL_BATCH_KEY: ${CENTRAL_BATCH_KEY:?Configurá la clave privada de las tandas}
+      OPENJARVIS_WORKER_KEY: ${OPENJARVIS_WORKER_KEY:?Configurá la clave privada de OpenJarvis}
+      OPENJARVIS_MODEL: ${OPENJARVIS_MODEL:-qwen3.5:2b}
+    volumes:
+      - type: bind
+        source: ${CENTRAL_MODEL_DIR:?Indicá el directorio persistente del modelo}
+        target: /var/lib/central-model
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CENTRAL_JARVIS_DIR:?Indicá el directorio persistente de OpenJarvis}
+        target: /var/lib/central-openjarvis
+        bind:
+          create_host_path: false
+    init: true
+
+  enviar: &email-batch
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: batch
+    image: central-comercial-batch:local
+    network_mode: service:app
+    env_file:
+      - .env.email
+    environment: &email-environment
+      CENTRAL_URL: http://127.0.0.1:8080/
+      CENTRAL_BATCH_KEY: ${CENTRAL_BATCH_KEY:?Configurá la clave privada de las tandas}
+      CHANNEL_TEST_WORKER_KEY: ${CHANNEL_TEST_WORKER_KEY:?Configurá la clave privada de correo}
+      CENTRAL_EMAIL_STATE_DIR: /var/lib/central/email
+      CENTRAL_BATCH_PHASE: enviar
+    volumes:
+      - type: bind
+        source: ${CENTRAL_EMAIL_DIR:?Indicá el directorio persistente de correo}
+        target: /var/lib/central/email
+        bind:
+          create_host_path: false
+    init: true
+
+  revisar:
+    <<: *email-batch
+    environment:
+      <<: *email-environment
+      CENTRAL_BATCH_PHASE: revisar

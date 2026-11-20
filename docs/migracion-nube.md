@@ -59,3 +59,28 @@ En el servidor de operación con disco persistente, configurar `CENTRAL_CLOUD_BA
 - Si una ejecución de correo termina con error, libera su asignación si la API sigue disponible. Una interrupción sin aviso conserva la asignación del día y los intentos con resultado incierto. Revisar el registro antes de repetir un envío.
 
 El cambio de publicación solo debe efectuarse después de comprobar la URL de operación con una copia de datos. La provisión, la compilación y ejecución de la imagen en el proveedor y la prueba real con la PC apagada requieren un entorno de nube autorizado.
+
+## Tandas y OpenJarvis en un solo servidor Linux
+
+Esta opción usa la misma API y el mismo disco del despliegue anterior. Los temporizadores de Linux arrancan los contenedores de trabajo aunque AI Studio y la PC estén cerrados. Se puede usar una máquina ARM64 de Oracle Always Free si la cuenta y la región tienen capacidad disponible. Oracle publica un límite total de 2 OCPU y 12 GB para esa modalidad y puede recuperar máquinas inactivas. Validar la compilación ARM64 y una búsqueda real dentro de la ventana horaria antes de autorizar el corte.
+
+1. Instalar Docker con Compose v2 y `util-linux` en el servidor con systemd. Ubicar el repositorio en `/opt/central-comercial`. Mantener los respaldos fuera de ese servidor y restaurar primero una copia conciliada en un directorio nuevo.
+2. En `deploy/.env`, además de la configuración del servidor, poner `CENTRAL_CLOUD_BATCHES=true`, `CENTRAL_CLOUD_OPENJARVIS=true` y `CENTRAL_CLOUD_SENDS=false`. Definir las claves privadas `CENTRAL_BATCH_KEY`, `OPENJARVIS_WORKER_KEY` y `CHANNEL_TEST_WORKER_KEY`, y las rutas absolutas `CENTRAL_MODEL_DIR`, `CENTRAL_JARVIS_DIR` y `CENTRAL_EMAIL_DIR`. Crear los directorios con acceso de escritura para los UID 10001 (modelo y OpenJarvis) y 1000 (registros y correo). Trasladar el diario de correo a su directorio persistente y guardar el acceso SMTP/IMAP en `deploy/.env.email`. Restringir ambos archivos de entorno al administrador del servidor.
+3. Compilar las imágenes en el servidor y levantar solamente la API. Los ejecutores comparten la red local del contenedor de la API. El puerto publicado queda en loopback y solo un proxy HTTPS debe exponer la API a Publish. Completar la comprobación inicial antes de habilitar los temporizadores.
+
+   ```sh
+   docker compose --env-file deploy/.env -f deploy/compose.yaml -f deploy/compose.batches.yaml build app buscar enviar
+   docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --wait app
+   ```
+
+4. Instalar y activar los temporizadores. Cada tanda tiene una hora de ejecución como máximo y corre de forma exclusiva. Si el servidor estaba apagado a la hora indicada, el temporizador espera la siguiente fecha programada. Para revisar el resultado consultar `journalctl -u central-batch@buscar.service` o la sección Conexiones de la interfaz enlazada.
+
+   ```sh
+   sudo install -m 644 deploy/systemd/central-batch@* /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now central-batch@buscar.timer central-batch@enviar.timer central-batch@revisar.timer
+   ```
+
+5. Hacer el corte de datos descrito arriba antes de configurar `CENTRAL_OPERATIONS_URL` en Publish o habilitar los envíos. El resumen de la tanda queda guardado en la API. La entrega a WhatsApp requiere su integración oficial y una confirmación de entrega.
+
+[Recursos Always Free de Oracle](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
