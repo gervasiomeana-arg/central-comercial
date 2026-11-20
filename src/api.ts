@@ -96,7 +96,7 @@ export const api = {
   // Public Auth & Status
   getStatus: () => fetchJson<{
     appName: string;
-    localMode?:boolean;localMigration?:boolean;cloudMonitorMode?:boolean;diagnosticMode?:boolean;release?:{version:string;sourceFingerprint:string};
+    localMode?:boolean;localMigration?:boolean;cloudMonitorMode?:boolean;cloudOperations?:boolean;outboundEnabled?:boolean;diagnosticMode?:boolean;release?:{version:string;sourceFingerprint:string};
     status: string;
     scheduler: SchedulerState;
     persistence: PersistenceStatus;

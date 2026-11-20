@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { Express } from 'express';
 import { db } from './db.js';
 import { DATA_DIR } from './data-directory.js';
+import { cloudMonitorMode } from './execution-role.js';
 import { workerAuthorized } from './channelTests.js';
 function withoutSecrets(value: any): any {
   if (Array.isArray(value)) return value.map(withoutSecrets);
@@ -21,7 +22,7 @@ export function registerCheckpointRoute(app: Express) {
   app.post('/api/local-runtime/migrate',(req,res)=>{
     res.setHeader('Cache-Control','no-store');
     if(!workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
-    if(process.env.CENTRAL_LOCAL_MODE==='true')return res.status(409).json({error:'Esta base ya trabaja en la computadora.'});
+    if(!cloudMonitorMode())return res.status(409).json({error:'Esta base ya está en operación. No se puede trasladar desde este punto.'});
     try{
       const frozen=path.join(DATA_DIR,'local-handoff.json');
       if(db.getRaw().localMigration){if(fs.existsSync(frozen))return res.json(JSON.parse(fs.readFileSync(frozen,'utf8')));throw new Error('El traslado ya fue realizado. Conservar los archivos de la PC dedicada.');}

@@ -1,0 +1,56 @@
+name: central-comercial
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+    env_file: .env
+    environment:
+      CENTRAL_CLOUD_OPERATIONS: 'true'
+      CENTRAL_LOCAL_MODE: 'false'
+      CENTRAL_DATA_DIR: /var/lib/central/records
+      REQUIRE_ADMIN_AUTH: 'true'
+    volumes:
+      - type: bind
+        source: ${CENTRAL_RECORDS_DIR:?Indicá el disco persistente de los registros}
+        target: /var/lib/central/records
+        bind:
+          create_host_path: false
+    ports:
+      - '127.0.0.1:8080:8080'
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, node, -e, 'fetch("http://127.0.0.1:8080/api/status").then(res=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  email:
+    profiles: [email]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: email
+    depends_on:
+      app:
+        condition: service_healthy
+        restart: true
+    network_mode: service:app
+    env_file:
+      - .env
+      - path: .env.email
+        required: false
+    environment:
+      CENTRAL_URL: http://127.0.0.1:8080/
+      CENTRAL_EMAIL_STATE_DIR: /var/lib/central/email
+    volumes:
+      - type: bind
+        source: ${CENTRAL_EMAIL_DIR:-./email-state}
+        target: /var/lib/central/email
+        bind:
+          create_host_path: false
+    init: true
+    restart: unless-stopped
