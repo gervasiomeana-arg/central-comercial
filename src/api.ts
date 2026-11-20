@@ -89,6 +89,8 @@ export const api = {
   startAutonomousRun:(input:import('./types.js').StartAutonomousInput)=>fetchJson<any>('/api/automation/start',{method:'POST',body:JSON.stringify(input)}),
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
   saveSalesGoal: (goal: import('./types.js').MonthlySalesGoal) => fetchJson<any>('/api/sales-goals', {method:'PUT', body:JSON.stringify(goal)}),
+  getOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report'),
+  requestOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report', {method:'POST',body:'{}'}),
   getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),
   startRealChannelTests: (channels: string[]) => fetchJson<any>('/api/channel-tests', {
     method: 'POST', body: JSON.stringify({ channels })

@@ -24,6 +24,7 @@ import type { ConnectorInfo, AuditLog, SchedulerState, PersistenceStatus } from 
 
 interface ConnectorsAndSystemViewProps {
   remoteRuntime: boolean;
+  localRuntime: boolean;
   connectors: ConnectorInfo[];
   logs: AuditLog[];
   scheduler: SchedulerState;
@@ -34,7 +35,7 @@ interface ConnectorsAndSystemViewProps {
 }
 
 export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = ({
-  remoteRuntime,
+  remoteRuntime, localRuntime,
   connectors,
   logs,
   scheduler,
@@ -81,7 +82,11 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
     <div className="space-y-6">
       <LocalRuntimePanel key={String(remoteRuntime)} remote={remoteRuntime} />
       <OpenJarvisPanel />
-      <RealChannelTests />
+      {remoteRuntime ? <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
+        <h2 className="text-lg font-semibold">Pruebas e informes de WhatsApp</h2>
+        <p className="text-sm text-slate-600">Para solicitar un informe inmediato, abrí Central Comercial en la PC donde está vinculado WhatsApp.</p>
+        <a className="underline text-emerald-800 text-sm" href="http://127.0.0.1:39300/">Abrir Central Comercial en esta PC</a>
+      </section> : <RealChannelTests localRuntime={localRuntime} />}
       {/* Top Banner */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
