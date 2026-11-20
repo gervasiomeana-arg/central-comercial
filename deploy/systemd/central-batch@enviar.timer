@@ -1,0 +1,9 @@
+[Unit]
+Description=Central Comercial - envío diario
+
+[Timer]
+OnCalendar=*-*-* 13:00:00 America/Argentina/Buenos_Aires
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
