@@ -18,7 +18,8 @@ const issueLabels: Record<string, string> = {
 };
 const ownerReportLabels = {
   sin_intento: 'Sin intento registrado',
-  aceptado_proveedor: 'Aceptado por WhatsApp',
+  aceptado_proveedor: 'Aceptado por WhatsApp, entrega sin confirmar',
+  entrega_confirmada: 'WhatsApp confirmó la entrega',
   rechazado: 'Rechazado',
   resultado_desconocido: 'Sin confirmación de WhatsApp',
   registro_no_disponible: 'Registro no disponible',

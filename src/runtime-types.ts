@@ -11,7 +11,7 @@ export interface RuntimeActivity {
 
 export interface OwnerReportStatus {
   day: string;
-  status: 'sin_intento' | 'aceptado_proveedor' | 'rechazado' | 'resultado_desconocido' | 'registro_no_disponible';
+  status: 'sin_intento' | 'aceptado_proveedor' | 'entrega_confirmada' | 'rechazado' | 'resultado_desconocido' | 'registro_no_disponible';
   at?: string;
 }
 

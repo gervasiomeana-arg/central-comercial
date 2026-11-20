@@ -1,6 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+const reportClock = new Intl.DateTimeFormat('en-CA', {
+ timeZone:'America/Argentina/Buenos_Aires', year:'numeric', month:'2-digit', day:'2-digit',
+ hour:'2-digit', hourCycle:'h23'
+});
+export function ownerReportSchedule(reports, now = new Date(), requestedDay) {
+ const parts = Object.fromEntries(reportClock.formatToParts(now).map(({type,value}) => [type,value]));
+ const today = [parts.year,parts.month,parts.day].join('-');
+ const yesterday = new Date(Date.parse(today) - 86400000).toISOString().slice(0,10);
+ const dueDay = Number(parts.hour) >= 20 ? today : yesterday;
+ const manual = requestedDay === today || requestedDay === yesterday;
+ if (manual && !reports['manual-' + requestedDay] && !reports['daily-' + requestedDay]?.manual) {
+  const key = (reports['daily-' + requestedDay] ? 'manual-' : 'daily-') + requestedDay;
+  return {day:requestedDay,key,manual:true};
+ }
+ const key = 'daily-' + dueDay;
+ return !reports[key] && dueDay >= '2026-11-18' ? {day:dueDay,key,manual:false} : null;
+}
 export async function sendWithAck(client,job,onChat,timeoutMs=60000){
  const chat=await client.getNumberId(job.recipient);if(!chat)return {outcome:'rejected'};
  return sendToChatWithAck(client,chat._serialized,job.content,onChat,timeoutMs);
