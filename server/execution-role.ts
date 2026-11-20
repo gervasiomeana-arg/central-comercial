@@ -2,6 +2,8 @@
 export const cloudOperationsEnabled = () =>
   process.env.CENTRAL_LOCAL_MODE !== 'true' && process.env.CENTRAL_CLOUD_OPERATIONS === 'true';
 
+export const cloudBatchesEnabled = () => cloudOperationsEnabled() && process.env.CENTRAL_CLOUD_BATCHES === 'true';
+
 export const cloudMonitorMode = () => process.env.CENTRAL_LOCAL_MODE !== 'true' && !cloudOperationsEnabled();
 export const diagnosticMode = () => process.env.CENTRAL_DIAGNOSTIC_MODE === 'true';
 export const outboundEnabled = () => !diagnosticMode() && !cloudMonitorMode() &&

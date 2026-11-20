@@ -16,3 +16,4 @@
 !email-worker/journal.mjs
 !deploy/
 !deploy/Dockerfile
+!deploy/run-batch.mjs

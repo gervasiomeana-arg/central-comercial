@@ -1,7 +1,10 @@
+import { operationsProxy } from './server/operations-proxy.js';
+import { batchWindow } from './server/batch-window.js';
+import { registerCommercialBatches } from './server/commercial-batches.js';
 import { dailyStatistics } from './server/daily-statistics.js';
 import {registerPromoCaptureRoutes} from './server/promo-capture.js';
 import { registerCommercialEmailRoutes,replyDecision } from './server/commercial-email.js';
-import {cloudMonitorMode,diagnosticMode,cloudOpenJarvisEnabled,openJarvisWorkerKey,cloudOperationsEnabled,outboundEnabled} from './server/execution-role.js';
+import {cloudMonitorMode,diagnosticMode,cloudOpenJarvisEnabled,openJarvisWorkerKey,cloudOperationsEnabled,outboundEnabled,cloudBatchesEnabled} from './server/execution-role.js';
 import {release} from './server/release.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
@@ -39,10 +42,18 @@ const localMode=process.env.CENTRAL_LOCAL_MODE==='true';
 if(localMode&&process.send)process.on('disconnect',()=>process.exit(75));
 
 const app = express();
+const publishedProxy = operationsProxy(process.env.CENTRAL_OPERATIONS_URL);
+if (publishedProxy) {
+  if (!cloudMonitorMode()) throw new Error('La interfaz publicada y el servidor de operación deben ser procesos separados.');
+  app.use(publishedProxy);
+}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req,res,next)=>{
   if(!outboundEnabled() && /^\/api\/(commercial-email|commercial-whatsapp|channel-tests)\/worker\/claim$/.test(req.path))return workerAuthorized(req.headers.authorization)?res.json({job:null,diagnosticMode:true}):res.status(401).json({error:'Ejecutor no autorizado.'});
+  if (cloudBatchesEnabled() && /^\/api\/(commercial-email|commercial-whatsapp)\/worker\/claim$/.test(req.path) && batchWindow() !== 'enviar') {
+    return workerAuthorized(req.headers.authorization) ? res.json({ job: null }) : res.status(401).json({ error: 'Ejecutor no autorizado.' });
+  }
   const cloudIntelligenceRoute = cloudOpenJarvisEnabled() && /^\/api\/(?:openjarvis\/plans|(?:assistant|openjarvis)\/worker\/(?:heartbeat|claim|complete))$/.test(req.path);
   if(cloudMonitorMode() && !cloudIntelligenceRoute && req.path.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(req.method) && !['/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/auth/login','/api/auth/logout','/api/auth/setup','/api/auth/recover','/api/automation/director/start','/api/assistant/messages','/api/promo/capture','/api/clients/convert-from-contact','/api/automation/pause','/api/automation/resume'].includes(req.path))return res.status(409).json({error:'La publicación supervisa la PC y conserva los registros previos para su traslado. Operá las campañas desde Central Comercial en tu PC.'});
   if(localMode){
@@ -93,9 +104,10 @@ app.get('/api/local-runtime/report',(req,res)=>{
   });
 });
 registerCheckpointRoute(app);
+registerCommercialBatches(app, requireAdminAuth, () => jarvis.status().ready);
 
 // Start background task runner
-scheduler.start(30000);
+if (!publishedProxy) scheduler.start(30000);
 
 // --- PUBLIC AUTH & HEALTH ROUTES ---
 
@@ -110,7 +122,7 @@ app.get('/api/status', (req, res) => {
     appName: 'Central Comercial',
     localMode,localMigration:Boolean(db.getRaw().localMigration),
     status: 'online',
-    version: release.version,release,cloudMonitorMode:cloudMonitorMode(),cloudOperations:cloudOperationsEnabled(),outboundEnabled:outboundEnabled(),diagnosticMode:diagnosticMode(),
+    version: release.version,release,cloudMonitorMode:cloudMonitorMode(),cloudOperations:cloudOperationsEnabled(),cloudBatches:cloudBatchesEnabled(),outboundEnabled:outboundEnabled(),diagnosticMode:diagnosticMode(),
     mode: isProduction ? 'production' : 'development',
     scheduler: {...schedulerState,isRunning:!diagnosticMode()&&schedulerState.isRunning},
     storage: 'local_file_db',
