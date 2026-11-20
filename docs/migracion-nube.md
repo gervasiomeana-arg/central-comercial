@@ -2,6 +2,19 @@
 
 GitHub sigue siendo el origen del código. Google AI Studio y Publish siguen siendo el flujo de la interfaz. Los procesos de fondo se ejecutan en infraestructura de nube con almacenamiento externo.
 
+## Despliegue en un servidor Linux
+
+El directorio [deploy](../deploy) permite desplegar la misma aplicación con un único servidor Node, disco persistente y un ejecutor de correo opcional. GitHub conserva el código y AI Studio sigue siendo el entorno de desarrollo. La publicación existente mantiene su comportamiento mientras se prepara y verifica el servidor de operación.
+
+1. Conservar una copia íntegra del directorio de registros del ejecutor activo, el respaldo de Publish y el diario de correo. Conciliar las dos fuentes antes del corte. La copia saneada del endpoint de respaldo preserva el historial comercial y deja fuera credenciales. Para conservarlas, trasladarlas por separado mediante el gestor de secretos del servidor.
+2. Si la fuente conciliada es un checkpoint con SHA-256, restaurarlo en un directorio nuevo dentro del disco persistente con `node deploy/restore-checkpoint.mjs respaldo.json /disco/central/registros`. El importador conserva colas y convierte intentos interrumpidos en resultados pendientes de revisión. Los respaldos originales quedan intactos. Con una copia íntegra ya conciliada, ubicar los registros en el volumen preservando su estructura.
+3. Configurar en `deploy/.env` la ruta `CENTRAL_RECORDS_DIR`, una clave privada nueva `CHANNEL_TEST_WORKER_KEY` de 32 caracteres como mínimo y un `ADMIN_SETUP_KEY` privado si hace falta crear el administrador. Dejar `CENTRAL_CLOUD_SENDS=false` durante la prueba. El proceso usa el usuario Node del contenedor (UID 1000) y necesita acceso de escritura al volumen.
+4. Ejecutar `docker compose -f deploy/compose.yaml up -d --build app`. El puerto se publica solo en loopback. Para usar OpenJarvis desde el puente existente, exponer el panel detrás de un proxy HTTPS y configurar `CENTRAL_CLOUD_OPENJARVIS=true` y su clave privada. Usar el modo de nube con una sola réplica y un único disco local persistente. El bloqueo del disco impide arrancar dos servidores sobre el mismo directorio.
+5. Si se va a usar correo, trasladar el diario a `CENTRAL_EMAIL_DIR` y configurar `deploy/.env.email` con la cuenta y credenciales autorizadas para SMTP e IMAP. Comprobar primero con `docker compose -f deploy/compose.yaml --profile email up -d --build`. El servicio de correo puede revisar el buzón y los rebotes con los envíos bloqueados.
+6. Cuando la base activa y la copia conciliada coincidan, detener los envíos del ejecutor anterior y configurar `CENTRAL_CLOUD_SENDS=true` para el corte. Verificar el primer envío y la recuperación de un reinicio antes de retirar la instalación anterior. Las campañas conservan sus países, cupos y reglas de aprobación.
+
+Este despliegue reutiliza el generador MP4 y sus pantallas públicas, requiere autenticación administrativa y conserva la base en disco. El modo de nube no sincroniza automáticamente con la antigua base de Publish. WhatsApp Business, el envío automático de videos y la publicación en Instagram requieren sus integraciones oficiales y una prueba real antes de habilitar los canales.
+
 ## Datos y cambio de operación
 
 1. Conservar por separado la base publicada y el último punto de control de la PC dedicada. Incluir base comercial, colas, historial de OpenJarvis, comprobantes de envío y archivos de video que se quieran conservar. Registrar fecha, checksum y conteos. Conservar credenciales y configuraciones sensibles fuera del repositorio, con acceso restringido.
