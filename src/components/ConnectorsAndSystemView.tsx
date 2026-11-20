@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DailyBatchesPanel } from './DailyBatchesPanel.js';
 import { RealChannelTests } from './RealChannelTests.js';
 import { OpenJarvisPanel } from './OpenJarvisPanel.js';
 import { LocalRuntimePanel } from './LocalRuntimePanel.js';
@@ -25,6 +26,7 @@ import type { ConnectorInfo, AuditLog, SchedulerState, PersistenceStatus } from 
 interface ConnectorsAndSystemViewProps {
   remoteRuntime: boolean;
   localRuntime: boolean;
+  dailyBatches: boolean;
   connectors: ConnectorInfo[];
   logs: AuditLog[];
   scheduler: SchedulerState;
@@ -35,7 +37,7 @@ interface ConnectorsAndSystemViewProps {
 }
 
 export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = ({
-  remoteRuntime, localRuntime,
+  remoteRuntime, localRuntime, dailyBatches,
   connectors,
   logs,
   scheduler,
@@ -80,7 +82,7 @@ export const ConnectorsAndSystemView: React.FC<ConnectorsAndSystemViewProps> = (
 
   return (
     <div className="space-y-6">
-      <LocalRuntimePanel key={String(remoteRuntime)} remote={remoteRuntime} />
+      {dailyBatches ? <DailyBatchesPanel /> : <LocalRuntimePanel key={String(remoteRuntime)} remote={remoteRuntime} />}
       <OpenJarvisPanel />
       {remoteRuntime ? <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
         <h2 className="text-lg font-semibold">Pruebas e informes de WhatsApp</h2>

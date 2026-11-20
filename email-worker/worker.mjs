@@ -44,14 +44,14 @@ async function connect(){
 const heartbeat=()=>api('heartbeat',{send:!reconnect&&Boolean(imap?.usable),read:!reconnect&&Boolean(imap?.usable),sender:env.EMAIL_ADDRESS});
 async function flush(){for(const [key,result] of Object.entries(state.outcomes)){try{await api('complete',result);}catch(error){if(error.status!==409)throw error;console.error('Resultado conservado localmente; el servidor exige revisar una asignación anterior. No se repite el envío.');}delete state.outcomes[key];save();}}
 async function send(){
-  const {job}=await api('claim');if(!job)return;
+  const {job}=await api('claim');if(!job)return false;
   // Persist before SMTP. A crash here becomes an unknown result, never an automatic resend.
-  const {shouldSend,result}=reserveMessage(state,job);save();if(!shouldSend){await flush();return;}
+  const {shouldSend,result}=reserveMessage(state,job);save();if(!shouldSend){await flush();return true;}
   try{
     const receipt=await smtp.sendMail({from:env.EMAIL_ADDRESS,to:job.recipient,subject:job.subject,text:job.content,messageId:job.providerMessageId,inReplyTo:job.inReplyTo,references:job.inReplyTo?[job.inReplyTo]:undefined,headers:{'X-Central-Comercial-Id':job.messageId},disableFileAccess:true,disableUrlAccess:true});
     result.outcome=receipt.accepted?.some(a=>String(a).toLowerCase()===job.recipient.toLowerCase())?'accepted':'rejected';result.response=String(receipt.response||'Sin respuesta SMTP');
   }catch(error){result.outcome=error.responseCode>=500?'rejected':'unknown';result.response=String(error.response||error.code||'Resultado SMTP desconocido');if([534,535].includes(error.responseCode)){authBlocked=true;reconnect=true;process.send?.({type:'attention',code:'email_auth'});setTimeout(()=>process.exit(78),2000);}}
-  finishMessage(state,job,result);save();await flush();
+  finishMessage(state,job,result);save();await flush();return true;
 }
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
@@ -85,4 +85,27 @@ async function read(){
 let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();try{await read();}catch(error){if(!imap?.usable)throw error;console.error("Lectura del buzón pendiente:",error.message);}await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
 const stop=()=>{imap?.close();smtp.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 if(process.send)process.on('disconnect',stop);
-await tick();setInterval(()=>void tick(),20000);
+const batch = env.CENTRAL_EMAIL_BATCH;
+if (batch === 'enviar' || batch === 'revisar') {
+ try {
+  if (!await connect()) throw new Error('El correo no está disponible.');
+  await heartbeat();
+  await flush();
+  if (batch === 'revisar') await read();
+  else {
+   while (await send()) {
+    if (authBlocked) throw new Error('La autorización del correo requiere revisión.');
+    await new Promise(resolve => setTimeout(resolve, 1500));
+   }
+  }
+ } catch (error) {
+  console.error(error.message);
+  process.exitCode = 1;
+ } finally {
+  imap?.close();
+  smtp.close();
+ }
+} else {
+ await tick();
+ setInterval(()=>void tick(),20000);
+}

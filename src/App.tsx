@@ -66,7 +66,7 @@ export default function App() {
     windowsExecutionGuide: ''
   });
   const [geminiConfigured, setGeminiConfigured] = useState(false);
-  const [deployment,setDeployment]=useState({local:false,migrated:false,monitor:false,diagnostic:false,cloud:false,outbound:false});
+  const [deployment,setDeployment]=useState({local:false,migrated:false,monitor:false,diagnostic:false,cloud:false,outbound:false,batches:false});
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -126,7 +126,7 @@ export default function App() {
       if (statusRes && statusRes.scheduler) {
         setScheduler(statusRes.scheduler);
         setGeminiConfigured(Boolean(statusRes.geminiConfigured));
-        setDeployment({local:'localMode'in statusRes&&Boolean(statusRes.localMode),migrated:'localMigration'in statusRes&&Boolean(statusRes.localMigration),monitor:'cloudMonitorMode'in statusRes&&Boolean(statusRes.cloudMonitorMode),diagnostic:'diagnosticMode'in statusRes&&Boolean(statusRes.diagnosticMode),cloud:'cloudOperations'in statusRes&&Boolean(statusRes.cloudOperations),outbound:'outboundEnabled'in statusRes&&Boolean(statusRes.outboundEnabled)});
+        setDeployment({local:'localMode'in statusRes&&Boolean(statusRes.localMode),migrated:'localMigration'in statusRes&&Boolean(statusRes.localMigration),monitor:'cloudMonitorMode'in statusRes&&Boolean(statusRes.cloudMonitorMode),diagnostic:'diagnosticMode'in statusRes&&Boolean(statusRes.diagnosticMode),cloud:'cloudOperations'in statusRes&&Boolean(statusRes.cloudOperations),outbound:'outboundEnabled'in statusRes&&Boolean(statusRes.outboundEnabled),batches:'cloudBatches'in statusRes&&Boolean(statusRes.cloudBatches)});
       }
       if (dashMetrics) setMetrics(dashMetrics);
       if (pipelineRes) setPipelineStatus(pipelineRes);
@@ -455,6 +455,7 @@ export default function App() {
               <ConnectorsAndSystemView
                 remoteRuntime={deployment.monitor}
                 localRuntime={deployment.local}
+                dailyBatches={deployment.batches}
                 connectors={connectors}
                 logs={logs}
                 scheduler={scheduler}

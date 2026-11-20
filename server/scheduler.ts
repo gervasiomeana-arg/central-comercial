@@ -1,14 +1,22 @@
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
-import {cloudMonitorMode,diagnosticMode} from './execution-role.js';
+import {cloudBatchesEnabled,diagnosticMode} from './execution-role.js';
+import { batchWindow, type CommercialBatch } from './batch-window.js';
+const batchWindowActive = (phase: CommercialBatch) => batchWindow() === phase;
 
 class CommercialScheduler {
   private timer: NodeJS.Timeout | null = null;
   private isProcessing = false;
 
   public start(intervalMs = 30000) {
-    if (diagnosticMode()) return;
+    if (diagnosticMode() || cloudBatchesEnabled()) {
+      if (cloudBatchesEnabled() && db.getSchedulerState().isRunning) {
+        db.getSchedulerState().isRunning = false;
+        db.save();
+      }
+      return;
+    }
     if (this.timer) return;
     const state = db.getSchedulerState();
     state.isRunning = true;
@@ -34,15 +42,15 @@ class CommercialScheduler {
     db.addLog('info', 'sistema', 'Motor de tareas programadas del backend detenido.');
   }
 
-  public async tick() {
-    if (diagnosticMode() || db.getSchedulerState().automationsPaused) return;
-    if (this.isProcessing) return;
+  public async tick(phase?: CommercialBatch) {
+    if (diagnosticMode() || db.getSchedulerState().automationsPaused || (!phase && cloudBatchesEnabled())) return false;
+    if (this.isProcessing) return false;
     this.isProcessing = true;
 
     try {
       const state = db.getSchedulerState();
       state.lastRunAt = new Date().toISOString();
-      state.nextRunAt = new Date(Date.now() + 30000).toISOString();
+      state.nextRunAt = phase ? null : new Date(Date.now() + 30000).toISOString();
 
       if (state.automationsPaused) {
         // Paused globally by admin
@@ -50,8 +58,8 @@ class CommercialScheduler {
         return;
       }
 
-      db.processLedger();
-      db.processSalesDirector();
+      if (!phase || phase === 'revisar') db.processLedger();
+      if (!phase || phase === 'buscar') db.processSalesDirector();
       for(const campaign of db.getCampaigns()){
         const app=db.getApplicationById(campaign.appId);
         if(app && /voley/i.test(app.slug+' '+app.name)){
@@ -59,14 +67,15 @@ class CommercialScheduler {
           if(/14\s+d[ií]as/i.test(campaign.messageTemplate))campaign.messageTemplate=campaign.messageTemplate.replace(/14\s+d[ií]as/gi,'7 días');
         }
       }
-      await intelligenceCycle();
-      // Public research is read-only on external sites and safe to execute in cloud mode.
-      await researchGoalProspects();
+      if (!phase || phase === 'buscar') {
+        await intelligenceCycle();
+        if (!phase || batchWindowActive(phase)) await researchGoalProspects();
+      }
 
       // Check tasks due
       const now = new Date();
       const contacts = db.getContacts();
-      for (const contact of contacts) {
+      for (const contact of !phase || phase === 'revisar' ? contacts : []) {
         if (contact.nextFollowUpDate && !['cliente','baja_solicitada','descartado'].includes(contact.status) && contact.permission !== 'revocado') {
           const followUpDate = new Date(contact.nextFollowUpDate);
           if (followUpDate <= now) {
@@ -106,7 +115,7 @@ class CommercialScheduler {
         }
       }
 
-      for (const campaign of campaigns) {
+      for (const campaign of phase === 'revisar' ? [] : campaigns) {
         if(!db.campaignInActiveRun(campaign.id))continue;
         const goal = db.getSalesGoalReport();
         if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
@@ -118,8 +127,10 @@ class CommercialScheduler {
 
       state.activeJobsCount = campaigns.filter(c => c.status === 'activa').length;
       db.save();
+      return true;
     } catch (err: any) {
       db.addLog('error', 'sistema', `Error en ciclo del scheduler: ${err.message}`, { error: String(err) });
+      if (phase) throw err;
     } finally {
       this.isProcessing = false;
     }

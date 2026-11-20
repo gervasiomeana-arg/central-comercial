@@ -89,6 +89,7 @@ export const api = {
   startAutonomousRun:(input:import('./types.js').StartAutonomousInput)=>fetchJson<any>('/api/automation/start',{method:'POST',body:JSON.stringify(input)}),
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
   saveSalesGoal: (goal: import('./types.js').MonthlySalesGoal) => fetchJson<any>('/api/sales-goals', {method:'PUT', body:JSON.stringify(goal)}),
+  getDailyBatches: () => fetchJson<{day:string;receipts:{phase:'buscar'|'enviar'|'revisar';startedAt?:string;completedAt?:string;report?:string}[]}>('/api/batches/today'),
   getOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report'),
   requestOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report', {method:'POST',body:'{}'}),
   getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),
@@ -98,7 +99,7 @@ export const api = {
   // Public Auth & Status
   getStatus: () => fetchJson<{
     appName: string;
-    localMode?:boolean;localMigration?:boolean;cloudMonitorMode?:boolean;cloudOperations?:boolean;outboundEnabled?:boolean;diagnosticMode?:boolean;release?:{version:string;sourceFingerprint:string};
+    localMode?:boolean;localMigration?:boolean;cloudMonitorMode?:boolean;cloudOperations?:boolean;cloudBatches?:boolean;outboundEnabled?:boolean;diagnosticMode?:boolean;release?:{version:string;sourceFingerprint:string};
     status: string;
     scheduler: SchedulerState;
     persistence: PersistenceStatus;

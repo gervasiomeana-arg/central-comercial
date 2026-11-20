@@ -24,3 +24,7 @@ RUN npm ci --omit=dev --ignore-scripts
 COPY email-worker/worker.mjs email-worker/journal.mjs ./
 USER node
 CMD ["node","worker.mjs"]
+
+FROM email AS batch
+COPY deploy/run-batch.mjs ./
+CMD ["node","run-batch.mjs"]

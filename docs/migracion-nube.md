@@ -45,3 +45,16 @@ Los planes gratuitos de Cloud Run, Cloud Scheduler y Firestore tienen límites y
 - [Precios de Cloud Scheduler](https://cloud.google.com/scheduler/pricing)
 - [Cuotas de Firestore](https://docs.cloud.google.com/firestore/quotas)
 - [API de OpenJarvis](https://open-jarvis.github.io/OpenJarvis/deployment/api-server/)
+
+## Tandas diarias y publicación
+
+La interfaz de AI Studio sigue publicándose desde GitHub. Cuando exista el servidor HTTPS de operación con la base reconciliada, configurar `CENTRAL_OPERATIONS_URL` en Publish para que sus acciones y consultas usen esa misma API. La versión publicada sin esa variable conserva su comportamiento actual. Mantener los secretos de correo, OpenJarvis y tareas fuera de Publish.
+
+En el servidor de operación con disco persistente, configurar `CENTRAL_CLOUD_BATCHES=true` y una nueva `CENTRAL_BATCH_KEY` de al menos 32 caracteres. En el modo de tandas no arranca el bucle comercial permanente. Si se usa Cloud Run Jobs, compilar el objetivo `batch` de `deploy/Dockerfile` y configurar tres trabajos de una sola tarea, con `CENTRAL_BATCH_PHASE` igual a `buscar`, `enviar` o `revisar`. Programarlos a las 09:00, 13:00 y 19:00 en `America/Argentina/Buenos_Aires`, con límite de una hora. Configurar la URL HTTPS de la API y la clave privada de tandas. Los trabajos de correo necesitan además sus propias credenciales y un directorio privado persistente compartido entre envío y revisión para conservar el diario y el cursor IMAP. Usar el mismo servidor y las mismas claves de trabajador en todos los ciclos. En este modo no iniciar el perfil de correo continuo.
+
+- La búsqueda necesita el puente de OpenJarvis conectado cuando comienza. Puede ejecutar hasta ocho ciclos de investigación por tanda. El trabajo devuelve error si el motor no está disponible o la fuente exige revisión.
+- La tanda de envío respeta el consentimiento, la pausa, el horario de la campaña y sus cupos. Mantener `CENTRAL_CLOUD_SENDS=false` durante el ensayo.
+- La revisión importa rebotes y respuestas antes de guardar el resumen en el disco de operación. El endpoint administrativo `GET /api/batches/today` consulta el estado y el resumen. Las pruebas locales no habilitan el envío por WhatsApp.
+- Si una ejecución de correo termina con error, libera su asignación si la API sigue disponible. Una interrupción sin aviso conserva la asignación del día y los intentos con resultado incierto. Revisar el registro antes de repetir un envío.
+
+El cambio de publicación solo debe efectuarse después de comprobar la URL de operación con una copia de datos. El arranque del modelo OpenJarvis bajo demanda, la provisión del servidor y la prueba real con la PC apagada requieren un entorno de nube autorizado.
