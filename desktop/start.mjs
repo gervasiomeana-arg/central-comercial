@@ -9,6 +9,7 @@ import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } 
 import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies } from './local-app.mjs';
+import { refreshInstalledUpdater } from './auto-update.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -19,6 +20,10 @@ const publicationUrl = new URL(config.url);
 const diagnosticMode = process.env.CENTRAL_DIAGNOSTIC_MODE === 'true';
 const lock = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
 await new Promise((resolve, reject) => { lock.once('error', () => reject(new Error('Ya hay un iniciador de Central Comercial abierto o el puerto local está ocupado. No se inició otro.'))); lock.listen(37379, '127.0.0.1', resolve); });
+if (process.platform === 'win32' && !diagnosticMode) {
+  try { refreshInstalledUpdater(root); }
+  catch { console.log('No se pudo actualizar el iniciador instalado. Central Comercial continúa con la versión preparada.'); }
+}
 const idFile = path.join(runtimeDir, 'id');
 const workerId = fs.existsSync(idFile) ? fs.readFileSync(idFile, 'utf8').trim() : randomUUID();
 fs.writeFileSync(idFile, workerId, { mode: 0o600 });
