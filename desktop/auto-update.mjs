@@ -4,9 +4,12 @@ import os from 'node:os';
 import {spawn} from 'node:child_process';
 import {pipeline} from 'node:stream/promises';
 import {Readable} from 'node:stream';
+import {atomicJSON, upgradeWorker} from './recovery.mjs';
 const runtime=path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'.local','share'),'CentralComercial','runtime');
 const releases=path.join(runtime,'releases'),pointer=path.join(runtime,'active-release.json');
+const pending=path.join(runtime,'pending-release.json');
 const valid=sha=>/^[a-f0-9]{40}$/.test(sha);
+const builtRelease=sha=>valid(sha)&&fs.existsSync(path.join(releases,sha,'dist','index.html'));
 const run=(cmd,args,cwd,timeout=300000)=>new Promise((resolve,reject)=>{
  const windowsNpm=process.platform==='win32' && cmd==='npm.cmd';
  const npmCli=path.join(path.dirname(process.execPath),'node_modules','npm','bin','npm-cli.js');
@@ -18,9 +21,37 @@ const run=(cmd,args,cwd,timeout=300000)=>new Promise((resolve,reject)=>{
  child.once('error',e=>{clearTimeout(timer);reject(e);});
  child.once('exit',code=>{clearTimeout(timer);code===0?resolve():reject(new Error(cmd+' exit '+code));});
 });
+export function activeRelease(){
+ try{const {sha}=JSON.parse(fs.readFileSync(pointer,'utf8'));return builtRelease(sha)?sha:null;}catch{return null;}
+}
 export function activeRoot(fallback){
- try{const {sha}=JSON.parse(fs.readFileSync(pointer,'utf8'));const root=path.join(releases,sha);
- return valid(sha)&&fs.existsSync(path.join(root,'dist','index.html'))?root:fallback;}catch{return fallback;}
+ const sha=activeRelease();
+ return sha?path.join(releases,sha):fallback;
+}
+export function refreshInstalledUpdater(root){
+ const installed=path.join(path.dirname(runtime),'App','desktop');
+ if(root!==activeRoot(null)||!fs.existsSync(path.join(installed,'watchdog.mjs')))return;
+ // Install the compatible update module before switching the stable watchdog.
+ for(const name of ['auto-update.mjs','watchdog.mjs']){
+  upgradeWorker(path.join(root,'desktop',name),path.join(installed,name));
+ }
+}
+export function rememberPreparedRelease(sha,previousSha){
+ if(!builtRelease(sha))throw new Error('Release sin validar');
+ atomicJSON(pending,{sha,previousSha});
+}
+export function activatePreparedRelease(){
+ let prepared;
+ try{prepared=JSON.parse(fs.readFileSync(pending,'utf8'));}catch(error){
+  if(error.code==='ENOENT')return null;
+  throw error;
+ }
+ const {sha,previousSha}=prepared;
+ // A manual activation may already have replaced the version used to stage this update.
+ const activate=previousSha===activeRelease()&&builtRelease(sha)&&sha!==previousSha;
+ if(activate)activateRelease(sha);
+ fs.rmSync(pending,{force:true});
+ return activate?sha:null;
 }
 export async function latestCommit(){
  const response=await fetch('https://api.github.com/repos/gervasiomeana-arg/central-comercial/commits/main',{headers:{'User-Agent':'CentralComercial'},signal:AbortSignal.timeout(30000)});
@@ -55,7 +86,6 @@ export async function stageRelease(sha){
  }finally{fs.rmSync(stage,{recursive:true,force:true});}
 }
 export function activateRelease(sha){
- if(!valid(sha)||!fs.existsSync(path.join(releases,sha,'dist','index.html')))throw new Error('Release sin validar');
- fs.writeFileSync(pointer+'.tmp',JSON.stringify({sha,at:new Date().toISOString()}));
- fs.renameSync(pointer+'.tmp',pointer);
+ if(!builtRelease(sha))throw new Error('Release sin validar');
+ atomicJSON(pointer,{sha,at:new Date().toISOString()});
 }

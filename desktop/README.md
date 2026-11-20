@@ -247,6 +247,15 @@ El archivo local runtime/estado.json contiene el mismo estado sin claves.
 uso. La huella permite contrastar publicación y paquete sin depender del
 texto antiguo 1.0.0; una coincidencia de interfaz sola no prueba el backend.
 
+El iniciador instalado consulta `main` en GitHub mientras está abierto.
+Compila la actualización en una carpeta separada y guarda cuál quedó lista
+para el siguiente arranque de Central Comercial. Al iniciar Windows con el
+inicio automático habilitado, se aplica antes de arrancar el puente local
+de OpenJarvis. El iniciador conserva el motor nativo, sus modelos, las
+sesiones y los registros. Publish en AI Studio se gestiona por separado.
+Las instalaciones con el iniciador anterior incorporan este mecanismo al
+activar esta versión y abrirla una vez en Windows.
+
 
 ### Puesta en marcha conciliada — 15/11/2026
 
