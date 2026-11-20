@@ -5,11 +5,21 @@ const reportClock = new Intl.DateTimeFormat('en-CA', {
  timeZone:'America/Argentina/Buenos_Aires', year:'numeric', month:'2-digit', day:'2-digit',
  hour:'2-digit', hourCycle:'h23'
 });
-export function ownerReportSchedule(reports, now = new Date(), requestedDay) {
+function reportDates(now) {
  const parts = Object.fromEntries(reportClock.formatToParts(now).map(({type,value}) => [type,value]));
  const today = [parts.year,parts.month,parts.day].join('-');
  const yesterday = new Date(Date.parse(today) - 86400000).toISOString().slice(0,10);
- const dueDay = Number(parts.hour) >= 20 ? today : yesterday;
+ return {today,yesterday,hour:Number(parts.hour)};
+}
+export function ownerInstantReport(stateDir, reports, now) {
+ const {today,yesterday} = reportDates(now);
+ const day = [today,yesterday].find(day => !reports['instant-' + day] &&
+  fs.existsSync(path.join(stateDir,'owner-report-request-' + day)));
+ return day ? {day,key:'instant-' + day,manual:true} : null;
+}
+export function ownerReportSchedule(reports, now = new Date(), requestedDay) {
+ const {today,yesterday,hour} = reportDates(now);
+ const dueDay = hour >= 20 ? today : yesterday;
  const manual = requestedDay === today || requestedDay === yesterday;
  if (manual && !reports['manual-' + requestedDay] && !reports['daily-' + requestedDay]?.manual) {
   const key = (reports['daily-' + requestedDay] ? 'manual-' : 'daily-') + requestedDay;

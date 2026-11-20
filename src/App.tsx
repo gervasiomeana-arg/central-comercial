@@ -454,6 +454,7 @@ export default function App() {
             {currentTab === 'system' && (
               <ConnectorsAndSystemView
                 remoteRuntime={deployment.monitor}
+                localRuntime={deployment.local}
                 connectors={connectors}
                 logs={logs}
                 scheduler={scheduler}

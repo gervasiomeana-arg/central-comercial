@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,ownerReportSchedule,sendToChatWithAck} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -44,7 +44,9 @@ client.on('message_ack', (message, ack) => {
 });
 async function ownerReportTick(account){
  if(!whatsappReady||process.env.CENTRAL_DIAGNOSTIC_MODE==='true')return;
- const task = ownerReportSchedule(ownerReports, new Date(), process.env.CENTRAL_WHATSAPP_REPORT_DAY);
+ const now = new Date();
+ const task = ownerInstantReport(stateDir, ownerReports, now) ||
+  ownerReportSchedule(ownerReports, now, process.env.CENTRAL_WHATSAPP_REPORT_DAY);
  if (!task) return;
  const {day,key,manual} = task;
  const owner = client.info?.wid;
@@ -57,7 +59,8 @@ async function ownerReportTick(account){
  // Reserve before sending; never duplicate an uncertain WhatsApp delivery.
  ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString()};saveOwnerReports();
  try{
-  const result=await sendToChatWithAck(client,owner._serialized,report.content,async()=>{},60000);
+  const content = key.startsWith('instant-') ? report.content.replace('INFORME DIARIO','INFORME AL MOMENTO') : report.content;
+  const result=await sendToChatWithAck(client,owner._serialized,content,async()=>{},60000);
   ownerReports[key]={status:result.ack>=2?'entrega_confirmada':result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',manual,at:new Date().toISOString(),providerId:result.providerId||''};
  }catch(error){ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);

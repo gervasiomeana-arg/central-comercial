@@ -1,12 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
-export function RealChannelTests() {
+const reportLabels: Record<string, string> = {
+  pendiente: 'Solicitud en cola',
+  aceptado_proveedor: 'Aceptado por WhatsApp, entrega sin confirmar',
+  entrega_confirmada: 'WhatsApp confirmó la entrega',
+  rechazado: 'WhatsApp rechazó el envío',
+  resultado_desconocido: 'Resultado sin confirmar',
+};
+export function RealChannelTests({localRuntime}:{localRuntime:boolean}) {
+  const [report, setReport] = useState<{ready:boolean;status:string} | null>(null);
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const refresh = async () => { try { setStatus(await api.getRealChannelTests()); } catch (e: any) { setError(e.message); } };
-  useEffect(() => { refresh(); const timer = setInterval(refresh, 5000); return () => clearInterval(timer); }, []);
+  useEffect(() => {
+    const update = () => {
+      void refresh();
+      if (localRuntime) void api.getOwnerReport().then(setReport).catch(() => setReport(null));
+    };
+    update();
+    const timer = setInterval(update, 5000);
+    return () => clearInterval(timer);
+  }, [localRuntime]);
+  const requestReport = async () => {
+    setBusy(true); setError('');
+    try { setReport(await api.requestOwnerReport()); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
   const send = async (channels: string[]) => {
     setBusy(true); setError('');
     try { await api.startRealChannelTests(channels); await refresh(); } catch (e: any) { setError(e.message); }
@@ -25,8 +47,13 @@ export function RealChannelTests() {
       <div className="flex flex-wrap gap-2">
         <button disabled={busy || !status.emailReady} onClick={() => send(['email'])} className="px-4 py-2 bg-blue-700 text-white rounded-lg disabled:opacity-40">Probar email</button>
         <button disabled={busy || !status.whatsappReady} onClick={() => send(['whatsapp'])} className="px-4 py-2 bg-emerald-700 text-white rounded-lg disabled:opacity-40">Probar WhatsApp</button>
+        {localRuntime && report && <button disabled={busy || !report.ready || report.status !== 'sin_intento'}
+          onClick={requestReport} className="px-4 py-2 bg-emerald-800 text-white rounded-lg disabled:opacity-40">Enviar informe de hoy por WhatsApp</button>}
         <button disabled={busy || !status.emailReady || !status.whatsappReady} onClick={() => send(['email', 'whatsapp'])} className="px-4 py-2 bg-slate-900 text-white rounded-lg disabled:opacity-40">Enviar ambas pruebas</button>
       </div>
+      {report && report.status !== 'sin_intento' && <p role="status" className="text-sm">
+        Informe inmediato de hoy. {reportLabels[report.status]}
+      </p>}
       {!status.online && <details className="text-sm bg-amber-50 p-3 rounded-lg"><summary className="font-semibold cursor-pointer">Conectar mi computadora una sola vez</summary>
         <p className="mt-2">Descargá el proyecto y abrí channel-worker/iniciar-windows.bat. La guía channel-worker/README.md indica cómo configurar la conexión privada y autorizar Gmail. El QR de WhatsApp aparece solamente en tu computadora. No ingreses tu contraseña habitual de Gmail en esta página.</p>
       </details>}

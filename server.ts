@@ -7,6 +7,7 @@ import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './se
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { DATA_DIR } from './server/data-directory.js';
+import { registerOwnerReportRoutes } from './server/owner-report.js';
 import { registerCheckpointRoute } from './server/checkpoint.js';
 import {registerCommercialWhatsAppRoutes} from './server/commercial-whatsapp.js';
 import {configureIntelligence,applyStrategy} from './server/intelligence-cycle.js';
@@ -252,6 +253,7 @@ app.post('/api/auth/logout', (req, res) => {
 // ALL endpoints below require real authenticated admin token
 const adminRouter = express.Router();
 adminRouter.use(requireAdminAuth);
+registerOwnerReportRoutes(adminRouter);
 adminRouter.post('/openjarvis/apply',(req,res)=>{try{const c=db.getCampaignById(req.body.campaignId);if(!c)throw new Error('Campaña no encontrada.');applyStrategy(jarvis,req.body.planId,c);res.json({success:true});}catch(error:any){res.status(409).json({error:error.message});}});
 
 adminRouter.get('/local-runtime', (req, res) => {
