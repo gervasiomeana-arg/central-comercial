@@ -63,7 +63,7 @@ export function contactLinks(html: string, base: string) {
   }))].sort((a,b)=>Number(/contact/i.test(b))-Number(/contact/i.test(a))).slice(0, 3);
 }
 const countries:Record<string,{prefix:string;iso:string;aliases:string[]}>= {
-  argentina:{prefix:'54',iso:'AR',aliases:['argentina']},uruguay:{prefix:'598',iso:'UY',aliases:['uruguay']},chile:{prefix:'56',iso:'CL',aliases:['chile']},brasil:{prefix:'55',iso:'BR',aliases:['brasil','brazil']},paraguay:{prefix:'595',iso:'PY',aliases:['paraguay']},colombia:{prefix:'57',iso:'CO',aliases:['colombia']},mexico:{prefix:'52',iso:'MX',aliases:['mexico']},espana:{prefix:'34',iso:'ES',aliases:['espana','spain']}
+  argentina:{prefix:'54',iso:'AR',aliases:['argentina']},uruguay:{prefix:'598',iso:'UY',aliases:['uruguay']},chile:{prefix:'56',iso:'CL',aliases:['chile']},brasil:{prefix:'55',iso:'BR',aliases:['brasil','brazil']},paraguay:{prefix:'595',iso:'PY',aliases:['paraguay']},colombia:{prefix:'57',iso:'CO',aliases:['colombia']},mexico:{prefix:'52',iso:'MX',aliases:['mexico']},peru:{prefix:'51',iso:'PE',aliases:['peru']},bolivia:{prefix:'591',iso:'BO',aliases:['bolivia']},espana:{prefix:'34',iso:'ES',aliases:['espana','spain']}
 };
 const word=(text:string,term:string)=>new RegExp(`\\b${normalize(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(normalize(text));
 function organizationData(html:string) {
@@ -131,7 +131,7 @@ export function relevantSearchLinks(document:string,app:Application,country:stri
   }
  }
  const rule=countries[normalize(country)];
- const suffix:Record<string,string>={argentina:'.ar',brasil:'.br',mexico:'.mx',chile:'.cl',uruguay:'.uy',paraguay:'.py',colombia:'.co',espana:'.es'};
+ const suffix:Record<string,string>={argentina:'.ar',brasil:'.br',mexico:'.mx',chile:'.cl',uruguay:'.uy',paraguay:'.py',colombia:'.co',peru:'.pe',bolivia:'.bo',espana:'.es'};
  return [...new Set(entries.flatMap(item=>{try{const u=publicUrl(item.url),text=item.text+' '+u.hostname+u.pathname;
   const topic=playbook(app).terms.some(t=>word(text,t));
   const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(suffix[normalize(country)]&&u.hostname.endsWith(suffix[normalize(country)]));

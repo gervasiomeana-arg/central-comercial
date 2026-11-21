@@ -135,6 +135,7 @@ export interface ResearchOutcome { at: string; query: string; created: number; r
 export interface ResearchState {
   month: string; day: string; requests: number; visited: string[];
   blocked?: boolean; lastError?: string; lastSuccess?: string;
+  primaryRetryAt?: number; fallbackRetryAt?: number;
   status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
 }
 export interface Campaign {
@@ -290,6 +291,7 @@ export interface ClientSubscription {
 export type PaymentStatus = 'pendiente_confirmacion_manual' | 'confirmado' | 'rechazado';
 
 export interface MonthlySalesGoal {
+  regionalScopeConfigured?: boolean;
   directorEnabled?: boolean; directorChannels?: ('email'|'whatsapp')[];
   month: string; targetClients: number; enabled: boolean;
   discoverContacts: boolean; sendEmail: boolean; answerEmail: boolean;

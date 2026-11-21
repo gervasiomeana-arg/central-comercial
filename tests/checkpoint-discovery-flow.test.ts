@@ -36,6 +36,22 @@ test('regresión del respaldo: recupera cola vieja, conserva cupo, filtra RSS aj
   db.commercialEmailHeartbeat('fixture-mail',true,true,'owner@fixture.test');const job=claimCommercialEmail('fixture-mail')!;assert.ok(job);assert.equal(job.recipient,'info@club-simulado.test');
   completeCommercialEmail({...job,workerId:'fixture-mail',outcome:'accepted',response:'250 SIMULATED ONLY'});
   assert.equal(db.getAutonomousRunReport().director?.apps.find(a=>a.id===open.appId)?.operations.acceptedContacts,1);
+  // A valid strategy must be applied even if the last public search found nothing.
+  const {JarvisQueue,enqueueJarvisPlan}=await import('../server/openjarvis.js');
+  const {configureIntelligence,intelligenceCycle}=await import('../server/intelligence-cycle.js');
+  const jarvis=new JarvisQueue(path.join(dir,'plans.json'));
+  jarvis.heartbeat('fixture-jarvis',true,'fixture-model');
+  open.researchLastOutcome={at:new Date().toISOString(),query:'consulta vacía',created:0,reused:0,checked:1,reasons:{}};
+  open.intelligenceRequestId=enqueueJarvisPlan(jarvis,open.appId,open.country);
+  const plan=jarvis.claim('fixture-jarvis')!;
+  jarvis.complete(plan.id,'fixture-jarvis',plan.lease,{strategy:{
+   segments:[{name:'Clubes de voleibol',reason:'Entrenamiento de equipos'}],
+   searchQueries:['club voleibol contacto Argentina'],campaignAngle:'Análisis de partidos',
+   nextSteps:['Verificar las fuentes públicas'],ownerQuestions:[],
+  }});
+  configureIntelligence(jarvis);
+  await intelligenceCycle();
+  assert.equal(open.intelligencePlanId,plan.id);
   assert.equal(claimCommercialEmail('fixture-mail'),null);assert.equal(db.getSalesGoalReport().achieved,0);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

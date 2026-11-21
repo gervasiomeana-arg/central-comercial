@@ -1,4 +1,4 @@
-import {campaignStrategyReady} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations} from './sales-director.js';
 import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
 import {db} from './db.js';
@@ -20,7 +20,8 @@ export function claimWhatsApp(id:string,now=new Date()){
  const all=db.getConversations().flatMap(c=>c.messages);
  for(const m of all)if(m.channel==='whatsapp'&&m.status==='envio_intentado'&&(m.sendDeadline||0)<now.getTime()){m.status='resultado_desconocido';m.serviceError='Sin confirmación: no se reenvía automáticamente.';}db.save();
  if(all.filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
- for(const conv of db.getConversations().filter(c=>c.channel==='whatsapp')){
+ const conversations=report.goal.directorEnabled?orderCommercialConversations(db.getConversations(),now):db.getConversations();
+ for(const conv of conversations.filter(c=>c.channel==='whatsapp')){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
   if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappAuthorized(contact,now))continue;
   for(const msg of conv.messages){
