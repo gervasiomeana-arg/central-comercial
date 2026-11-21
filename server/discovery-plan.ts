@@ -18,7 +18,7 @@ export function repairDiscoveryPlan(c:Campaign,app:Application){
  return true;
 }
 export function searchRequest(query:string,country:string,html=false){
- const markets:Record<string,[string,string]>={argentina:['es-AR','ar-es'],brasil:['pt-BR','br-pt'],mexico:['es-MX','mx-es'],chile:['es-CL','cl-es'],uruguay:['es-UY','ar-es']};
+ const markets:Record<string,[string,string]>={argentina:['es-AR','ar-es'],brasil:['pt-BR','br-pt'],mexico:['es-MX','mx-es'],chile:['es-CL','cl-es'],uruguay:['es-UY','ar-es'],paraguay:['es-PY','ar-es'],colombia:['es-CO','co-es'],peru:['es-PE','pe-es'],bolivia:['es-BO','ar-es']};
  const market=markets[normalize(country)]||['es-ES','es-es'];
  const url=new URL(html?'https://html.duckduckgo.com/html/':'https://www.bing.com/search');
  url.searchParams.set('q',query);

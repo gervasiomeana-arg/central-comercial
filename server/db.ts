@@ -1,6 +1,6 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
-import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor } from './sales-director.js';
+import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor, regionalMarkets, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
@@ -708,7 +708,7 @@ class DatabaseManager {
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
     const previous = this.getMonthlyGoal(input.month);
-    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
+    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, regionalScopeConfigured: true, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
     const index = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (index < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[index] = goal;
     this.addLog('info', 'campañas', `Objetivo ${goal.month}: ${goal.targetClients} clientes nuevos con primer pago confirmado.`, { enabled: goal.enabled });
@@ -736,8 +736,18 @@ class DatabaseManager {
     this.processSalesDirector(); this.save();
   }
   public processSalesDirector() {
-    const report = this.getSalesGoalReport();
+    let report = this.getSalesGoalReport();
     if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
+    const goal = report.goal;
+    if (process.env.CENTRAL_LOCAL_MODE === 'true' && goal.directorEnabled && !goal.regionalScopeConfigured) {
+      goal.regionalScopeConfigured = true;
+      if (goal.countries.length === 1 && normalize(goal.countries[0]) === 'argentina') {
+        goal.countries = [...goal.countries, ...regionalMarkets.slice(1)];
+        this.addLog('info','campañas','Búsqueda regional activada para las cuatro aplicaciones. Se conservan los cupos, horarios y reglas de autorización.');
+        report = this.getSalesGoalReport();
+      }
+      this.save();
+    }
     const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
     this.data.campaigns.push(...created);
     let changed = created.length > 0;
@@ -828,7 +838,7 @@ class DatabaseManager {
         campaigns:campaigns.map(c=>({id:c.id,app:this.getApplicationById(c.appId)?.name,country:c.country,status:c.status,
           audience:c.researchSegment,strategyReady:campaignStrategyReady(c,this.getApplicationById(c.appId)),strategySource:c.intelligencePlanId?'OpenJarvis':c.catalogStrategy?'Catálogo verificado':'Pendiente',error:campaignStrategyReady(c,this.getApplicationById(c.appId))?undefined:c.intelligenceError,intelligenceNote:c.intelligenceError})),
         apps:report.apps.filter(a=>a.ready)},paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers,
-        research:{status:this.data.researchState.status,detail:this.data.researchState.detail,blocked:this.data.researchState.blocked,requests:this.data.researchState.day===accountingDay()?this.data.researchState.requests:0,limit:report.goal.dailyResearchLimit,lastError:this.data.researchState.lastError,nextAttemptAt:campaigns.map(c=>c.researchNextAttemptAt).filter((n):n is number=>typeof n==='number'&&n>Date.now()).sort((a,b)=>a-b)[0]},lastCycleAt:this.data.scheduler.lastRunAt};
+        research:{status:this.data.researchState.status,detail:this.data.researchState.detail,blocked:this.data.researchState.blocked,requests:this.data.researchState.day===accountingDay()?this.data.researchState.requests:0,limit:report.goal.dailyResearchLimit,lastError:this.data.researchState.lastError,nextAttemptAt:[...campaigns.map(c=>c.researchNextAttemptAt),this.data.researchState.primaryRetryAt,this.data.researchState.fallbackRetryAt].filter((n):n is number=>typeof n==='number'&&n>Date.now()).sort((a,b)=>a-b)[0]},lastCycleAt:this.data.scheduler.lastRunAt};
     }
     const campaign=this.getCampaignById(run.campaignId), app=this.getApplicationById(run.appId);
     const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);
@@ -848,7 +858,7 @@ class DatabaseManager {
     if(campaign?.channels.includes('email')&&!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
     if(campaign?.channels.includes('whatsapp')&&!whatsappReady)blockers.push('WhatsApp pendiente de vincular.');
     if(campaign?.intelligenceEnabled&&!campaign.intelligencePlanId)blockers.push(campaign.intelligenceError||'Esperando una estrategia válida de OpenJarvis.');
-    if(this.data.researchState.day===accountingDay() && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
+    if(this.data.researchState.day===accountingDay() && this.getMonthlyGoal().dailyResearchLimit>0 && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
     if(this.data.researchState.lastError && this.data.researchState.lastError!=='Cupo diario de investigación alcanzado.')blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
     if(campaign?.lastPreparation?.blockedReason)blockers.push(`Preparación: ${campaign.lastPreparation.blockedReason}`);
     const unknown=messages.filter(m=>m.status==='resultado_desconocido').length;

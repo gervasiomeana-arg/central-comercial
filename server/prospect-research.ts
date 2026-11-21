@@ -22,22 +22,37 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     if(state.day!==day)Object.assign(state,{day,requests:0,status:'pending',detail:undefined});
     // A spent quota is a scheduling condition, never a network failure.
     if(state.lastError==='Cupo diario de investigación alcanzado.')delete state.lastError;
+    if(state.blocked&&state.lastError==='El buscador no devolvió un listado público compatible. Requiere revisión.'){
+      delete state.blocked;delete state.lastError;
+    }
     if(state.blocked){state.status='error';state.detail=state.lastError||'El proveedor requiere revisión antes de continuar.';db.save();return;}
     
     const campaigns=db.getCampaigns().filter(c=>c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
-    const cap=Number.POSITIVE_INFINITY;
+    const remaining=()=>goal.dailyResearchLimit===0?Infinity:goal.dailyResearchLimit-state.requests;
+    if(remaining()<=0){
+      if(state.status!=='quota'){
+        state.status='quota';state.detail='Cupo diario alcanzado. La cola se conserva para mañana.';db.save();
+      }
+      return;
+    }
+    const lastAppResearch=new Map<string,string>();
+    for(const c of campaigns){
+      if(c.lastResearchAt && c.lastResearchAt>(lastAppResearch.get(c.appId)||''))lastAppResearch.set(c.appId,c.lastResearchAt);
+    }
     const eligible=campaigns.filter(c=>{
       if(!campaignStrategyReady(c,db.getApplicationById(c.appId)))return false;
       if(c.researchDay!==day){c.researchDay=day;c.researchCount=0;c.researchQueriesToday=0;}
       if((c.researchNextAttemptAt||0)>Date.now())return false;
-      const used=new Set(db.getConversations().filter(thread=>thread.campaignId===c.id).map(thread=>thread.contactId));
-      const needed=Number.POSITIVE_INFINITY; // Max contacts governs outreach, not discovery.
-      if(!needed)return false;
-      const available=db.getContacts().filter(contact=>!used.has(contact.id)&&contact.interestedAppIds?.includes(c.appId)&&normalize(contact.country||'')===normalize(c.country)&&normalize(contact.language||'')===normalize(c.language)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email||'')&&contact.source&&Number.isFinite(Date.parse(contact.sourceReviewDate))&&(contact.permission==='autorizado'||(contact.permission==='desconocido'&&c.allowPublicEmail&&contact.outreachBasis==='public_business_contact'))&&Date.parse(contact.sourceReviewDate)<=Date.now()&&!['cliente','descartado','baja_solicitada'].includes(contact.status));
-      return true; // Research continues independently of existing outreach-ready contacts.
-    }).sort((a,b)=>(a.lastResearchAt||'').localeCompare(b.lastResearchAt||''));
+      if(c.researchQueue?.some(item=>(item.retryAt||0)<=Date.now()))return true;
+      return ((c.researchSearchFallbackQuery?state.fallbackRetryAt:state.primaryRetryAt)||0)<=Date.now();
+    }).sort((a,b)=>(lastAppResearch.get(a.appId)||'').localeCompare(lastAppResearch.get(b.appId)||'')
+      || (a.lastResearchAt||'').localeCompare(b.lastResearchAt||''));
     const campaign=eligible[0];
-    if(!campaign){state.status='waiting';state.detail=`Sin tarea elegible: ${campaigns.filter(c=>(c.researchNextAttemptAt||0)>Date.now()).length} campañas en espera. Páginas revisadas hoy: ${state.requests}, sin límite interno.`;db.save();return;}
+    if(!campaign){
+      const detail='Sin consultas disponibles en este ciclo. Las páginas pendientes se conservan.';
+      if(state.status!=='waiting'||state.detail!==detail){state.status='waiting';state.detail=detail;db.save();}
+      return;
+    }
     const app=db.getApplicationById(campaign.appId)!, country=campaign.country;
     // Only generated goal campaigns are migrated. Custom campaign queries stay intact.
     if(campaign.researchQueryVersion!==2){campaign.researchQueries=researchQueriesFor(app,country);campaign.researchQueryVersion=2;campaign.researchQueryIndex=0;}
@@ -48,8 +63,12 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     const queue=campaign.researchQueue, seen=campaign.researchSeenUrls;
     // Canonicalize historical duplicates while preserving the first candidate and its evidence.
     const dedup=new Set<string>();for(let i=queue.length-1;i>=0;i--){try{const k=candidateKey(queue[i]);if(dedup.has(k))queue.splice(i,1);else dedup.add(k);}catch{queue.splice(i,1);}}
-    const seenCanonical=new Set<string>();campaign.researchSeenUrls=seen.filter(k=>{const url=k.split('|')[0];try{const key=candidateKey({url} as ResearchCandidate);if(seenCanonical.has(key))return false;seenCanonical.add(key);return true;}catch{return false;}}).map(k=>candidateKey({url:k.split('|')[0]} as ResearchCandidate));
-    const remaining=()=>Number.POSITIVE_INFINITY;
+    const seenCanonical=new Set<string>();
+    for(const entry of seen){
+      const value=entry.split('|')[0];
+      try{seenCanonical.add(candidateKey({url:value.includes('://')?value:'https://'+value}));}catch{/* Ignore invalid historical entries. */}
+    }
+    campaign.researchSeenUrls=[...seenCanonical];
     const fetchPage=async(url:string)=>{
       if(remaining()<=0)throw new ResearchQuota('Cupo de páginas alcanzado.');
       state.requests++;campaign.researchCount=(campaign.researchCount||0)+1;campaign.lastResearchAt=new Date().toISOString();state.status='running';db.save();
@@ -63,7 +82,6 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     };
     let index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     if(index<0){
-      if(remaining()<1){state.status='waiting';state.detail='Consultas de hoy terminadas; se conserva la cola para continuar sin repetir búsquedas.';campaign.researchNextAttemptAt=Date.now()+60*1000;db.save();return;}
       const fallback=campaign.researchSearchFallbackQuery;
       const searchIndex=campaign.researchQueryIndex||0;
       const base=queries[searchIndex%queries.length];
@@ -77,8 +95,8 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       if(!fallback){campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;}db.save();
       try{
         const rss=await fetchPage(searchRequest(query,country,Boolean(fallback)));
-        if(!fallback&&!/<rss|<feed/i.test(rss.text)){state.blocked=true;throw new Error('El buscador no devolvió un listado público compatible. Requiere revisión.');}
-        if(fallback&&/captcha|anomaly-modal|challenge-form/i.test(rss.text)){state.blocked=true;throw new Error('El buscador requiere verificación humana. No se eludirá.');}
+        if(/anomaly-modal|challenge-form|<title>[^<]*captcha/i.test(rss.text)){state.blocked=true;throw new Error('El buscador requiere verificación humana. No se eludirá.');}
+        if(!fallback&&!/<rss|<feed/i.test(rss.text))throw new Error('El buscador no devolvió un listado público compatible.');
         const links=relevantSearchLinks(rss.text,app,country,Boolean(fallback));const previous=queue.length;links.forEach(url=>enqueue({url}));const added=queue.length-previous;
         if(!fallback&&!links.length)campaign.researchSearchFallbackQuery=query;else delete campaign.researchSearchFallbackQuery;
         // A search that returns only previously seen URLs is also exhausted.
@@ -86,10 +104,22 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados, ${added} enlaces nuevos para revisar; ${links.length-added} repetidos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'});
         state.lastSuccess=new Date().toISOString();delete state.lastError;
         reason(outcome,added?'Enlaces nuevos pendientes de verificación':links.length?'Resultados repetidos, sin enlaces nuevos':'Consulta sin páginas nuevas de organizaciones');
-      }catch(error:any){state.status='error';state.lastError=String(error.message);if(/bloqueado|requiere revisión/i.test(error.message))state.blocked=true;campaign.researchNextAttemptAt=Date.now()+30*60*1000;db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:error.message});db.save();return;}
+      }catch(error:any){
+        state.lastError=String(error.message);
+        if(/bloqueado|verificación humana/i.test(state.lastError))state.blocked=true;
+        state.status=state.blocked?'error':remaining()<=0?'quota':'waiting';
+        state.detail=state.blocked?state.lastError:remaining()<=0?'Cupo diario alcanzado. La cola se conserva para mañana.':'Una fuente no respondió. Se conservan las páginas pendientes.';
+        if(!state.blocked && !fallback)campaign.researchSearchFallbackQuery=query;
+        if(fallback)delete campaign.researchSearchFallbackQuery;
+        // Back off the failed provider across campaigns. Existing candidate pages can still be reviewed.
+        const retryField=fallback?'fallbackRetryAt':'primaryRetryAt';
+        if(!state.blocked)state[retryField]=Date.now()+30*60*1000;
+        db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:state.lastError});
+        db.save();return;
+      }
       index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     }
-    // Queued contact pages survive restarts. Each tick processes one page without a daily cap.
+    // Queued contact pages survive restarts. Each tick processes at most one candidate page.
     if(index>=0&&remaining()>0){
       const candidate=queue[index];
       try{
@@ -137,6 +167,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     }
     if(index<0){state.status='waiting';state.detail=campaign.researchSearchFallbackQuery?'Los resultados RSS no verificaron actividad y país; se programó una consulta HTML pública alternativa.':'No hubo resultados pertinentes; se continuará con otra consulta dentro del cupo.';}
     if(!outcome.created&&!outcome.reused&&outcome.checked===0)reason(outcome,'Sin contactos nuevos: buscar otro segmento');
+    if(!state.blocked&&remaining()<=0){state.status='quota';state.detail='Cupo diario alcanzado. La cola se conserva para mañana.';}
     campaign.researchLastOutcome=outcome;
     db.addLog('info','contactos',`Investigación ${app.name}: ${outcome.created} contactos nuevos, ${outcome.checked} páginas revisadas.`,{campaignId:campaign.id,...outcome,pendingPages:queue.length,requestsToday:state.requests});
     db.save();

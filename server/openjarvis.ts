@@ -73,6 +73,7 @@ export class JarvisQueue {
     return this.plans.some(plan => plan.state === 'queued' || plan.state === 'running');
   }
   assistantWorkerReady(id: string) { return this.status().assistantReady === true && this.worker?.id === id; }
+  planState(id:string) { return this.plans.find(plan=>plan.id===id)?.state; }
   completed(id:string){const p=this.plans.find(p=>p.id===id);if(p?.state!=='completed'||!p.strategy)return null;return {id:p.id,context:p.context,strategy:p.strategy};}
   rejectStrategy(id:string) {
     const plan=this.plans.find(p=>p.id===id);

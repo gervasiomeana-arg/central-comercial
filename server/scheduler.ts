@@ -1,3 +1,4 @@
+import { normalize } from './sales-director.js';
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
@@ -115,9 +116,12 @@ class CommercialScheduler {
         }
       }
 
+      const goal = db.getSalesGoalReport();
+      const marketsWithContacts = new Set(contacts.flatMap(contact => (contact.interestedAppIds || [])
+        .map(appId => JSON.stringify([appId,normalize(contact.country).trim()]))));
       for (const campaign of phase === 'revisar' ? [] : campaigns) {
         if(!db.campaignInActiveRun(campaign.id))continue;
-        const goal = db.getSalesGoalReport();
+        if(goal.goal.directorEnabled && campaign.goalMonth && !marketsWithContacts.has(JSON.stringify([campaign.appId,normalize(campaign.country).trim()])))continue;
         if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
         if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
           try { db.prepareCampaignDrafts(campaign.id); }

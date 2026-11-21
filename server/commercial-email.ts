@@ -1,5 +1,5 @@
 import {usableContactEmail} from '../src/email-policy.js';
-import {campaignStrategyReady} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
 import { db } from './db.js';
@@ -37,7 +37,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   for (const m of all) if (m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime()) { m.status = 'resultado_desconocido'; m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.'; }
   db.save();
   if (all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
-  for (const conv of db.getConversations()) {
+  for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
     if (contact.undeliverableEmail === contact.email?.trim().toLowerCase() || !usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;

@@ -1,9 +1,23 @@
-import type { Application, Campaign, MonthlySalesGoal, PaymentRecord, Client } from '../src/types.js';
+import type { Application, Campaign, Conversation, MonthlySalesGoal, PaymentRecord, Client } from '../src/types.js';
 import { accountingDay, validDay } from '../src/ledger.js';
 import {usableContactEmail} from '../src/email-policy.js';
 import {whatsappAuthorized} from '../src/whatsapp-policy.js';
 
 export const normalize = (value: string) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+export const regionalMarkets = ['Argentina', 'Brasil', 'México', 'Uruguay', 'Paraguay', 'Chile', 'Colombia', 'Perú', 'Bolivia'];
+
+// Give each application an opportunity before one with more drafts takes another turn.
+export function orderCommercialConversations(conversations: Conversation[], now: Date) {
+  const day = accountingDay(now);
+  const attempts = new Map<string,number>();
+  for (const conversation of conversations) {
+    const count = conversation.messages.filter(message => message.direction === 'outbound' &&
+      !message.replyToProviderId && message.attemptedAt && accountingDay(new Date(message.attemptedAt)) === day).length;
+    attempts.set(conversation.appId, (attempts.get(conversation.appId) || 0) + count);
+  }
+  return [...conversations].sort((a,b)=>(attempts.get(a.appId)||0)-(attempts.get(b.appId)||0));
+}
+
 export function defaultGoal(month: string): MonthlySalesGoal {
   return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: 40, updatedAt: new Date().toISOString() };
 }
