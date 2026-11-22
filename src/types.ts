@@ -432,6 +432,8 @@ export interface AuthStatusResponse {
   authenticated: boolean;
   admin?: { id: string; email: string; name: string };
   setupKeyRequired: boolean;
+  googleSignIn?: boolean;
+  googleLoginUrl?: string;
 }
 
 // Real Automation Pipeline Status (Strict separation of capabilities)

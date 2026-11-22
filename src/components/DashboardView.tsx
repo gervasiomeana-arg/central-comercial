@@ -142,7 +142,7 @@ export function PcMonitorOverview({ appId, onStatistics, onConnections }: {
       <Clock3 size={24} />
       <p>{runtime === undefined ? 'Buscando el resumen de tu PC…' :
         runtime === null ? 'No pudimos consultar el estado de tu PC.' :
-        runtime.overviewRequiresAuth ? 'Activá el inicio de sesión administrativo en Publish para consultar los totales privados de tu PC.' :
+        runtime.overviewRequiresAuth ? 'El acceso con Google todavía no está configurado en Publish.' :
         runtime.online ? 'Tu PC está conectada, pero todavía no llegó un resumen para esta selección.' :
         'Publish todavía no recibió un reporte reciente de tu PC.'}</p>
     </div>}

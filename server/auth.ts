@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { Request, Response, NextFunction } from 'express';
 import type { AdminUser } from '../src/types.js';
+import { cloudMonitorMode } from './execution-role.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,7 +40,8 @@ export const TESTING_ADMIN = {
   name: 'Modo de pruebas'
 };
 export function passwordlessTestingEnabled(): boolean {
-  return process.env.REQUIRE_ADMIN_AUTH !== 'true';
+  const googleCredentials = cloudMonitorMode() && process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim();
+  return !googleCredentials && process.env.REQUIRE_ADMIN_AUTH !== 'true';
 }
 
 // In-memory active sessions store
@@ -52,7 +54,7 @@ class AuthManager {
 
   constructor() {
     this.ensureDirectory();
-    this.setupToken = this.initializeSetupToken();
+    this.setupToken = cloudMonitorMode() ? '' : this.initializeSetupToken();
     this.admin = this.loadAdmin();
   }
 
@@ -238,7 +240,7 @@ class AuthManager {
     };
   }
 
-  private createSession(admin: StoredAdmin): string {
+  public createSession(admin: Pick<StoredAdmin, 'id' | 'email' | 'name'>): string {
     const token = crypto.randomBytes(48).toString('hex');
     const record: SessionRecord = {
       token,
@@ -274,6 +276,19 @@ class AuthManager {
 
 export const authManager = new AuthManager();
 
+export const googleSessionCookie = '__Host-central-session';
+export function requestAdminToken(req: Request) {
+  if (cloudMonitorMode()) {
+    const prefix = googleSessionCookie + '=';
+    return req.headers.cookie?.split(';').map(part => part.trim())
+      .find(part => part.startsWith(prefix))?.slice(prefix.length);
+  }
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) return header.slice(7).trim();
+  const token = req.headers['x-auth-token'];
+  return typeof token === 'string' ? token.trim() : undefined;
+}
+
 // Express Middleware for backend protection
 export function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   if (passwordlessTestingEnabled()) {
@@ -281,16 +296,7 @@ export function requireAdminAuth(req: Request, res: Response, next: NextFunction
     next();
     return;
   }
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else if (req.headers['x-auth-token']) {
-    token = String(req.headers['x-auth-token']).trim();
-  }
-
-  const session = authManager.validateSession(token);
+  const session = authManager.validateSession(requestAdminToken(req));
   if (!session) {
     return res.status(401).json({
       error: 'Acceso no autorizado. Se requiere autenticación de administrador.',

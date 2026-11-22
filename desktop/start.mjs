@@ -143,6 +143,20 @@ else {
 }
 async function backup(){if(backingUp||stopping)return;backingUp=true;try{backupAt=await saveCheckpoint(config,runtimeDir);issues.delete('backup_failed');}catch{issues.add('backup_failed');console.log('Copia local pendiente de actualizar. Se conserva la última copia válida.');}finally{backingUp=false;}}
 await backup();backupTimer=setInterval(()=>void backup(),60000);
+async function shareRequestedRecords(requestId) {
+  if (stopping || publicationUrl.origin !== 'https://central-comercial.ai.studio' || typeof requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(requestId)) return;
+  const authorization = { Authorization: `Bearer ${config.key}` };
+  const local = await fetch(new URL('/api/local-runtime/records',config.url), {
+    headers: authorization, redirect: 'error', signal: AbortSignal.timeout(5000),
+  });
+  if (!local.ok) return;
+  const records = await local.json();
+  const remote = await fetch(new URL('/api/pc-records',publicationUrl), {
+    method: 'POST', headers: { ...authorization, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workerId, requestId, records }), redirect: 'error', signal: AbortSignal.timeout(10000),
+  });
+  if (!remote.ok) log('central', `Consulta remota de registros pendiente (HTTP ${remote.status}).`);
+}
 async function heartbeat() {
   if (reporting) return; reporting = true;
   try {
@@ -161,6 +175,7 @@ async function heartbeat() {
       try {
         const remote=await fetch(new URL('/api/local-runtime/heartbeat',publicationUrl),{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:`Bearer ${config.key}`},body:JSON.stringify(payload),signal:AbortSignal.timeout(5000)});
         if(!remote.ok)log('central',`Supervisión web pendiente (HTTP ${remote.status}). La operación y los datos siguen en esta PC.`);
+        else await shareRequestedRecords((await remote.json()).recordsRequest);
       }catch{log('central','Supervisión web sin conexión. La operación y los datos siguen en esta PC.');}
     }
   } catch { log('central', 'Conexión pendiente; no se puede confirmar el estado desde la app.'); }
