@@ -8,6 +8,7 @@ import { db } from './db.js';
 import { workerAuthorized } from './channelTests.js';
 import type { DatabaseSchema } from './db.js';
 import type { AssistantEntry, AssistantReport } from '../src/assistant-types.js';
+import { applyCampaignProposal, campaignChatEnabled, validateCampaignProposal } from './assistant-campaigns.js';
 import type { JarvisQueue } from './openjarvis.js';
 
 export function buildAssistantReport(data: DatabaseSchema, goal: { month: string; targetClients: number; remaining: number }, appId = 'all', now = new Date()): AssistantReport {
@@ -75,7 +76,7 @@ export class AssistantQueue {
   }
   status() {
     this.expire(); const jarvis = this.jarvis.status();
-    return { ready: jarvis.assistantReady === true || geminiEnabled(), model: jarvis.assistantReady ? jarvis.model : geminiEnabled() ? `Gemini (${geminiModel})` : '',
+    return { campaignActions:campaignChatEnabled(), campaignJarvisReady:jarvis.assistantReady === true, ready: jarvis.assistantReady === true || geminiEnabled(), model: jarvis.assistantReady ? jarvis.model : geminiEnabled() ? `Gemini (${geminiModel})` : '',
       entries: this.entries.slice(-40).map(({ workerId, leaseHash, report, ...entry }) => entry) };
   }
   async ask(question: unknown, report: AssistantReport, kind: unknown = 'question') {
@@ -83,15 +84,17 @@ export class AssistantQueue {
     if (typeof question !== 'string' || !question.trim() || question.length > 1200) throw new Error('Escribí una consulta de hasta 1200 caracteres.');
     const q = question.trim(), normalized = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const command = /\b(envia|enviar|manda|mandar|activa|activar|inicia|iniciar|cobra|cobrar|confirma|confirmar|borra|borrar|elimina|eliminar)\b/.test(normalized);
-    const records = kind === 'report' || /\b(informe|resumen|estado|objetivo|cobramos|vendimos|cuantos|cuantas)\b|como (voy|vamos)|que (falta|logro|consiguio)/.test(normalized);
-    const same = this.entries.find(e => e.question === q && e.report.appId === report.appId && e.report.text === report.text && e.state !== 'failed' && this.now() - e.createdAt < 30000);
+    const records = kind === 'report' || (!report.campaignScope && /\b(informe|resumen|estado|objetivo|cobramos|vendimos|cuantos|cuantas)\b|como (voy|vamos)|que (falta|logro|consiguio)/.test(normalized));
+    const same = this.entries.find(e => e.question === q && e.report.appId === report.appId && e.report.text === report.text && JSON.stringify(e.report.campaignScope) === JSON.stringify(report.campaignScope) && e.state !== 'failed' && this.now() - e.createdAt < 30000);
     if (same) return same.id;
-    const source = command || records ? 'records' : 'openjarvis';
+    const local = this.jarvis.status().assistantReady;
+    const source = (command && !report.campaignScope) || records ? 'records' : 'openjarvis';
+    if (report.campaignScope && source === 'openjarvis' && !local) throw new Error('Conectá OpenJarvis en tu PC para trabajar en campañas.');
     if (source === 'openjarvis' && !this.status().ready) throw new Error(cloudOpenJarvisEnabled() ? 'OpenJarvis en la nube está pendiente de conexión.' : 'OpenJarvis y Gemini todavía no están configurados para conversar.');
     if (source === 'openjarvis' && this.entries.filter(e => e.source === 'openjarvis' && this.now() - e.createdAt < 86400000).length >= 20) throw new Error('Límite de veinte consultas diarias a OpenJarvis para cuidar los recursos.');
     const entry: StoredEntry = { id: randomUUID(), question: q, appId: report.appId, appName: report.appName, report, source,
       state: source === 'records' ? 'completed' : 'queued', createdAt: this.now(), updatedAt: this.now() };
-    if (source === 'records') entry.answer = command ? 'No ejecuté esa acción. En esta etapa, el asistente conversa, recomienda y da informes. Para iniciar campañas, enviar o registrar pagos, usá los controles correspondientes de Central Comercial.' : report.text;
+    if (source === 'records') entry.answer = command && kind !== 'report' ? 'No ejecuté esa acción. En esta etapa, el asistente conversa, recomienda y da informes. Para iniciar campañas, enviar o registrar pagos, usá los controles correspondientes de Central Comercial.' : report.text;
     this.entries.push(entry); this.save();
     if (source === 'openjarvis' && !this.jarvis.status().assistantReady && geminiEnabled()) {
       entry.state = 'running'; entry.model = geminiModel; this.save();
@@ -118,19 +121,36 @@ export class AssistantQueue {
     entry.state = 'running'; entry.workerId = workerId; entry.leaseHash = hash(lease).toString('hex'); entry.updatedAt = this.now(); entry.model = this.jarvis.status().model;
     this.save();
     const previous = this.entries.filter(e => e.appId === entry.appId && e.state === 'completed' && Boolean(e.answer) && e.createdAt < entry.createdAt).slice(-6);
-    const conversationContext = previous.map(e => `Usuario: ${e.question.slice(0, 500)}\nCentral: ${(e.answer || '').slice(0, 900)}`).join('\n\n');
+    const conversationContext = previous.map(e => `Usuario: ${e.question.slice(0, 500)}\nCentral: ${(e.answer || '').slice(0, 900)}${e.campaignProposal ? '\nPropuesta previa: '+JSON.stringify(e.campaignProposal).slice(0, 2100) : ''}`).join('\n\n');
     return { id: entry.id, lease, question: entry.question, conversationContext, report: entry.report, model: entry.model };
   }
-  complete(id: string, workerId: string, lease: unknown, input: { failed?: boolean; answer?: unknown }) {
+  complete(id: string, workerId: string, lease: unknown, input: { failed?: boolean; answer?: unknown; campaignProposal?: unknown }) {
     this.expire(); const entry = this.entries.find(e => e.id === id);
     if (!entry || entry.workerId !== workerId || typeof lease !== 'string' || lease.length > 100 || !entry.leaseHash || !timingSafeEqual(hash(lease), Buffer.from(entry.leaseHash, 'hex'))) throw new Error('Consulta no asignada a este puente.');
     if (['completed', 'failed'].includes(entry.state)) return;
     if (input.failed) { entry.state = 'failed'; entry.error = 'OpenJarvis no devolvió una respuesta válida. No se regeneró la consulta.'; }
     else {
       if (typeof input.answer !== 'string' || !input.answer.trim() || input.answer.length > 3000) throw new Error('Respuesta inválida.');
-      entry.answer = input.answer.trim(); entry.state = 'completed';
+      entry.answer = input.answer.trim();
+      entry.campaignProposal = validateCampaignProposal(input.campaignProposal, entry.report);
+      if (input.campaignProposal && !entry.campaignProposal) entry.answer += '\n\nNo pude preparar un cambio válido. Revisá la aplicación, la campaña elegida y el país.';
+      entry.state = 'completed';
     }
     entry.updatedAt = this.now(); this.save();
+  }
+  applyCampaign(id: string) {
+    if (!campaignChatEnabled()) throw new Error('Aplicá los cambios desde Central Comercial en tu PC.');
+    const entry = this.entries.find(item => item.id === id);
+    const proposal = entry?.campaignProposal;
+    if (!entry || entry.state !== 'completed' || !proposal) throw new Error('No hay una propuesta pendiente en este mensaje.');
+    if (!proposal.applied) {
+      const newer = this.entries.some(item => item.createdAt > entry.createdAt && item.appId === entry.appId &&
+        item.campaignProposal && item.campaignProposal.campaignId === proposal.campaignId);
+      if (newer) throw new Error('Hay una propuesta más reciente. Revisá el último cambio antes de aplicarlo.');
+      proposal.applied = applyCampaignProposal(entry.id, entry.appId, proposal);
+      this.save();
+    }
+    return proposal.applied;
   }
 }
 export function registerAssistantWorkerRoutes(app: Express, queue: AssistantQueue) {

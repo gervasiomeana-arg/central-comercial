@@ -753,7 +753,7 @@ class DatabaseManager {
     let changed = created.length > 0;
     if (report.goal.directorEnabled) {
       const channels = report.goal.directorChannels || ['email'];
-      for (const c of this.data.campaigns.filter(c => this.campaignInActiveRun(c.id))) {
+      for (const c of this.data.campaigns.filter(c => !c.chatManaged && this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
         if(app && repairDiscoveryPlan(c,app)){changed=true;this.addLog('info','contactos','Búsqueda reparada: consultas de prospectos y cola anterior archivada; el cupo global consumido se conserva.',{campaignId:c.id});}
         if (!c.intelligencePlanId && app && !campaignStrategyReady({...c,intelligenceEnabled:true},app)) {
@@ -790,8 +790,10 @@ class DatabaseManager {
 
   public campaignInActiveRun(id: string) {
     const goal = this.getMonthlyGoal();
+    const campaign = this.getCampaignById(id), app = campaign && this.getApplicationById(campaign.appId);
+    if (campaign?.chatManaged) return Boolean(goal.enabled && campaign.goalMonth === goal.month &&
+      goal.countries.includes(campaign.country) && app?.status === 'lista' && app.campaignsAllowed);
     if (goal.directorEnabled) {
-      const campaign = this.getCampaignById(id), app = campaign && this.getApplicationById(campaign.appId);
       return Boolean(campaign && campaign.id.startsWith(`goal-${goal.month}-`) && campaign.goalMonth === goal.month && goal.countries.includes(campaign.country) && app?.status === 'lista' && app.campaignsAllowed);
     }
     return !this.data.autonomousRun || this.data.autonomousRun.campaignId === id;
