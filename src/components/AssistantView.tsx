@@ -31,7 +31,7 @@ export function AssistantView({ selectedAppFilter, applications }: { selectedApp
   }, [canEditCampaigns, selectedAppFilter]);
   const visible = state?.entries.filter(e => e.appId === selectedAppFilter) || [];
   const assistantReady = canEditCampaigns ? state?.campaignJarvisReady : state?.ready;
-  const pending = state?.entries.some(e => e.state === 'queued' || e.state === 'running');
+  const pending = !state?.monitor && state?.entries.some(e => e.state === 'queued' || e.state === 'running');
   useEffect(() => {
     let disposed = false, initialized = false;
     const refresh = async () => {
@@ -75,11 +75,11 @@ export function AssistantView({ selectedAppFilter, applications }: { selectedApp
   };
   return <section className="max-w-5xl mx-auto space-y-7">
     <header className="flex flex-col sm:flex-row justify-between gap-5">
-      <div><p className="text-xs uppercase tracking-widest text-slate-500 mb-3">Tu asistente comercial</p><h1 className="text-3xl font-semibold text-slate-900 flex items-center gap-3"><AudioLines className="text-emerald-800" /> Hablemos de tu negocio.</h1><p className="mt-3 text-slate-600">Planeá campañas con OpenJarvis, revisá sus propuestas y aplicá los cambios desde el chat.</p></div>
+      <div><p className="text-xs uppercase tracking-widest text-slate-500 mb-3">Tu asistente comercial</p><h1 className="text-3xl font-semibold text-slate-900 flex items-center gap-3"><AudioLines className="text-emerald-800" /> Hablemos de tu negocio.</h1><p className="mt-3 text-slate-600">{state?.monitor ? 'Consultá la actividad informada por tu PC dedicada.' : 'Planeá campañas con OpenJarvis, revisá sus propuestas y aplicá los cambios desde el chat.'}</p></div>
       <button disabled={busy || !loaded} onClick={() => void send(true)} className="self-start rounded-xl bg-emerald-800 text-white px-5 py-3 min-h-12 inline-flex items-center gap-2 disabled:opacity-40"><FileText size={18} /> Informe actual</button>
     </header>
     <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-wrap items-center justify-between gap-4">
-      <div><p className="font-medium text-slate-800">{appName}</p><p className="text-sm text-slate-500 mt-1">{assistantReady ? (state?.model.startsWith('Gemini (') ? state.model : `OpenJarvis conectado · ${state?.model}`) : 'Informes disponibles · Conversación con OpenJarvis pendiente de conexión'}</p></div>
+      <div><p className="font-medium text-slate-800">{appName}</p><p className="text-sm text-slate-500 mt-1">{state?.monitor ? 'Publish · Resumen de la PC dedicada' : assistantReady ? (state?.model.startsWith('Gemini (') ? state.model : `OpenJarvis conectado · ${state?.model}`) : 'Informes disponibles · Conversación con OpenJarvis pendiente de conexión'}</p></div>
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex gap-2 items-center text-sm text-slate-600"><input type="checkbox" checked={readReplies} disabled={!voice.canSpeak} onChange={e => { setReadReplies(e.target.checked); if (!e.target.checked) voice.stopSpeaking(); }} /> Leer nuevas respuestas en voz alta</label>
         {voice.voices.length > 0 && <label className="text-sm text-slate-600"><span className="sr-only">Voz de lectura</span><select value={voice.voiceName} onChange={e => voice.setVoiceName(e.target.value)} className="rounded-lg border border-slate-200 p-2 max-w-64"><option value="">Voz en español recomendada</option>{voice.voices.map((v, i) => <option key={`${v.name}-${i}`} value={v.name}>{v.name}{v.localService ? ' · del equipo' : ''}</option>)}</select></label>}
@@ -94,7 +94,7 @@ export function AssistantView({ selectedAppFilter, applications }: { selectedApp
         </select></label> : <p className="text-sm">Elegí una aplicación arriba para crear o modificar sus campañas.</p>}
     </div>}
     <div className="space-y-5" aria-live="polite" aria-relevant="additions text">
-      {loaded && visible.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 px-7 py-10 text-slate-600"><h2 className="font-semibold text-lg text-slate-900 mb-3">Central Comercial, a tu manera.</h2><p>Pedí un informe actual para conocer campañas, envíos registrados, respuestas, pagos y avance de la meta mensual. O consultale a OpenJarvis cómo mejorar tu estrategia.</p><p className="mt-3 text-sm">Podés pedir cambios concretos y revisarlos antes de aplicarlos.</p></div>}
+      {loaded && visible.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 px-7 py-10 text-slate-600"><h2 className="font-semibold text-lg text-slate-900 mb-3">Central Comercial, a tu manera.</h2><p>{state?.monitor ? 'Pedí un informe actual o preguntá en qué países hubo actividad hoy.' : 'Pedí un informe actual o consultale a OpenJarvis cómo mejorar tu estrategia. Podés pedir cambios concretos y revisarlos antes de aplicarlos.'}</p></div>}
       {visible.slice(-20).map(entry => <article key={entry.id} className="space-y-3">
         <div className="ml-auto max-w-2xl rounded-2xl rounded-br-md bg-slate-800 px-5 py-4 text-white"><p className="text-xs text-slate-300 mb-2">Vos · {entry.appName}</p><p className="whitespace-pre-wrap break-words">{entry.question}</p></div>
         <div className="mr-auto rounded-2xl rounded-bl-md border border-slate-200 bg-white px-6 py-5 max-w-3xl">
@@ -118,7 +118,7 @@ export function AssistantView({ selectedAppFilter, applications }: { selectedApp
     </div>
     <form onSubmit={e => { e.preventDefault(); void send(); }} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
       <label htmlFor="central-question" className="font-medium text-slate-800">Tu consulta para {appName.toLowerCase()}</label>
-      <textarea id="central-question" value={input} maxLength={1200} onChange={e => setInput(e.target.value)} rows={3} placeholder="Por ejemplo: armemos una campaña para clubes de Brasil." className="w-full block rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-900 focus:outline-emerald-700" />
+      <textarea id="central-question" value={input} maxLength={1200} onChange={e => setInput(e.target.value)} rows={3} placeholder={state?.monitor ? "¿En qué países hubo actividad hoy?" : "Por ejemplo: armemos una campaña para clubes de Brasil."} className="w-full block rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-900 focus:outline-emerald-700" />
       <div className="flex flex-wrap items-center justify-between gap-3"><button type="button" disabled={busy || !voice.canDictate} onClick={() => voice.dictate(input)} aria-pressed={voice.listening} className={`min-h-12 inline-flex items-center gap-2 px-4 py-3 rounded-xl border ${voice.listening ? 'bg-rose-50 text-rose-800 border-rose-200' : 'text-slate-700 border-slate-200'} disabled:opacity-40`}>{voice.listening ? <Square size={17} /> : <Mic size={17} />}{voice.listening ? 'Terminar dictado' : 'Dictar consulta'}</button><div className="flex items-center gap-4"><span className="text-xs text-slate-500">{input.length}/1200</span><button type="submit" disabled={busy || !input.trim() || voice.listening || Boolean(pending) || (canEditCampaigns && !assistantReady)} className="min-h-12 px-5 py-3 rounded-xl bg-emerald-800 text-white inline-flex items-center gap-2 disabled:opacity-40"><Send size={16} />{busy ? 'Enviando…' : 'Enviar consulta'}</button></div></div>
       <p className="text-xs text-slate-500 leading-relaxed">El micrófono se activa solo al pulsar Dictar; revisá el texto antes de enviarlo. El navegador puede procesar el audio mediante su proveedor. Central Comercial no guarda audio. Las voces y el dictado dependen del navegador y del equipo.</p>
       {!voice.canDictate && <p className="text-sm text-slate-600">Dictado no disponible en este navegador. Podés escribir y descargar los informes.</p>}

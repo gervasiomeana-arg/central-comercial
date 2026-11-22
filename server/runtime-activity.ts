@@ -1,5 +1,5 @@
 import { validDay } from '../src/ledger.js';
-import type { RuntimeActivity } from '../src/runtime-types.js';
+import { overviewCountKeys, type RuntimeActivity, type RuntimeOverview } from '../src/runtime-types.js';
 
 const isCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -24,9 +24,23 @@ export function validateActivity(value: RuntimeActivity): RuntimeActivity {
     ids.add(app.id);
     return { id: app.id, slug: app.slug, name: app.name, contacts: [...app.contacts], promotions: [...app.promotions] };
   });
+  let overview: RuntimeOverview[] | undefined;
+  if (value.overview !== undefined) {
+    if (!Array.isArray(value.overview) || value.overview.length > 101) throw new Error('Resumen de la PC inválido.');
+    const scopes = new Set<string>();
+    overview = value.overview.map(item => {
+      if (!item || (item.appId !== 'all' && !ids.has(item.appId)) || scopes.has(item.appId) ||
+          typeof item.dailyMarketActivity !== 'string' || item.dailyMarketActivity.length > 12000 ||
+          !overviewCountKeys.every(key => isCount(item[key]))) throw new Error('Resumen de la PC inválido.');
+      scopes.add(item.appId);
+      const counts = Object.fromEntries(overviewCountKeys.map(key => [key,item[key]])) as Pick<RuntimeOverview,typeof overviewCountKeys[number]>;
+      return { ...counts, appId:item.appId, dailyMarketActivity:item.dailyMarketActivity };
+    });
+  }
   return {
     paused: value.paused, lastCycleAt: value.lastCycleAt, pendingPromotions: value.pendingPromotions,
     completedPlans: value.completedPlans, campaignsUsingOpenJarvis: value.campaignsUsingOpenJarvis,
     statistics: { dates: [...dates], series: cleanSeries },
+    ...(overview ? { overview } : {}),
   };
 }
