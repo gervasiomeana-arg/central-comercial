@@ -10,6 +10,7 @@ import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './se
 import { attachCampaignScope } from './server/assistant-campaigns.js';
 import { AssistantQueue, currentAssistantReport, dailyMarketActivity, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { overviewCountKeys, type RuntimeOverview } from './src/runtime-types.js';
+import { PcRecordsRelay, registerPcRecordsRoutes } from './server/pc-records.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { DATA_DIR } from './server/data-directory.js';
 import { registerOwnerReportRoutes } from './server/owner-report.js';
@@ -30,7 +31,8 @@ import { db } from './server/db.js';
 import { scheduler } from './server/scheduler.js';
 import { ChannelTestQueue, registerWorkerTestRoutes, workerAuthorized } from './server/channelTests.js';
 import { analyzeAndSuggestResponse } from './server/ai.js';
-import { authManager, requireAdminAuth, passwordlessTestingEnabled, TESTING_ADMIN } from './server/auth.js';
+import { authManager, requireAdminAuth, passwordlessTestingEnabled, TESTING_ADMIN, requestAdminToken, googleSessionCookie } from './server/auth.js';
+import { GOOGLE_ADMIN_START, googleAdminConfig, googleCookieOptions, registerGoogleAdminRoutes } from './server/google-admin.js';
 import { testConnectorReal } from './server/connectors.js';
 import type { Contact, Campaign, Application, PaymentRecord, ClientSubscription } from './src/types.js';
 
@@ -56,12 +58,16 @@ app.use((req,res,next)=>{
   if (cloudBatchesEnabled() && /^\/api\/(commercial-email|commercial-whatsapp)\/worker\/claim$/.test(req.path) && batchWindow() !== 'enviar') {
     return workerAuthorized(req.headers.authorization) ? res.json({ job: null }) : res.status(401).json({ error: 'Ejecutor no autorizado.' });
   }
+  if (cloudMonitorMode() && googleAdminConfig() && !['GET','HEAD','OPTIONS'].includes(req.method) &&
+      ['/api/automation/director/start','/api/automation/pause','/api/automation/resume','/api/clients/convert-from-contact','/api/promo/capture'].includes(req.path)) {
+    return res.status(409).json({ error: 'Podés consultar los registros de la PC desde Publish. Para operar, abrí Central Comercial en tu PC.' });
+  }
   const cloudIntelligenceRoute = cloudOpenJarvisEnabled() && /^\/api\/(?:openjarvis\/plans|(?:assistant|openjarvis)\/worker\/(?:heartbeat|claim|complete))$/.test(req.path);
-  if(cloudMonitorMode() && !cloudIntelligenceRoute && req.path.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(req.method) && !['/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/auth/login','/api/auth/logout','/api/auth/setup','/api/auth/recover','/api/automation/director/start','/api/assistant/messages','/api/promo/capture','/api/clients/convert-from-contact','/api/automation/pause','/api/automation/resume'].includes(req.path))return res.status(409).json({error:'La publicación supervisa la PC y conserva los registros previos para su traslado. Operá las campañas desde Central Comercial en tu PC.'});
+  if(cloudMonitorMode() && !cloudIntelligenceRoute && req.path.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(req.method) && !['/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/pc-records','/api/auth/login','/api/auth/logout','/api/auth/setup','/api/auth/recover','/api/automation/director/start','/api/assistant/messages','/api/promo/capture','/api/clients/convert-from-contact','/api/automation/pause','/api/automation/resume'].includes(req.path))return res.status(409).json({error:'La publicación supervisa la PC y conserva los registros previos para su traslado. Operá las campañas desde Central Comercial en tu PC.'});
   if(localMode){
     if(!localRequestAllowed(req.headers.host||'',req.headers.origin,String(req.headers['sec-fetch-site']||''),req.path.startsWith('/api'),PORT))return res.status(403).json({error:'La API local solo admite la interfaz de esta computadora.'});
   }else if(cloudMonitorMode()&&db.getRaw().localMigration&&req.path.startsWith('/api')
-    && !(req.method === 'GET' && req.path === '/api/statistics/daily' && req.query.source === 'pc')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint','/api/assistant','/api/assistant/messages'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
+    && !(req.method === 'GET' && req.path === '/api/statistics/daily' && req.query.source === 'pc')&&!['/api/status','/api/pc-records','/api/auth/status','/api/auth/google','/api/auth/google/callback','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint','/api/assistant','/api/assistant/messages'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
   next();
 });
 
@@ -76,7 +82,10 @@ registerJarvisWorkerRoutes(app, jarvis);
 const assistant = new AssistantQueue(path.join(DATA_DIR, 'assistant_history.json'), jarvis);
 registerAssistantWorkerRoutes(app, assistant);
 const localRuntime = new LocalRuntime();
-registerLocalRuntimeRoutes(app, localRuntime);
+const pcRecords = new PcRecordsRelay();
+registerLocalRuntimeRoutes(app, localRuntime, workerId =>
+  cloudMonitorMode() && googleAdminConfig() ? pcRecords.claim(workerId) : undefined);
+registerPcRecordsRoutes(app, localRuntime, pcRecords);
 app.get('/api/local-runtime/report',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!localMode || !workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
@@ -157,28 +166,27 @@ app.get('/api/auth/status', (req, res) => {
       passwordlessTesting: true
     });
   }
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else if (req.headers['x-auth-token']) {
-    token = String(req.headers['x-auth-token']).trim();
-  }
-
-  const session = authManager.validateSession(token);
+  const session = authManager.validateSession(requestAdminToken(req));
   const isConfigured = authManager.isConfigured();
+  const google = cloudMonitorMode();
+  const googleLoginUrl = google && googleAdminConfig() ? GOOGLE_ADMIN_START : undefined;
 
   res.json({
-    configured: isConfigured,
+    configured: google ? Boolean(googleLoginUrl) : isConfigured,
     authenticated: Boolean(session),
     admin: session ? { id: session.adminId, email: session.email, name: session.name } : undefined,
-    setupKeyRequired: !isConfigured
+    ...(google ? { googleSignIn: true, googleLoginUrl } : {}),
+    setupKeyRequired: !google && !isConfigured
   });
 });
 
-// Credential changes are unnecessary while direct test access is enabled.
+registerGoogleAdminRoutes(app);
+
+// The published monitor only accepts Google sign-in.
 app.use(['/api/auth/setup', '/api/auth/recover', '/api/auth/login'], (req, res, next) => {
+  if (cloudMonitorMode()) {
+    return res.status(409).json({ error: 'Ingresá con tu cuenta de Google.' });
+  }
   if (passwordlessTestingEnabled()) {
     return res.status(409).json({ error: 'El acceso de pruebas es directo y no requiere contraseña. Recargue la página.' });
   }
@@ -261,15 +269,8 @@ app.post('/api/auth/login', (req, res) => {
 
 // Admin Logout
 app.post('/api/auth/logout', (req, res) => {
-  const authHeader = req.headers.authorization;
-  let token: string | undefined;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else if (req.headers['x-auth-token']) {
-    token = String(req.headers['x-auth-token']).trim();
-  }
-
-  authManager.logout(token);
+  authManager.logout(requestAdminToken(req));
+  if (cloudMonitorMode()) res.clearCookie(googleSessionCookie, googleCookieOptions);
   res.json({ success: true });
 });
 
@@ -302,7 +303,7 @@ adminRouter.post('/assistant/messages', async (req, res) => {
     const appId = typeof req.body?.appId === 'string' ? req.body.appId : 'all';
     if (cloudMonitorMode()) {
       if (passwordlessTestingEnabled()) {
-        return res.status(409).json({ error:'Activá el inicio de sesión administrativo en Publish para consultar los informes privados de tu PC.' });
+        return res.status(409).json({ error:'El acceso con Google todavía no está configurado en Publish.' });
       }
       const pc = localRuntime.status();
       const summary = pc.activity?.overview?.find(item=>item.appId===appId);

@@ -78,6 +78,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getPcRecords: () => fetchJson<import('./pc-records-types.js').PcRecordsStatus>('/api/pc-records'),
   getDailyStatistics: (days: number, source: 'pc' | 'web') => fetchJson<DailyStatistics>(`/api/statistics/daily?days=${days}&source=${source}`),
   getLocalRuntime: () => fetchJson<import('./runtime-types.js').LocalRuntimeState>('/api/local-runtime'),
   getAssistant: () => fetchJson<import('./assistant-types.js').AssistantState>('/api/assistant'),
@@ -133,8 +134,8 @@ export const api = {
     return res;
   },
 
-  logout: () => {
-    fetchJson<{ success: boolean }>('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  logout: async () => {
+    await fetchJson<{ success: boolean }>('/api/auth/logout', { method: 'POST' }).catch(() => {});
     authStorage.clearToken();
   },
 

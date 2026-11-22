@@ -42,12 +42,15 @@ export class LocalRuntime {
     return { online: true, ...status,receivedAt:at };
   }
 }
-export function registerLocalRuntimeRoutes(app: Express, runtime: LocalRuntime) {
+export function registerLocalRuntimeRoutes(app: Express, runtime: LocalRuntime, claimRecords?: (workerId: string) => string | undefined) {
   // Outbound heartbeat only. There is no remote shell or process-control endpoint.
   app.post('/api/local-runtime/heartbeat', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!workerAuthorized(req.headers.authorization)) return res.status(401).json({ error: 'Computadora no autorizada.' });
-    try { runtime.heartbeat(req.body); res.json({ ok: true }); }
+    try {
+      runtime.heartbeat(req.body);
+      res.json({ ok: true, recordsRequest: claimRecords?.(req.body.workerId) });
+    }
     catch (e: any) { res.status(409).json({ error: e.message }); }
   });
 }

@@ -11,8 +11,10 @@ import { ClientsView } from './components/ClientsView.js';
 import { ConnectorsAndSystemView } from './components/ConnectorsAndSystemView.js';
 import { AssistantView } from './components/AssistantView.js';
 import { TasksModal } from './components/TasksModal.js';
+import { GoogleSignIn } from './components/GoogleSignIn.js';
 import { AuthModal } from './components/AuthModal.js';
 import { api } from './api.js';
+import type { PcCommercialRecords, PcRecordsStatus } from './pc-records-types.js';
 import type {
   Application,
   AccountCharge,
@@ -32,6 +34,8 @@ import type {
   PersistenceStatus
 } from './types.js';
 
+const pcRecordTabs = ['applications', 'contacts', 'campaigns', 'conversations', 'clients'];
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [selectedAppFilter, setSelectedAppFilter] = useState('all');
@@ -39,6 +43,7 @@ export default function App() {
 
   // Authentication & Security State
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
+  const [pcRecords, setPcRecords] = useState<PcRecordsStatus | null>(null);
   const [adminUser, setAdminUser] = useState<{ id: string; email: string; name: string } | undefined>(undefined);
 
   // Core Data States
@@ -89,38 +94,28 @@ export default function App() {
         }
       }
 
-      const [
-        statusRes,
-        dashMetrics,
-        pipelineRes,
-        persistenceRes,
-        appsRes,
-        contactsRes,
-        campsRes,
-        convsRes,
-        clientsRes,
-        subsRes,
-        paysRes,
-        tasksRes,
-        connsRes,
-        logsRes,
-        chargesRes
-      ] = await Promise.all([
+      const usesPcRecords = auth?.googleSignIn === true;
+      const [statusRes, dashMetrics, pipelineRes, persistenceRes, connsRes, logsRes, pcRecordStatus, webRecords] = await Promise.all([
         api.getStatus().catch(() => ({ appName: '', status: 'offline', scheduler, geminiConfigured: false })),
-        api.getDashboardMetrics(selectedAppFilter, selectedPeriod).catch(() => null),
+        usesPcRecords ? null : api.getDashboardMetrics(selectedAppFilter, selectedPeriod).catch(() => null),
         api.getPipelineStatus().catch(() => null),
         api.getPersistenceStatus().catch(() => null),
-        api.getApplications().catch(() => []),
-        api.getContacts().catch(() => []),
-        api.getCampaigns().catch(() => []),
-        api.getConversations().catch(() => []),
-        api.getClients().catch(() => []),
-        api.getSubscriptions().catch(() => []),
-        api.getPayments().catch(() => []),
-        api.getTasks().catch(() => []),
         api.getConnectors().catch(() => []),
         api.getLogs().catch(() => []),
-        api.getAccountCharges().catch(() => [])
+        usesPcRecords ? api.getPcRecords().catch(() => null) : null,
+        usesPcRecords ? null : Promise.all([
+          api.getApplications().catch(() => []),
+          api.getContacts().catch(() => []),
+          api.getCampaigns().catch(() => []),
+          api.getConversations().catch(() => []),
+          api.getClients().catch(() => []),
+          api.getSubscriptions().catch(() => []),
+          api.getPayments().catch(() => []),
+          api.getTasks().catch(() => []),
+          api.getAccountCharges().catch(() => []),
+        ]).then(([applications, contacts, campaigns, conversations, clients, subscriptions, payments, tasks, accountCharges]): PcCommercialRecords => ({
+          applications, contacts, campaigns, conversations, clients, subscriptions, payments, tasks, accountCharges,
+        })),
       ]);
 
       if (statusRes && statusRes.scheduler) {
@@ -131,17 +126,19 @@ export default function App() {
       if (dashMetrics) setMetrics(dashMetrics);
       if (pipelineRes) setPipelineStatus(pipelineRes);
       if (persistenceRes) setPersistenceStatus(persistenceRes);
-      setApplications(appsRes);
-      setContacts(contactsRes);
-      setCampaigns(campsRes);
-      setConversations(convsRes);
-      setClients(clientsRes);
-      setSubscriptions(subsRes);
-      setPayments(paysRes);
-      setTasks(tasksRes);
+      setPcRecords(pcRecordStatus);
+      const records = usesPcRecords ? pcRecordStatus?.records : webRecords;
+      setApplications(records?.applications || []);
+      setContacts(records?.contacts || []);
+      setCampaigns(records?.campaigns || []);
+      setConversations(records?.conversations || []);
+      setClients(records?.clients || []);
+      setSubscriptions(records?.subscriptions || []);
+      setPayments(records?.payments || []);
+      setTasks(records?.tasks || []);
+      setAccountCharges(records?.accountCharges || []);
       setConnectors(connsRes);
       setLogs(logsRes);
-      setAccountCharges(chargesRes);
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -310,11 +307,19 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    api.logout();
+    await api.logout();
+    if (authStatus?.googleSignIn) {
+      window.location.replace('/');
+      return;
+    }
     setAdminUser(undefined);
     setAuthStatus(prev => prev ? { ...prev, authenticated: false } : null);
   };
 
+  const viewingPcRecords = Boolean(authStatus?.googleSignIn && pcRecordTabs.includes(currentTab));
+  const pcRecordsTime = pcRecords?.receivedAt ? new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short',
+  }).format(pcRecords.receivedAt) : undefined;
   const errorLogsCount = logs.filter(l => l.level === 'error').length;
   const pendingTasksCount = tasks.filter(t => t.status === 'pendiente').length;
 
@@ -344,12 +349,19 @@ export default function App() {
       <main className="cc-main">
         {deployment.cloud?<p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{deployment.outbound ? 'Central Comercial trabaja en la nube.' : 'Central Comercial está en prueba en la nube. Los envíos están deshabilitados.'}</p>:deployment.local?<p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Central Comercial está trabajando en tu PC. Los registros se guardan en esta computadora y se conservan al reiniciar.</p>:deployment.monitor?null:deployment.migrated?<div role="status" className="rounded-xl bg-amber-50 p-4 text-amber-950">La instancia activa se trasladó a tu PC dedicada. Esta publicación no ejecuta campañas. <a className="underline" href="http://127.0.0.1:39300">Abrir Central Comercial en mi PC</a></div>:<p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">Publicación de Central Comercial. El paquete completo permite trasladar los registros a la PC dedicada durante su primera activación.</p>}
         {deployment.diagnostic && <p role="status" className="rounded-xl bg-amber-100 p-4 text-amber-950">Verificación sin envíos. Se comprueban las conexiones; las campañas y sus límites guardados se conservan.</p>}
-        {deployment.monitor && !['dashboard','assistant','statistics','system'].includes(currentTab) && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">Este módulo muestra los registros propios de Publish. La base comercial de la PC se consulta en Central Comercial desde esa computadora.</p>}
+        {viewingPcRecords && pcRecordsTime && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950">Registros de tu PC · {pcRecordsTime} (hora argentina) · Solo consulta.</p>}
+        {deployment.monitor && (!authStatus?.googleSignIn || !pcRecordTabs.includes(currentTab)) &&
+          !['dashboard','assistant','statistics','system'].includes(currentTab) &&
+          <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">Este módulo muestra los registros propios de Publish.</p>}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-xs font-semibold">Conectando a Central Comercial...</span>
           </div>
+        ) : authStatus?.googleSignIn && !authStatus.authenticated ? null : viewingPcRecords && !pcRecords?.records ? (
+          <div className="cc-empty-page" role="status"><p>{pcRecords?.online
+            ? 'Esperando los registros de tu PC. El próximo reporte se cargará automáticamente.'
+            : pcRecords === null ? 'No pudimos consultar los registros de la PC.' : 'No hay una conexión reciente con tu PC. Dejá abierto el iniciador para consultar sus registros.'}</p></div>
         ) : (
           <>
             {currentTab === 'statistics' && <StatisticsView appFilter={selectedAppFilter} monitor={deployment.monitor} migrated={deployment.migrated && !deployment.cloud} />}
@@ -473,11 +485,8 @@ export default function App() {
 
       {/* Admin Authentication & Setup Modal */}
       {authStatus && !authStatus.authenticated && (
-        <AuthModal
-          authStatus={authStatus}
-          onLogin={handleLogin}
-          onSetup={handleSetup}
-        />
+        authStatus.googleSignIn ? <GoogleSignIn loginUrl={authStatus.googleLoginUrl} /> :
+          <AuthModal authStatus={authStatus} onLogin={handleLogin} onSetup={handleSetup} />
       )}
 
       {/* Global Tasks & Follow-ups Modal */}
