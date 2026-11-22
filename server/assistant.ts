@@ -9,7 +9,61 @@ import { workerAuthorized } from './channelTests.js';
 import type { DatabaseSchema } from './db.js';
 import type { AssistantEntry, AssistantReport } from '../src/assistant-types.js';
 import { applyCampaignProposal, campaignChatEnabled, validateCampaignProposal } from './assistant-campaigns.js';
+import { accountingDay } from '../src/ledger.js';
+import { promotionReceipt, recordedDay } from './daily-statistics.js';
+import { normalize } from './sales-director.js';
 import type { JarvisQueue } from './openjarvis.js';
+
+function dailyMarketActivity(data: DatabaseSchema, appId: string, now: Date) {
+  const day = accountingDay(now);
+  const belongs = (id: string) => appId === 'all' || id === appId;
+  const rows = new Map<string,{country:string; active:number; requests:number; contacts:number; promotions:number}>();
+  const row = (country = '') => {
+    const label = country.trim() || 'País sin registrar';
+    const key = normalize(label);
+    let value = rows.get(key);
+    if (!value) { value = { country:label, active:0, requests:0, contacts:0, promotions:0 }; rows.set(key,value); }
+    return value;
+  };
+  const campaigns = new Map(data.campaigns.filter(c => belongs(c.appId)).map(c => [c.id,c]));
+  const countriesByContact = new Map(data.contacts.map(c => [c.id,c.country]));
+  for (const campaign of campaigns.values()) {
+    if (campaign.status === 'activa') row(campaign.country).active++;
+    if (campaign.researchDay === day && (campaign.researchCount || 0) > 0) row(campaign.country).requests += campaign.researchCount!;
+  }
+  const countedContacts = new Set<string>();
+  for (const contact of data.contacts) {
+    if (recordedDay(contact.createdAt) !== day || !contact.interestedAppIds?.some(belongs) || countedContacts.has(contact.id)) continue;
+    row(contact.country).contacts++;
+    countedContacts.add(contact.id);
+  }
+  const countedPromotions = new Set<string>();
+  for (const thread of data.conversations) {
+    if (!belongs(thread.appId) || !thread.campaignId) continue;
+    for (const message of thread.messages) {
+      const receipt = promotionReceipt(message);
+      if (!receipt || receipt.day !== day || countedPromotions.has(receipt.key)) continue;
+      countedPromotions.add(receipt.key);
+      row(countriesByContact.get(thread.contactId) || campaigns.get(thread.campaignId)?.country).promotions++;
+    }
+  }
+  const activity = [...rows.values()].filter(x => x.requests || x.contacts || x.promotions);
+  const details = activity.sort((a,b)=>a.country.localeCompare(b.country,'es')).map(x => {
+    const metrics = [
+      x.requests ? `Consultas de búsqueda: ${x.requests}` : '',
+      x.contacts ? `Contactos nuevos: ${x.contacts}` : '',
+      x.promotions ? `Promociones aceptadas por el proveedor: ${x.promotions}` : '',
+    ].filter(Boolean);
+    return `• ${x.country} — ${metrics.join(' · ')}`;
+  });
+  const activeOnly = [...rows.values()].filter(x=>x.active && !x.requests && !x.contacts && !x.promotions)
+    .map(x=>x.country).sort((a,b)=>a.localeCompare(b,'es'));
+  return [
+    `Actividad de hoy (${day.split('-').reverse().join('/')}, hora argentina) · ${data.applications.find(a=>a.id===appId)?.name || 'Todas las aplicaciones'}`,
+    ...(details.length ? details : ['Hasta ahora no figuran consultas de búsqueda, contactos nuevos ni promociones aceptadas para hoy.']),
+    ...(activeOnly.length ? [`Campañas activas sin actividad registrada hoy: ${activeOnly.join(', ')}.`] : []),
+  ].join('\n');
+}
 
 export function buildAssistantReport(data: DatabaseSchema, goal: { month: string; targetClients: number; remaining: number }, appId = 'all', now = new Date()): AssistantReport {
   const app = data.applications.find(a => a.id === appId);
@@ -44,7 +98,7 @@ export function buildAssistantReport(data: DatabaseSchema, goal: { month: string
     description: a.description || '', website: a.website || '', features: a.verifiedFeatures || [],
     plans: (a.plans || []).filter(p => p.verified && !p.archived).map(p => ({ name: p.name, price: p.price,
       currency: p.currency, interval: p.interval, market: p.market || 'Consultar mercado' })) }));
-  return { createdAt: now.toISOString(), appId, appName: app?.name || 'Todas las aplicaciones', text: details.join('\n\n'), catalog };
+  return { createdAt: now.toISOString(), appId, appName: app?.name || 'Todas las aplicaciones', text: details.join('\n\n'), dailyMarketActivity: dailyMarketActivity(data, appId, now), catalog };
 }
 export function currentAssistantReport(appId = 'all') {
   const g = db.getSalesGoalReport();
@@ -84,7 +138,12 @@ export class AssistantQueue {
     if (typeof question !== 'string' || !question.trim() || question.length > 1200) throw new Error('Escribí una consulta de hasta 1200 caracteres.');
     const q = question.trim(), normalized = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const command = /\b(envia|enviar|manda|mandar|activa|activar|inicia|iniciar|cobra|cobrar|confirma|confirmar|borra|borrar|elimina|eliminar)\b/.test(normalized);
-    const records = kind === 'report' || (!report.campaignScope && /\b(informe|resumen|estado|objetivo|cobramos|vendimos|cuantos|cuantas)\b|como (voy|vamos)|que (falta|logro|consiguio)/.test(normalized));
+    const wantsMarkets = /\b(en que|en cuales|cuales|que) (paises|mercados)\b/.test(normalized) &&
+      (/\b(hoy|campanas?|trabaj\w*|buscar|busc\w*|promocion\w*)\b/.test(normalized) || /^(?:[¿?] *)?(?:y )?en que (paises|mercados)\??$/.test(normalized));
+    const wantsDailyActivity = /\b(que|cuanto) (hiciste|trabajaste) hoy\b|\btrabajaste hoy\b/.test(normalized);
+    const asksForStrategy = /\b(deberiamos|podriamos|conviene|recomend\w*|sugier\w*|propon\w*|plane\w*|armemos|podemos)\b/.test(normalized);
+    const dailyActivity = kind !== 'report' && !asksForStrategy && (wantsMarkets || wantsDailyActivity) ? report.dailyMarketActivity : undefined;
+    const records = Boolean(dailyActivity) || kind === 'report' || (!report.campaignScope && /\b(informe|resumen|estado|objetivo|cobramos|vendimos|cuantos|cuantas)\b|como (voy|vamos)|que (falta|logro|consiguio)/.test(normalized));
     const same = this.entries.find(e => e.question === q && e.report.appId === report.appId && e.report.text === report.text && JSON.stringify(e.report.campaignScope) === JSON.stringify(report.campaignScope) && e.state !== 'failed' && this.now() - e.createdAt < 30000);
     if (same) return same.id;
     const local = this.jarvis.status().assistantReady;
@@ -94,14 +153,14 @@ export class AssistantQueue {
     if (source === 'openjarvis' && this.entries.filter(e => e.source === 'openjarvis' && this.now() - e.createdAt < 86400000).length >= 20) throw new Error('Límite de veinte consultas diarias a OpenJarvis para cuidar los recursos.');
     const entry: StoredEntry = { id: randomUUID(), question: q, appId: report.appId, appName: report.appName, report, source,
       state: source === 'records' ? 'completed' : 'queued', createdAt: this.now(), updatedAt: this.now() };
-    if (source === 'records') entry.answer = command && kind !== 'report' ? 'No ejecuté esa acción. En esta etapa, el asistente conversa, recomienda y da informes. Para iniciar campañas, enviar o registrar pagos, usá los controles correspondientes de Central Comercial.' : report.text;
+    if (source === 'records') entry.answer = dailyActivity ?? (command && kind !== 'report' ? 'No ejecuté esa acción. En esta etapa, el asistente conversa, recomienda y da informes. Para iniciar campañas, enviar o registrar pagos, usá los controles correspondientes de Central Comercial.' : report.text);
     this.entries.push(entry); this.save();
     if (source === 'openjarvis' && !this.jarvis.status().assistantReady && geminiEnabled()) {
       entry.state = 'running'; entry.model = geminiModel; this.save();
       try {
         const history = this.entries.filter(e => e.id !== entry.id && e.appId === entry.appId && e.state === 'completed' && e.answer).slice(-6).map(e => `Usuario: ${e.question.slice(0,400)}\nCentral: ${e.answer!.slice(0,600)}`).join('\n\n');
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-        const response = await ai.models.generateContent({ model: geminiModel, contents: JSON.stringify({ question: q, history, report }), config: { maxOutputTokens: 600, temperature: 0.3, systemInstruction: 'Sos Central Comercial, director comercial consultivo. Conversá naturalmente en español y respondé preguntas de seguimiento usando el historial. Basate solo en los registros fechados y el catálogo adjunto; no inventes clientes, resultados, precios ni envíos. No ejecutes acciones ni afirmes que las ejecutaste. No reveles claves. No envíes mensajes ni confirmes pagos. Si falta información, decilo.' } });
+        const response = await ai.models.generateContent({ model: geminiModel, contents: JSON.stringify({ question: q, history, report }), config: { maxOutputTokens: 600, temperature: 0.3, systemInstruction: 'Sos Central Comercial, director comercial consultivo. Conversá naturalmente en español y respondé preguntas de seguimiento usando el historial. Basate solo en los registros fechados y el catálogo adjunto; para actividad de hoy usá dailyMarketActivity. Una campaña activa o cero suscripciones no indican si hubo actividad; no inventes clientes, resultados, precios ni envíos. No ejecutes acciones ni afirmes que las ejecutaste. No reveles claves. No envíes mensajes ni confirmes pagos. Si falta información, decilo.' } });
         const answer = response.text?.trim();
         if (!answer || answer.length > 3000) throw new Error('Gemini no devolvió una respuesta válida.');
         entry.answer = answer; entry.state = 'completed';

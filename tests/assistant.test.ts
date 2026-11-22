@@ -69,3 +69,35 @@ test('conversación exige puente actualizado y asignación; una confirmación du
     assert.ok(!JSON.stringify(queue.status()).includes('leaseHash'));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('el chat responde países según los registros del día argentino, sin llamar al modelo', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-market-report-'));
+  try {
+    const fixture = {
+      ...data,
+      campaigns: [
+        { id:'ar', appId:'a', country:'Argentina', status:'activa', researchDay:'2026-11-13', researchCount:2 },
+        { id:'br', appId:'a', country:'Brasil', status:'activa' },
+        { id:'mx', appId:'b', country:'México', status:'activa' },
+      ],
+      contacts: [{ id:'c', country:'Argentina', interestedAppIds:['a'], createdAt:'2026-11-14T02:50:00Z' }],
+      conversations: [{ appId:'a', campaignId:'ar', contactId:'c', messages:[
+        { direction:'outbound', channel:'email', status:'aceptado_proveedor', serviceConfirmationId:'one', acceptedAt:'2026-11-14T02:30:00Z' },
+        { direction:'outbound', channel:'email', status:'aceptado_proveedor', serviceConfirmationId:'one', acceptedAt:'2026-11-14T02:30:00Z' },
+        { direction:'outbound', channel:'email', status:'aceptado_proveedor', serviceConfirmationId:'later', acceptedAt:'2026-11-14T03:00:00Z' },
+      ] }],
+      subscriptions: [],
+    } as unknown as DatabaseSchema;
+    const snapshot = new Date('2026-11-14T02:59:00Z');
+    const marketReport = buildAssistantReport(fixture, {month:'2026-11',targetClients:5,remaining:5}, 'all', snapshot);
+    const queue = new AssistantQueue(path.join(dir, 'history.json'), new JarvisQueue(path.join(dir, 'plans.json')));
+    await queue.ask('en que paises estas realizando campañas el dia de hoy?', marketReport);
+    const reply = queue.status().entries[0];
+    assert.equal(reply.source,'records');
+    assert.match(reply.answer!, /13\/11\/2026/);
+    assert.match(reply.answer!, /Argentina — Consultas de búsqueda: 2 · Contactos nuevos: 1 · Promociones aceptadas por el proveedor: 1/);
+    assert.match(reply.answer!, /Campañas activas sin actividad registrada hoy: Brasil, México/);
+    const scoped = buildAssistantReport(fixture, {month:'2026-11',targetClients:5,remaining:5}, 'a', snapshot);
+    assert.doesNotMatch(scoped.dailyMarketActivity!, /México/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

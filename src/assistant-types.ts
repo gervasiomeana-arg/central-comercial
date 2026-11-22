@@ -3,6 +3,7 @@ export interface AssistantReport {
   appId: string;
   appName: string;
   text: string;
+  dailyMarketActivity?: string;
   campaignScope?: CampaignChatScope;
   catalog?: { name: string; status: string; description: string; website: string; features: string[];
     plans: { name: string; price: number | null; currency: string; interval: string; market: string }[] }[];

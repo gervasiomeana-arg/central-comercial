@@ -4,11 +4,20 @@ import type { Application, Contact, Conversation, DailyStatistics } from '../src
 const dayMs = 24 * 60 * 60 * 1000;
 const sentStatuses = new Set(['aceptado_proveedor', 'entrega_confirmada', 'enviado']);
 
-function recordedDay(value?: string) {
+export function recordedDay(value?: string) {
   if (!value) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return validDay(value) ? value : undefined;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? accountingDay(new Date(timestamp)) : undefined;
+}
+
+export function promotionReceipt(message: Conversation['messages'][number]) {
+  const confirmation = message.serviceConfirmationId?.trim();
+  if (message.direction !== 'outbound' || message.replyToProviderId || !sentStatuses.has(message.status) || !confirmation) return;
+  return {
+    day: recordedDay(message.acceptedAt ?? message.sentAt ?? message.deliveredAt),
+    key: JSON.stringify([message.channel, confirmation]),
+  };
 }
 
 export function dailyStatistics(
@@ -46,13 +55,10 @@ export function dailyStatistics(
     const app = byApp.get(conversation.appId);
     if (!app || !conversation.campaignId) continue;
     for (const message of conversation.messages) {
-      if (message.direction !== 'outbound' || message.replyToProviderId ||
-          !sentStatuses.has(message.status) || !message.serviceConfirmationId?.trim()) continue;
-      const day = recordedDay(message.acceptedAt ?? message.sentAt ?? message.deliveredAt);
-      const index = day === undefined ? undefined : indices.get(day);
-      const key = JSON.stringify([message.channel, message.serviceConfirmationId.trim()]);
-      if (index === undefined || countedPromotions.has(key)) continue;
-      countedPromotions.add(key);
+      const receipt = promotionReceipt(message);
+      const index = receipt?.day === undefined ? undefined : indices.get(receipt.day);
+      if (!receipt || index === undefined || countedPromotions.has(receipt.key)) continue;
+      countedPromotions.add(receipt.key);
       app.promotions[index]++;
     }
   }
