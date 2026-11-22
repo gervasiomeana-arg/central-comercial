@@ -7,6 +7,7 @@ import { registerCommercialEmailRoutes,replyDecision } from './server/commercial
 import {cloudMonitorMode,diagnosticMode,cloudOpenJarvisEnabled,openJarvisWorkerKey,cloudOperationsEnabled,outboundEnabled,cloudBatchesEnabled} from './server/execution-role.js';
 import {release} from './server/release.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
+import { attachCampaignScope } from './server/assistant-campaigns.js';
 import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { DATA_DIR } from './server/data-directory.js';
@@ -280,9 +281,16 @@ adminRouter.post('/assistant/messages', async (req, res) => {
   try {
     const appId = typeof req.body?.appId === 'string' ? req.body.appId : 'all';
     const report = currentAssistantReport(appId);
+    if (req.body?.kind !== 'report') attachCampaignScope(report, req.body?.campaignId);
     const id = await assistant.ask(req.body?.question, report, req.body?.kind);
     res.json({ id, ...assistant.status() });
   } catch (error: any) { res.status(409).json({ error: error.message }); }
+});
+
+adminRouter.post('/assistant/messages/:id/apply-campaign', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try { assistant.applyCampaign(req.params.id); res.json(assistant.status()); }
+  catch (error: any) { res.status(409).json({ error: error.message }); }
 });
 
 adminRouter.get('/openjarvis', (req, res) => {

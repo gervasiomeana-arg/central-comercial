@@ -139,6 +139,7 @@ export interface ResearchState {
   status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
 }
 export interface Campaign {
+  chatManaged?: boolean;
   researchDiscoveryVersion?: number;
   researchSearchFallbackQuery?: string;
   researchRepairArchive?: { at:string; queries:string[]; queue:ResearchCandidate[]; seen:string[]; count:number; nextAttemptAt?:number; outcome?:ResearchOutcome; previousAiPlan?:string };

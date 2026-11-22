@@ -85,7 +85,7 @@ async function tick() {
     try {
       if (area === 'assistant') {
         const answer = await answerQuestion(base, job.model, job, jarvisKey);
-        state.pending = { id: job.id, lease: job.lease, area, answer };
+        state.pending = { id: job.id, lease: job.lease, area, ...answer };
       } else {
         const strategy = await generateStrategy(base, job.model, job.context, jarvisKey);
         state.pending = { id: job.id, lease: job.lease, area, strategy };
