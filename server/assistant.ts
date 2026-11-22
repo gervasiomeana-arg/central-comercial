@@ -14,7 +14,7 @@ import { promotionReceipt, recordedDay } from './daily-statistics.js';
 import { normalize } from './sales-director.js';
 import type { JarvisQueue } from './openjarvis.js';
 
-function dailyMarketActivity(data: DatabaseSchema, appId: string, now: Date) {
+export function dailyMarketActivity(data: DatabaseSchema, appId: string, now: Date) {
   const day = accountingDay(now);
   const belongs = (id: string) => appId === 'all' || id === appId;
   const rows = new Map<string,{country:string; active:number; requests:number; contacts:number; promotions:number}>();

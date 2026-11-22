@@ -1,6 +1,8 @@
 import { ActivationControl } from './ActivationControl.js';
 import { SalesGoalPanel } from './SalesGoalPanel.js';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { api } from '../api.js';
+import type { LocalRuntimeState } from '../runtime-types.js';
 import { ArrowUpRight, ArrowRight, Layers, Users, Send, MessageSquare, CreditCard, Circle, ChevronRight, PlugZap, Check, Clock3 } from 'lucide-react';
 import type { DashboardMetrics, Application, CommercialTask, AutomationPipelineStatus, PersistenceStatus, ExecutiveSummary, Campaign, Contact } from '../types.js';
 
@@ -86,3 +88,67 @@ export function DashboardView(props: DashboardViewProps) {
   </div>;
 }
 
+
+export function PcMonitorOverview({ appId, onStatistics, onConnections }: {
+  appId: string; onStatistics: () => void; onConnections: () => void;
+}) {
+  const [runtime, setRuntime] = useState<LocalRuntimeState | null | undefined>(undefined);
+  useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      const report = await api.getLocalRuntime().catch(() => null);
+      if (!disposed) setRuntime(report);
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 20000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, []);
+
+  const summary = runtime?.online ? runtime.activity?.overview?.find(item => item.appId === appId) : undefined;
+  const receivedAt = runtime?.receivedAt && new Intl.DateTimeFormat('es-AR', {
+    dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires',
+  }).format(runtime.receivedAt);
+  const kpis = summary ? [
+    { label: 'Contactos', value: summary.contactsTotal, detail: summary.contactsVerified + ' con fuente registrada', Icon: Users },
+    { label: 'Mensajes enviados registrados', value: summary.messagesSent, detail: summary.messagesPending + ' pendientes', Icon: Send },
+    { label: 'Respuestas recibidas', value: summary.responsesReceived, detail: summary.interestedCount + ' interesados', Icon: MessageSquare },
+    { label: 'Suscripciones activas', value: summary.activeSubscriptionsCount, detail: summary.trialClientsCount + ' en período de prueba', Icon: CreditCard },
+  ] : [];
+
+  return <div className="cc-dashboard">
+    <div className="cc-page-hero">
+      <div>
+        <p className="cc-eyebrow">PUBLISH</p>
+        <h1>Resumen de tu PC</h1>
+        <p className="cc-hero-description">Consultá los totales de tu operación desde cualquier computadora.</p>
+      </div>
+    </div>
+    {summary ? <>
+      <div className="cc-summary-toolbar">
+        <div className="cc-summary-status">
+          <span className={'cc-dot ' + (runtime?.activity?.paused ? 'is-paused' : '')} />
+          <span>{summary.activeCampaigns} campañas activas{runtime?.activity?.paused ? ' · Tareas pausadas' : ''}</span>
+          {receivedAt && <span className="cc-muted">Reporte del {receivedAt} · Hora argentina</span>}
+        </div>
+      </div>
+      <section className="cc-kpi-grid" aria-label="Totales comerciales de la PC">
+        {kpis.map(({ label, value, detail, Icon }) => <article className="cc-kpi-card" key={label}>
+          <div className="cc-kpi-title"><span>{label}</span><Icon size={17} strokeWidth={1.5} /></div>
+          <strong className="cc-kpi-value">{value.toLocaleString('es-AR')}</strong>
+          <span className="cc-kpi-detail">{detail}</span>
+        </article>)}
+      </section>
+    </> : <div className="cc-empty-page" role="status">
+      <Clock3 size={24} />
+      <p>{runtime === undefined ? 'Buscando el resumen de tu PC…' :
+        runtime === null ? 'No pudimos consultar el estado de tu PC.' :
+        runtime.overviewRequiresAuth ? 'Activá el inicio de sesión administrativo en Publish para consultar los totales privados de tu PC.' :
+        runtime.online ? 'Tu PC está conectada, pero todavía no llegó un resumen para esta selección.' :
+        'Publish todavía no recibió un reporte reciente de tu PC.'}</p>
+    </div>}
+    <div className="cc-summary-toolbar">
+      <button className="cc-text-button" onClick={onStatistics}>Ver estadísticas por día <ArrowRight size={16} /></button>
+      <button className="cc-text-button" onClick={onConnections}>Ver conexiones <ArrowRight size={16} /></button>
+    </div>
+  </div>;
+}

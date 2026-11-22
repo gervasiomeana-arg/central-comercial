@@ -58,14 +58,24 @@ test('la publicación recibe totales de actividad y descarta campos privados del
   let now = Date.parse('2026-11-18T15:00:00Z');
   const runtime = new LocalRuntime(() => now);
   const statistics = dailyStatistics([{ id: 'app-a', slug: 'app-a', name: 'App A' }], [], [], 90, new Date(now));
+  const overview = [{
+    appId: 'all', dailyMarketActivity: 'Argentina · Contactos nuevos: 2',
+    contactsTotal: 57, contactsVerified: 56, messagesSent: 44, messagesPending: 2,
+    responsesReceived: 1, interestedCount: 1, activeSubscriptionsCount: 0, trialClientsCount: 0, activeCampaigns: 4,
+  }];
   const heartbeat = {
     workerId: 'pc-privada', startedAt: now, ramGB: 8, model: 'qwen3.5:2b',
     components: { email: 'running', whatsapp: 'running', intelligence: 'running' }, issues: [],
     activity: { paused: false, lastCycleAt: new Date(now).toISOString(), pendingPromotions: 2,
-      completedPlans: 1, campaignsUsingOpenJarvis: 1, statistics: { ...statistics, messages: ['contenido privado'] } },
+      completedPlans: 1, campaignsUsingOpenJarvis: 1, statistics: { ...statistics, messages: ['contenido privado'] },
+      overview: [{ ...overview[0], contactNames: ['contenido privado'] }] },
   };
   runtime.heartbeat(heartbeat);
   assert.deepEqual(runtime.status().activity?.statistics, statistics);
+  assert.deepEqual(runtime.status().activity?.overview, overview);
+  assert.throws(() => runtime.heartbeat({ ...heartbeat, activity: { ...heartbeat.activity,
+    overview: [{ ...overview[0], contactsTotal: -1 }],
+  } }), /Resumen de la PC inválido/);
   assert.equal(runtime.status().activity?.pendingPromotions, 2);
   assert.doesNotMatch(JSON.stringify(runtime.status()), /contenido privado|pc-privada/);
   assert.throws(() => runtime.heartbeat({ ...heartbeat, activity: { ...heartbeat.activity, pendingPromotions: -1 } }), /inválido/);

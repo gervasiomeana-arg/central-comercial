@@ -24,6 +24,7 @@ export interface AssistantEntry {
 }
 export interface AssistantState {
   entries: AssistantEntry[];
+  monitor?: boolean;
   campaignActions?: boolean;
   campaignJarvisReady?: boolean;
   ready: boolean;

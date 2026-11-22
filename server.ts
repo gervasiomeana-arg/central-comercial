@@ -8,7 +8,8 @@ import {cloudMonitorMode,diagnosticMode,cloudOpenJarvisEnabled,openJarvisWorkerK
 import {release} from './server/release.js';
 import { JarvisQueue, registerJarvisWorkerRoutes, enqueueJarvisPlan } from './server/openjarvis.js';
 import { attachCampaignScope } from './server/assistant-campaigns.js';
-import { AssistantQueue, currentAssistantReport, registerAssistantWorkerRoutes } from './server/assistant.js';
+import { AssistantQueue, currentAssistantReport, dailyMarketActivity, registerAssistantWorkerRoutes } from './server/assistant.js';
+import { overviewCountKeys, type RuntimeOverview } from './src/runtime-types.js';
 import { LocalRuntime, registerLocalRuntimeRoutes } from './server/local-runtime.js';
 import { DATA_DIR } from './server/data-directory.js';
 import { registerOwnerReportRoutes } from './server/owner-report.js';
@@ -60,7 +61,7 @@ app.use((req,res,next)=>{
   if(localMode){
     if(!localRequestAllowed(req.headers.host||'',req.headers.origin,String(req.headers['sec-fetch-site']||''),req.path.startsWith('/api'),PORT))return res.status(403).json({error:'La API local solo admite la interfaz de esta computadora.'});
   }else if(cloudMonitorMode()&&db.getRaw().localMigration&&req.path.startsWith('/api')
-    && !(req.method === 'GET' && req.path === '/api/statistics/daily' && req.query.source === 'pc')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
+    && !(req.method === 'GET' && req.path === '/api/statistics/daily' && req.query.source === 'pc')&&!['/api/status','/api/auth/status','/api/auth/login','/api/auth/logout','/api/local-runtime','/api/local-runtime/heartbeat','/api/local-runtime/migrate','/api/local-runtime/checkpoint','/api/assistant','/api/assistant/messages'].includes(req.path))return res.status(409).json({error:'La instancia activa se trasladó a la PC dedicada. Esta publicación no ejecuta más trabajos ni expone los registros trasladados.'});
   next();
 });
 
@@ -82,7 +83,8 @@ app.get('/api/local-runtime/report',(req,res)=>{
   const worker = db.getSalesGoalReport().worker;
   const jarvisState = jarvis.status();
   const schedulerState = db.getSchedulerState();
-  const campaigns = db.getCampaigns().filter(c => db.campaignInActiveRun(c.id));
+  const allCampaigns = db.getCampaigns();
+  const campaigns = allCampaigns.filter(c => db.campaignInActiveRun(c.id));
   const activeCampaignIds = new Set(campaigns.map(c => c.id));
   const conversations = db.getConversations();
   const pendingPromotions = conversations.reduce((total, conversation) => {
@@ -91,6 +93,14 @@ app.get('/api/local-runtime/report',(req,res)=>{
       !message.replyToProviderId && ['preparado', 'pendiente'].includes(message.status) &&
       message.reviewStatus !== 'rejected').length;
   }, 0);
+  const now = new Date();
+  const apps = db.getApplications();
+  const overview = ['all', ...apps.map(app=>app.id)].map(appId => {
+    const metrics = db.getDashboardMetrics(appId);
+    const activeCampaigns = allCampaigns.filter(c => c.status === 'activa' && (appId === 'all' || c.appId === appId)).length;
+    const counts = Object.fromEntries(overviewCountKeys.map(key=>[key,key==='activeCampaigns'?activeCampaigns:metrics[key]])) as Pick<RuntimeOverview,typeof overviewCountKeys[number]>;
+    return { ...counts, appId, dailyMarketActivity:dailyMarketActivity(db.getRaw(),appId,now) };
+  });
   res.json({
     connections: { email: worker.online && worker.send && worker.read, whatsapp: whatsappStatus().ready, intelligence: jarvisState.ready },
     diagnosticMode: diagnosticMode(), release,
@@ -100,7 +110,8 @@ app.get('/api/local-runtime/report',(req,res)=>{
       pendingPromotions,
       completedPlans: jarvisState.plans.filter(plan => plan.state === 'completed').length,
       campaignsUsingOpenJarvis: campaigns.filter(campaign => Boolean(campaign.intelligencePlanId)).length,
-      statistics: dailyStatistics(db.getApplications(), db.getContacts(), conversations, 90),
+      statistics: dailyStatistics(apps, db.getContacts(), conversations, 90, now),
+      overview,
     },
   });
 });
@@ -270,16 +281,47 @@ registerOwnerReportRoutes(adminRouter);
 adminRouter.post('/openjarvis/apply',(req,res)=>{try{const c=db.getCampaignById(req.body.campaignId);if(!c)throw new Error('Campaña no encontrada.');applyStrategy(jarvis,req.body.planId,c);res.json({success:true});}catch(error:any){res.status(409).json({error:error.message});}});
 
 adminRouter.get('/local-runtime', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store'); res.json(localRuntime.status());
+  res.setHeader('Cache-Control', 'no-store');
+  const status = localRuntime.status();
+  if (cloudMonitorMode() && passwordlessTestingEnabled()) {
+    const { overview, ...activity } = status.activity || {};
+    return res.json({ ...status, activity: status.activity ? activity : undefined, overviewRequiresAuth: true });
+  }
+  res.json(status);
 });
 
 adminRouter.get('/assistant', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store'); res.json(assistant.status());
+  res.setHeader('Cache-Control', 'no-store');
+  const status = assistant.status();
+  res.json(cloudMonitorMode() ? { ...status, campaignActions:false, ready:false, model:'', monitor:true,
+    entries: passwordlessTestingEnabled() ? [] : status.entries } : status);
 });
 adminRouter.post('/assistant/messages', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const appId = typeof req.body?.appId === 'string' ? req.body.appId : 'all';
+    if (cloudMonitorMode()) {
+      if (passwordlessTestingEnabled()) {
+        return res.status(409).json({ error:'Activá el inicio de sesión administrativo en Publish para consultar los informes privados de tu PC.' });
+      }
+      const pc = localRuntime.status();
+      const summary = pc.activity?.overview?.find(item=>item.appId===appId);
+      const appName = db.getApplicationById(appId)?.name || 'Todas las aplicaciones';
+      const received = pc.receivedAt ? new Date(pc.receivedAt).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',hour12:false}) : '';
+      const question = typeof req.body?.question === 'string' ? req.body.question : '';
+      const asksPastActivity = /\b(anoche|ayer|semana pasada|mes pasado)\b/i.test(question);
+      const asksDailyActivity = /pa[ií]s|mercado|hoy|trabajaste/i.test(question);
+      const directsCampaign = /\b(plane[aá]|arm[eá]|armemos|cre[aá]|activ[aá]|paus[aá]|cambi[aá]|modific[aá]|envi[aá]|mand[aá]|prepar[aá])\b/i.test(question);
+      const prefix = 'Fuente: PC dedicada' + (received ? ' · reporte recibido ' + received + ' (hora argentina)' : '') + '.';
+      const totals = summary ? `Contactos: ${summary.contactsTotal}. Mensajes enviados registrados: ${summary.messagesSent}. Respuestas: ${summary.responsesReceived}. Campañas activas: ${summary.activeCampaigns}. Suscripciones activas: ${summary.activeSubscriptionsCount}.` : '';
+      const planInPc = 'Para planear o cambiar campañas con OpenJarvis, abrí Hablar con Central en la PC dedicada.';
+      const text = !summary ? 'Todavía no hay un resumen reciente de la PC dedicada en Publish. Abrí Central Comercial en esa PC para consultar sus registros.' :
+        [prefix, directsCampaign ? planInPc :
+          asksPastActivity ? 'Para consultar días anteriores, abrí Estadísticas y seleccioná la fecha.' :
+          asksDailyActivity ? summary.dailyMarketActivity : totals].join('\n\n');
+      const id = await assistant.ask(req.body?.question,{createdAt:new Date().toISOString(),appId,appName,text},'report');
+      return res.json({ ...assistant.status(), id, campaignActions:false, ready:false, model:'', monitor:true });
+    }
     const report = currentAssistantReport(appId);
     if (req.body?.kind !== 'report') attachCampaignScope(report, req.body?.campaignId);
     const id = await assistant.ask(req.body?.question, report, req.body?.kind);

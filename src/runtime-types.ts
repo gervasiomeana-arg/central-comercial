@@ -7,6 +7,7 @@ export interface RuntimeActivity {
   completedPlans: number;
   campaignsUsingOpenJarvis: number;
   statistics: DailyStatistics;
+  overview?: RuntimeOverview[];
 }
 
 export interface OwnerReportStatus {
@@ -19,6 +20,7 @@ export type LocalComponentState = 'running' | 'missing' | 'stopped';
 export interface LocalRuntimeState {
   online: boolean;
   activity?: RuntimeActivity;
+  overviewRequiresAuth?: boolean;
   ownerReport?: OwnerReportStatus;
   startedAt?: number;
   ramGB?: number;
@@ -31,3 +33,13 @@ export interface LocalRuntimeState {
   components?: { email: LocalComponentState; whatsapp: LocalComponentState; intelligence: LocalComponentState };
   issues: string[];
 }
+
+export const overviewCountKeys = [
+  'contactsTotal', 'contactsVerified', 'messagesSent', 'messagesPending',
+  'responsesReceived', 'interestedCount', 'activeSubscriptionsCount', 'trialClientsCount', 'activeCampaigns',
+] as const;
+
+export type RuntimeOverview = Record<typeof overviewCountKeys[number],number> & {
+  appId: string;
+  dailyMarketActivity: string;
+};
