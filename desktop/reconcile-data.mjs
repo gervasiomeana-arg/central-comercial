@@ -19,9 +19,9 @@ export function verifyCheckpoint(snapshot){
  if(snapshot?.payload?.format!==1||createHash('sha256').update(JSON.stringify(snapshot.payload)).digest('hex')!==snapshot.sha256)throw new Error('La copia publicada no supera la comprobación de integridad.');
  const data=snapshot.payload.files?.['central_comercial_db.json'];validateDatabase(data);return data;
 }
-export function reconcileDatabases(local,remote,{activate=false,researchLimit=24}={}){
+export function reconcileDatabases(local,remote,{activate=false,researchLimit=0}={}){
  validateDatabase(local);validateDatabase(remote);
- if(!Number.isInteger(researchLimit)||researchLimit<1||researchLimit>40)throw new Error('Cupo de investigación inválido.');
+ if(!Number.isInteger(researchLimit)||researchLimit<0||researchLimit>40)throw new Error('Cupo de investigación inválido.');
  const merged=structuredClone(local),report={added:{},preservedDifferences:[],before:{},after:{},researchLimit};
  for(const collection of collections){
   merged[collection]||=[];
@@ -75,7 +75,7 @@ export function reconcileDatabases(local,remote,{activate=false,researchLimit=24
  merged.updatedAt=new Date().toISOString();validateDatabase(merged);
  return {merged,report};
 }
-export async function reconcileRuntime(runtimeDir,config,{activate=false,researchLimit=24,fetcher=fetch}={}){
+export async function reconcileRuntime(runtimeDir,config,{activate=false,researchLimit=0,fetcher=fetch}={}){
  const file=path.join(runtimeDir,'records','central_comercial_db.json');
  if(!fs.existsSync(file))throw new Error('No se encontró la base local existente. Iniciar primero la preparación del paquete completo.');
  const before=fs.readFileSync(file,'utf8');const local=JSON.parse(before);validateDatabase(local);

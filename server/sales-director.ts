@@ -1,4 +1,5 @@
 import type { Application, Campaign, Conversation, MonthlySalesGoal, PaymentRecord, Client } from '../src/types.js';
+import { localOperationsEnabled } from './execution-role.js';
 import { accountingDay, validDay } from '../src/ledger.js';
 import {usableContactEmail} from '../src/email-policy.js';
 import {whatsappAuthorized} from '../src/whatsapp-policy.js';
@@ -19,7 +20,7 @@ export function orderCommercialConversations(conversations: Conversation[], now:
 }
 
 export function defaultGoal(month: string): MonthlySalesGoal {
-  return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: 40, updatedAt: new Date().toISOString() };
+  return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: localOperationsEnabled() ? 0 : 40, updatedAt: new Date().toISOString() };
 }
 export function validateGoal(input: MonthlySalesGoal) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error('Mes no válido.');

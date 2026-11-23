@@ -61,6 +61,6 @@ CentralComercial de LOCALAPPDATA. No compartir .env, perfiles ni respaldos.
 ARRANQUE AUTONOMO CONCILIADO (15/11/2026)
 Cerrar el iniciador de verificacion con Ctrl+C. Abrir
 PONER_EN_MARCHA_CENTRAL.bat. Conserva ambas bases, agrega lo faltante,
-aplica el cupo autorizado de 24 paginas sin reiniciar el consumo,
+mantiene el registro de consultas y permite buscar sin cupo diario,
 configura el inicio con Windows y abre la operacion autonoma normal.
 No requiere volver a vincular Gmail ni WhatsApp.

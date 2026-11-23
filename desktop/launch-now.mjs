@@ -13,8 +13,8 @@ try{
   await new Promise((resolve,reject)=>{lock.once('error',()=>reject(new Error('Central sigue abierta. Cerrá el iniciador anterior con Ctrl+C y volvé a abrir PONER_EN_MARCHA_CENTRAL.bat. No se modificó la base.')));lock.listen(port,'127.0.0.1',resolve);});locks.push(lock);
  }
  const runtime=path.join(process.env.LOCALAPPDATA||path.join(os.homedir(),'.local','share'),'CentralComercial','runtime');
- const report=await reconcileRuntime(runtime,config,{activate:true,researchLimit:24});
+ const report=await reconcileRuntime(runtime,config,{activate:true});
  console.log(`Conciliación completada: ${report.after.contacts} contactos y ${report.after.conversations} conversaciones.`);
- console.log(`Investigación: ${report.requestsPreserved} solicitudes conservadas; cupo 24 por día. Correo: ${report.emailLimit} por día. Países: ${report.countries.join(', ')}.`);
+ console.log(`Investigación: ${report.requestsPreserved} solicitudes conservadas; sin cupo diario. Correo: ${report.emailLimit} por día. Países: ${report.countries.join(', ')}.`);
  console.log('Se conservaron ambas copias, la planificación local, los pagos y las sesiones. Iniciando operación autónoma.');
 }finally{for(const lock of locks)await new Promise(resolve=>lock.close(resolve));}
