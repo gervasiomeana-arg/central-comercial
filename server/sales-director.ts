@@ -4,8 +4,8 @@ import { accountingDay, validDay } from '../src/ledger.js';
 import {usableContactEmail} from '../src/email-policy.js';
 import {whatsappAuthorized} from '../src/whatsapp-policy.js';
 
-export const normalize = (value: string) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-export const regionalMarkets = ['Argentina', 'Brasil', 'México', 'Uruguay', 'Paraguay', 'Chile', 'Colombia', 'Perú', 'Bolivia'];
+import { americanMarkets, campaignCountryAllowed, marketLanguage, marketSearchName, normalize } from './campaign-markets.js';
+export { normalize } from './campaign-markets.js';
 
 // Give each application an opportunity before one with more drafts takes another turn.
 export function orderCommercialConversations(conversations: Conversation[], now: Date) {
@@ -27,7 +27,7 @@ export function validateGoal(input: MonthlySalesGoal) {
   if (!Number.isInteger(input.targetClients) || input.targetClients < 0 || input.targetClients > 10000) throw new Error('La meta debe ser un entero entre 0 y 10.000 clientes.');
   if (!Number.isInteger(input.dailyEmailLimit) || input.dailyEmailLimit < 1 || input.dailyEmailLimit > 50) throw new Error('Elegí un límite diario de 1 a 50 correos.');
   if (!Number.isInteger(input.dailyResearchLimit) || input.dailyResearchLimit < 0) throw new Error('Configuración de investigación inválida.');
-  if (!Array.isArray(input.countries) || !input.countries.length || input.countries.length > 10 || input.countries.some(c => typeof c !== 'string' || !c.trim() || c.length > 60)) throw new Error('Indicá hasta diez países de búsqueda.');
+  if (!Array.isArray(input.countries) || !input.countries.length || input.countries.length > americanMarkets.length || input.countries.some(c => typeof c !== 'string' || !c.trim() || c.length > 60)) throw new Error('Indicá hasta 35 países de búsqueda.');
   for (const field of ['enabled', 'discoverContacts', 'sendEmail', 'answerEmail'] as const) if (typeof input[field] !== 'boolean') throw new Error('Configuración de autonomía no válida.');
 }
 export function playbook(app: Application) {
@@ -38,8 +38,41 @@ export function playbook(app: Application) {
   if (name.includes('neuro')) return { audience: 'Instituciones educativas y centros con contacto institucional público', reason: 'Pueden conocer las actividades y herramientas de acompañamiento adulto. No se investigan familias ni datos de niños.', terms: ['educacion', 'educativo', 'educativa', 'educacao', 'infantil', 'escola', 'infancia', 'escuela', 'inclusion', 'neurodesarrollo', 'actividades infantiles', 'jardin de infantes', 'autismo', 'tdah', 'psicopedagog', 'terapeutic'], segments: ['centro educativo contacto institucional', 'institución educativa actividades niños contacto', 'fundación educación familias contacto'] };
   return { audience: app.targetAudience, reason: 'La aplicación debe estar lista y habilitada para campañas.', terms: [], segments: [] };
 }
+const translatedProspecting = {
+  en: {
+    voley: ['volleyball club', 'volleyball federation', 'volleyball academy'],
+    visibility: ['digital marketing agency', 'SEO consultancy', 'web design agency'],
+    neuro: ['early childhood education centre', 'kindergarten', 'family education foundation'],
+  },
+  fr: {
+    voley: ['club de volleyball', 'fédération de volleyball', 'école de volleyball'],
+    visibility: ['agence de marketing numérique', 'consultant SEO', 'agence web'],
+    neuro: ['école maternelle', 'centre de la petite enfance', 'association éducative'],
+  },
+  nl: {
+    voley: ['volleybalclub', 'volleybalbond', 'volleybalschool'],
+    visibility: ['digitaal marketingbureau', 'SEO adviesbureau', 'webdesignbureau'],
+    neuro: ['kleuterschool', 'centrum voor kinderopvang', 'educatieve stichting'],
+  },
+};
+function audienceKey(app: Application) {
+  const slug = normalize(app.slug);
+  return slug.includes('voley') ? 'voley' : slug.includes('visibility') ? 'visibility' : slug.includes('neuro') ? 'neuro' : undefined;
+}
+export function prospectingTerms(app: Application, country: string) {
+  const language = marketLanguage(country);
+  const key = audienceKey(app);
+  return key && language in translatedProspecting
+    ? [...playbook(app).terms, ...translatedProspecting[language as keyof typeof translatedProspecting][key]]
+    : playbook(app).terms;
+}
 export function researchQueriesFor(app: Application, country: string) {
-  if (normalize(country) !== 'brasil') return playbook(app).segments.map(segment=>`${segment} ${country}`);
+  const language = marketLanguage(country), key = audienceKey(app);
+  const market = marketSearchName(country);
+  if (key && language in translatedProspecting) {
+    return translatedProspecting[language as keyof typeof translatedProspecting][key].map(segment => `${segment} contact ${market}`);
+  }
+  if (language !== 'pt-BR') return playbook(app).segments.map(segment => `${segment} ${market}`);
   const name=normalize(`${app.slug} ${app.name}`);
   const segments=name.includes('voley')?['clube vôlei contato','escola voleibol contato','federação voleibol contato']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('funer')?['empresa funerária contato','serviços funerários contato','sala velatória contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
   return segments.map(segment=>`${segment} ${country}`);
@@ -71,7 +104,26 @@ export function goalProgress(goal: MonthlySalesGoal, applications: Application[]
   return { goal, achieved, remaining: Math.max(0, goal.targetClients - achieved), daysRemaining, apps: applications.map(app => ({ id: app.id, name: app.name, ready: appIds.has(app.id), clients: [...firstApp.values()].filter(p => p.appId === app.id && belongs(p)).length, ...playbook(app) })) };
 }
 export function promotionalTemplate(app: Application, country: string) {
-  const portuguese = normalize(country) === 'brasil';
+  const language = marketLanguage(country);
+  if (language === 'en') return `Hello, {organizacion} team.
+
+We would like to introduce ${app.name}. You can learn about our services at ${app.website}. Would you like a brief introduction to see if it fits your organisation?
+
+The ${app.name} team
+If you prefer not to receive further messages, please reply UNSUBSCRIBE.`;
+  if (language === 'fr') return `Bonjour, équipe de {organizacion}.
+
+Nous souhaitons vous présenter ${app.name}. Découvrez nos services sur ${app.website}. Souhaitez-vous recevoir une présentation pour votre organisation ?
+
+L’équipe ${app.name}
+Pour ne plus recevoir de messages, répondez STOP.`;
+  if (language === 'nl') return `Hallo, team van {organizacion}.
+
+Graag stellen wij ${app.name} aan u voor. Op ${app.website} vindt u informatie over onze diensten. Wilt u een korte introductie voor uw organisatie ontvangen?
+
+Het team van ${app.name}
+Antwoord STOP als u geen verdere berichten wilt ontvangen.`;
+  const portuguese = language === 'pt-BR';
   const key = normalize(app.slug);
   const description = portuguese ? key.includes('voley') ? 'Uma plataforma de scout, análise e treinamento de voleibol para treinadores e clubes.' : key.includes('visibility') ? 'Auditoria e acompanhamento da presença digital de empresas e agências.' : key.includes('funer') ? 'Gestão operacional e administrativa para empresas funerárias: serviços, recursos, agenda e estoque.' : 'Atividades e jogos para crianças com acompanhamento de adultos. A plataforma não faz diagnósticos nem tratamentos.' : app.description;
   return portuguese
@@ -82,11 +134,12 @@ export function goalCampaigns(goal: MonthlySalesGoal, apps: Application[], exist
   if (!goal.enabled || goal.targetClients <= 0 || accountingDay(now).slice(0, 7) !== goal.month) return [];
   const result: Campaign[] = [];
   for (const app of apps.filter(a => a.status === 'lista' && a.campaignsAllowed)) for (const country of goal.countries) {
+    if (!campaignCountryAllowed(app, country)) continue;
     const strategy = playbook(app); if (!strategy.segments.length) continue;
     const id = `goal-${goal.month}-${app.id}-${normalize(country).replace(/[^a-z0-9]+/g,'-')}`;
     if (existing.some(c => c.id === id)) continue;
     const end = new Date(`${goal.month}-01T12:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 1); end.setUTCDate(0);
-    result.push({ id, appId: app.id, name: `${app.name} · Objetivo ${goal.month}`, goalMonth: goal.month, objective: `Contribuir al objetivo conjunto de ${goal.targetClients} clientes nuevos con primer pago confirmado.`, country, language: normalize(country) === 'brasil' ? 'pt-BR' : 'es', segment: '', researchSegment: strategy.audience, researchQueryVersion: 2, researchQueries: researchQueriesFor(app,country), channels: ['email'], messageTemplate: promotionalTemplate(app, country), followUpTemplates: [], timezone: 'America/Argentina/Buenos_Aires', sendWindowStart: '09:00', sendWindowEnd: '18:00', dailyLimit: Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, apps.filter(a => a.status === 'lista' && a.campaignsAllowed).length))), startDate: accountingDay(now), endDate: end.toISOString().slice(0, 10), maxFollowUps: 0, followUpIntervalDays: 4, stopCriteria: ['respuesta_recibida', 'solicitud_baja', 'objetivo_alcanzado'], mode: 'automatico', status: 'lista', autoPrepare: true, autoSendEmail: goal.sendEmail, allowPublicEmail: true, stats: { contactsCount: 0, messagesPending: 0, messagesSent: 0, messagesFailed: 0, messagesUnknown: 0, responsesReceived: 0 }, createdAt: now.toISOString(), updatedAt: now.toISOString() });
+    result.push({ id, appId: app.id, name: `${app.name} · Objetivo ${goal.month}`, goalMonth: goal.month, objective: `Contribuir al objetivo conjunto de ${goal.targetClients} clientes nuevos con primer pago confirmado.`, country, language: marketLanguage(country), segment: '', researchSegment: strategy.audience, researchQueryVersion: 2, researchQueries: researchQueriesFor(app,country), channels: ['email'], messageTemplate: promotionalTemplate(app, country), followUpTemplates: [], timezone: 'America/Argentina/Buenos_Aires', sendWindowStart: '09:00', sendWindowEnd: '18:00', dailyLimit: Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, apps.filter(a => a.status === 'lista' && a.campaignsAllowed).length))), startDate: accountingDay(now), endDate: end.toISOString().slice(0, 10), maxFollowUps: 0, followUpIntervalDays: 4, stopCriteria: ['respuesta_recibida', 'solicitud_baja', 'objetivo_alcanzado'], mode: 'automatico', status: 'lista', autoPrepare: true, autoSendEmail: goal.sendEmail, allowPublicEmail: true, stats: { contactsCount: 0, messagesPending: 0, messagesSent: 0, messagesFailed: 0, messagesUnknown: 0, responsesReceived: 0 }, createdAt: now.toISOString(), updatedAt: now.toISOString() });
   }
   return result;
 }

@@ -5,7 +5,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
 import { db } from './db.js';
-import {playbook, normalize} from './sales-director.js';
+import { campaignCountryAllowed } from './campaign-markets.js';
+import {prospectingTerms, normalize} from './sales-director.js';
 import type { JarvisContext, JarvisPlan, JarvisStatus, JarvisStrategy } from '../src/openjarvis-types.js';
 
 type StoredPlan = JarvisPlan & { planningContractVersion?:number; correctionRecovery?:boolean; workerId?: string; leaseHash?: string };
@@ -126,9 +127,9 @@ export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: u
   if (!text(appId, 100) || !text(country, 100)) throw new Error('Elegí una aplicación y un país del objetivo mensual.');
   const app = db.getApplicationById(appId as string), report = db.getSalesGoalReport();
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Esta aplicación todavía no está habilitada para campañas.');
-  if (!report.goal.countries.includes(country as string)) throw new Error('El país debe estar incluido en el objetivo mensual.');
+  if (!report.goal.countries.includes(country as string) || !campaignCountryAllowed(app, country as string)) throw new Error('El país debe estar incluido en el objetivo mensual.');
   // No contacts, message histories, balances, credentials or unverified offers leave this boundary.
-  return queue.enqueue({ queryRules:{country:country as string,activityTerms:playbook(app).terms,institutionalOnly:normalize(app.slug+' '+app.name).includes('neuro')}, app: { id: app.id, name: app.name, description: app.description,
+  return queue.enqueue({ queryRules:{country:country as string,activityTerms:prospectingTerms(app,country as string),institutionalOnly:normalize(app.slug+' '+app.name).includes('neuro')}, app: { id: app.id, name: app.name, description: app.description,
     audience: app.targetAudience, website: app.website, features: app.verifiedFeatures }, country: country as string,
     goal: { month: report.goal.month, targetClients: report.goal.targetClients, remainingClients: report.remaining,
       dailyEmailLimit: report.goal.dailyEmailLimit, dailyResearchLimit: report.goal.dailyResearchLimit } });

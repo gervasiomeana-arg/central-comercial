@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import { accountingDay } from '../src/ledger.js';
+import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
 import { normalize, researchQueriesFor } from './sales-director.js';
 import { diagnosticMode } from './execution-role.js';
 import { whatsappStatus } from './commercial-whatsapp.js';
@@ -12,7 +13,7 @@ export function attachCampaignScope(report: AssistantReport, selectedId: unknown
   if (!campaignChatEnabled() || report.appId === 'all') return;
   const selected = typeof selectedId === 'string' ? db.getCampaignById(selectedId) : undefined;
   if (selectedId && (!selected || selected.appId !== report.appId)) throw new Error('Elegí una campaña de la aplicación seleccionada.');
-  report.campaignScope = { countries: [...db.getMonthlyGoal().countries] };
+  report.campaignScope = { countries: db.getMonthlyGoal().countries.filter(country => campaignCountryAllowed(db.getApplicationById(report.appId) ?? report.appId, country)) };
   if (selected) {
     const { id, name, country, status, objective, messageTemplate, updatedAt } = selected;
     report.campaignScope.campaign = { id, name, country, status, objective, messageTemplate, revision: updatedAt };
@@ -54,12 +55,12 @@ export function applyCampaignProposal(entryId: string, appId: string, proposal: 
     const id = 'chat-' + entryId;
     if (db.getCampaignById(id)) return 'Campaña guardada como borrador.';
     const { name, country, objective, messageTemplate } = proposal;
-    if (!name || !country || !objective || !messageTemplate || !goal.countries.includes(country)) throw new Error('El país debe estar en el objetivo mensual vigente.');
+    if (!name || !country || !objective || !messageTemplate || (!goal.countries.includes(country) || !campaignCountryAllowed(app,country))) throw new Error('El país debe estar en el objetivo mensual vigente.');
     const end = new Date(day + 'T12:00:00Z');
     end.setUTCMonth(end.getUTCMonth()+1, 0);
     const campaign: Campaign = {
       id, appId, name, country, objective, messageTemplate, chatManaged:true, goalMonth:goal.month,
-      language:normalize(country)==='brasil'?'pt-BR':'es', segment:'', channels:['email'], researchQueries:researchQueriesFor(app,country),
+      language:marketLanguage(country), segment:'', channels:['email'], researchQueries:researchQueriesFor(app,country),
       researchQueryVersion:2, researchDiscoveryVersion:3, followUpTemplates:[], timezone:'America/Argentina/Buenos_Aires',
       sendWindowStart:'09:00', sendWindowEnd:'18:00', dailyLimit:goal.dailyEmailLimit, startDate:day, endDate:end.toISOString().slice(0,10),
       maxFollowUps:0, followUpIntervalDays:4, stopCriteria:['respuesta_recibida','solicitud_baja'],
@@ -67,7 +68,8 @@ export function applyCampaignProposal(entryId: string, appId: string, proposal: 
       stats:{contactsCount:0,messagesPending:0,messagesSent:0,messagesFailed:0,messagesUnknown:0,responsesReceived:0},
       createdAt:'', updatedAt:'',
     };
-    db.saveCampaign(campaign);
+    const saved = db.saveCampaign(campaign);
+    if (saved.error) throw new Error(saved.error);
     return 'Campaña guardada como borrador. Podés seguir ajustándola o pedir que se active.';
   }
 

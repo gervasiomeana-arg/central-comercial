@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { americanMarkets, mexicoRegions } from '../server/campaign-markets.js';
 import { accountingDay } from '../src/ledger.js';
 import { defaultGoal, goalProgress, goalCampaigns, validateGoal } from '../server/sales-director.js';
 import { commercialCatalog } from '../server/commercial-catalog.js';
@@ -22,10 +23,28 @@ test('goal counts unique first paying clients; renewals, pending, duplicates and
   assert.equal(report.achieved,1);assert.equal(report.remaining,4);assert.equal(report.daysRemaining,19);assert.equal(report.apps.find(a=>a.id===apps[1].id)?.clients,1);
 });
 test('director creates only ready apps, deduplicates, stops outside month and separates countries/languages',()=>{
-  const goal={...defaultGoal('2026-11'),countries:['Argentina','Brasil']};const campaigns=goalCampaigns(goal,apps,[],now);
-  assert.equal(campaigns.length,8);assert.ok(campaigns.every(c=>c.channels.join()==='email'));
+  const goal={...defaultGoal('2026-11'),countries:['Argentina','Brasil','México']};const campaigns=goalCampaigns(goal,apps,[],now);
+  assert.equal(campaigns.length,10);assert.ok(campaigns.every(c=>c.channels.join()==='email'));
   assert.ok(campaigns.filter(c=>c.country==='Brasil').every(c=>c.language==='pt-BR'&&c.messageTemplate.includes('Olá')));
   assert.equal(goalCampaigns(goal,apps,campaigns,now).length,0);assert.equal(goalCampaigns(goal,apps,[],new Date('2026-12-01T15:00:00Z')).length,0);
+});
+test('el alcance cubre América y reserva Funeraria Control exclusivamente para México', () => {
+  const goal = { ...defaultGoal('2026-11'), countries: americanMarkets };
+  validateGoal(goal);
+  assert.equal(new Set(americanMarkets).size, 35);
+  assert.equal(new Set(mexicoRegions).size, 32);
+  const campaigns = goalCampaigns(goal, apps, [], now);
+  assert.equal(campaigns.length, 106);
+  for (const app of apps) {
+    const countries = campaigns.filter(c => c.appId === app.id).map(c => c.country);
+    assert.deepEqual(countries, app.slug === 'funeraria' ? ['México'] : americanMarkets);
+  }
+  const canada = campaigns.find(c => c.appId === apps[0].id && c.country === 'Canadá')!;
+  assert.equal(canada.language, 'en');
+  assert.ok(canada.researchQueries?.every(query => query.includes('Canada')));
+  const funeraria = apps.find(app => app.slug === 'funeraria')!;
+  assert.equal(extractContact('<h1>Funeraria en New Mexico</h1>info@fixture.test', 'https://fixture.test', funeraria, 'México', now), null);
+  assert.equal(extractContact('<h1>Funeraria en Sonora</h1>info@fixture.mx', 'https://fixture.mx', funeraria, 'México', now)?.country, 'México');
 });
 test('public fetch rejects local networks, credentials and insecure URLs',()=>{
   for(const address of ['127.0.0.1','10.0.0.1','169.254.169.254','172.16.0.2','192.168.1.2','100.64.0.1','::1'])assert.equal(publicAddress(address),false);
@@ -56,20 +75,24 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const day = accountingDay();
   const month = day.slice(0, 7);
-  const goal = { ...defaultGoal(month), enabled: true, targetClients: 5, dailyResearchLimit: 24 };
+  const goal = { ...defaultGoal(month), enabled: true, directorEnabled: true, targetClients: 5, dailyResearchLimit: 24 };
   const campaign = goalCampaigns(goal, [apps[0]], [])[0];
   const queued = 'https://club-prueba.test/contacto';
+  const funeralOutsideMexico = { ...campaign, id:'historical-funeral', appId:'app-funeraria', status:'activa', updatedAt:'2000-01-01' };
   campaign.researchQueue = [{ url: queued }];
   campaign.researchDay = day;
   campaign.researchCount = 24;
   fs.writeFileSync(path.join(dir, 'central_comercial_db.json'), JSON.stringify({
     applications: apps, contacts: [], clients: [], conversations: [], payments: [], subscriptions: [],
-    campaigns: [campaign], monthlySalesGoals: [goal],
+    campaigns: [campaign, funeralOutsideMexico], monthlySalesGoals: [goal],
     researchState: { month, day, requests: 24, visited: [], status: 'quota', detail: 'Cupo diario alcanzado.' },
   }));
 
   const { db } = await import('../server/db.js');
   const { researchGoalProspects } = await import('../server/prospect-research.js');
+  assert.deepEqual(db.getMonthlyGoal().countries, americanMarkets);
+  assert.equal(db.getCampaignById(funeralOutsideMexico.id)?.status, 'pausada');
+  assert.equal(db.campaignInActiveRun(funeralOutsideMexico.id), false);
   assert.equal(db.getMonthlyGoal().dailyResearchLimit, 0);
   assert.equal(db.getMonthlyGoal().dailyEmailLimit, goal.dailyEmailLimit);
   assert.equal(db.getResearchState().status, 'pending');
@@ -82,4 +105,9 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   assert.equal(db.getResearchState().requests, 25);
   assert.equal(db.getCampaigns()[0].researchCount, 25);
   assert.notEqual(db.getResearchState().status, 'quota');
+  db.processSalesDirector();
+  const scheduled = db.getCampaigns().filter(item => db.campaignInActiveRun(item.id));
+  assert.equal(scheduled.length, 106);
+  assert.deepEqual(scheduled.filter(item => item.appId === 'app-funeraria').map(item => item.country), ['México']);
+  assert.equal(db.getCampaignById(funeralOutsideMexico.id)?.status, 'pausada');
 });

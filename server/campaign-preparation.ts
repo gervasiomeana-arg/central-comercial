@@ -1,3 +1,4 @@
+import { campaignCountryAllowed } from './campaign-markets.js';
 import {usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +15,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const result = (blockedReason?: string) => ({ drafts, skipped, blockedReason });
   const skip = (reason: string) => { skipped[reason] = (skipped[reason] || 0) + 1; };
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) return result('La aplicación no está habilitada para campañas.');
+  if (!campaignCountryAllowed(app, campaign.country)) return result('Campaña fuera del alcance geográfico autorizado.');
   if (['pausada', 'finalizada'].includes(campaign.status)) return result('La campaña está pausada o finalizada.');
   if (!campaign.channels?.some(c=>c==='email'||c==='whatsapp')) return result('Elegí email o WhatsApp.');
   if(!campaignStrategyReady(campaign,app))return result('Esperando una estrategia válida de OpenJarvis.');
