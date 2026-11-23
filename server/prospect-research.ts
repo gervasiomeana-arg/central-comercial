@@ -1,3 +1,4 @@
+import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
 import {campaignStrategyReady} from './sales-director.js';
 import { db } from './db.js';
@@ -27,7 +28,12 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     }
     if(state.blocked){state.status='error';state.detail=state.lastError||'El proveedor requiere revisión antes de continuar.';db.save();return;}
     
-    const campaigns=db.getCampaigns().filter(c=>c.goalMonth===goal.month&&goal.countries.some(country=>normalize(country)===normalize(c.country))&&['lista','activa','bloqueada_por_configuracion'].includes(c.status)&&db.getApplicationById(c.appId)?.status==='lista'&&db.getApplicationById(c.appId)?.campaignsAllowed);
+    const campaigns = db.getCampaigns().filter(c => {
+      const app = db.getApplicationById(c.appId);
+      return c.goalMonth === goal.month && app?.status === 'lista' && app.campaignsAllowed &&
+        campaignCountryAllowed(app, c.country) && ['lista','activa','bloqueada_por_configuracion'].includes(c.status) &&
+        goal.countries.some(country => normalize(country) === normalize(c.country));
+    });
     const remaining=()=>goal.dailyResearchLimit===0?Infinity:goal.dailyResearchLimit-state.requests;
     if(remaining()<=0){
       if(state.status!=='quota'){
@@ -86,9 +92,10 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       const searchIndex=campaign.researchQueryIndex||0;
       const base=queries[searchIndex%queries.length];
       // Rotate geography and search intent after exhausting the initial fixed query set.
-      const regions=normalize(country)==='argentina'?['Córdoba','Rosario','Mendoza','Tucumán','Mar del Plata','La Plata','Salta','Neuquén','Bahía Blanca','Santa Fe']:normalize(country)==='brasil'?['São Paulo','Rio de Janeiro','Campinas','Curitiba','Belo Horizonte','Porto Alegre','Recife','Santos']:normalize(country)==='mexico'?['Ciudad de México','Guadalajara','Monterrey','Puebla','Mérida','Querétaro']:[];
+      const regions=normalize(country)==='argentina'?['Córdoba','Rosario','Mendoza','Tucumán','Mar del Plata','La Plata','Salta','Neuquén','Bahía Blanca','Santa Fe']:normalize(country)==='brasil'?['São Paulo','Rio de Janeiro','Campinas','Curitiba','Belo Horizonte','Porto Alegre','Recife','Santos']:normalize(country)==='mexico'?mexicoRegions:[];
       const round=Math.floor(searchIndex/queries.length);
-      const region=round>0&&regions.length?regions[(round-1)%regions.length]:'';
+      const regionIndex = normalize(country)==='mexico' ? searchIndex - queries.length : round - 1;
+      const region=round>0&&regions.length?regions[regionIndex%regions.length]:'';
       const intent=round>regions.length+1?['contacto institucional','email comercial','sitio oficial','asociación regional'][Math.floor(round/Math.max(1,regions.length))%4]:'';
       const query=fallback||[base,region,intent].filter(Boolean).join(' ');outcome.query=query;
       // Advance once per search, including failures; never repeat a single daily query forever.

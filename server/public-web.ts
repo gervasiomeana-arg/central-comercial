@@ -3,7 +3,8 @@ import https from 'node:https';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import type { Application, Contact, ResearchEvidence } from '../src/types.js';
-import { playbook, normalize } from './sales-director.js';
+import { marketFor, marketLanguage, mexicoRegions } from './campaign-markets.js';
+import { playbook, normalize, prospectingTerms } from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 
 export function publicAddress(address: string) {
@@ -62,9 +63,6 @@ export function contactLinks(html: string, base: string) {
     try { const url = publicUrl(new URL(decode(match[1]), base).href); return hostKey(url.href) === hostKey(base) && /contact|contato|contacto|institucional|quienes|quem-somos|about/i.test(url.pathname) ? [url.href] : []; } catch { return []; }
   }))].sort((a,b)=>Number(/contact/i.test(b))-Number(/contact/i.test(a))).slice(0, 3);
 }
-const countries:Record<string,{prefix:string;iso:string;aliases:string[]}>= {
-  argentina:{prefix:'54',iso:'AR',aliases:['argentina']},uruguay:{prefix:'598',iso:'UY',aliases:['uruguay']},chile:{prefix:'56',iso:'CL',aliases:['chile']},brasil:{prefix:'55',iso:'BR',aliases:['brasil','brazil']},paraguay:{prefix:'595',iso:'PY',aliases:['paraguay']},colombia:{prefix:'57',iso:'CO',aliases:['colombia']},mexico:{prefix:'52',iso:'MX',aliases:['mexico']},peru:{prefix:'51',iso:'PE',aliases:['peru']},bolivia:{prefix:'591',iso:'BO',aliases:['bolivia']},espana:{prefix:'34',iso:'ES',aliases:['espana','spain']}
-};
 const word=(text:string,term:string)=>new RegExp(`\\b${normalize(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(normalize(text));
 function organizationData(html:string) {
   const found:{countries:string[];emails:string[]}={countries:[],emails:[]};
@@ -89,11 +87,20 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const clean=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
   const text=decode(clean.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ');
   const inherited=context&&context.appId===app.id&&normalize(context.country)===normalize(country)&&hostKey(context.url)===hostKey(url)?context:undefined;
-  const structured=organizationData(html), rule=countries[normalize(country)];
+  const structured=organizationData(html), rule=marketFor(country);
   const phone=clean.match(/(?:wa\.me\/|api\.whatsapp\.com\/send\?[^"'<>]*?phone=)(\+?\d{8,15})/i)?.[1].replace(/\D/g,'')||'';
   const telephone=clean.match(/href\s*=\s*["']tel:\s*(\+[^"']+)["']/i)?.[1].replace(/\D/g,'')||'';
   const title=decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||new URL(url).hostname).slice(0,160);
-  const evidence:ResearchEvidence={url,appId:app.id,country,title,topicVerified:Boolean(inherited?.topicVerified||playbook(app).terms.some(term=>word(text,term))),countryVerified:Boolean(inherited?.countryVerified||(rule?.aliases||[country]).some(alias=>word(text,alias))||(rule&&(phone.startsWith(rule.prefix)||telephone.startsWith(rule.prefix)))||structured.countries.some(name=>normalize(name)===normalize(country)||Boolean(rule&&name.toUpperCase()===rule.iso)))};
+  const countryText = rule?.iso === 'MX' ? text.replace(/\b(?:new|nuevo) m[eé]xico\b/gi, '') : text;
+  const structuredCountry = structured.countries.some(name =>
+    (rule?.aliases || [country]).some(alias => normalize(alias) === normalize(name)) || rule?.iso === name.toUpperCase());
+  const mexicanRegion = rule?.iso === 'MX' && new URL(url).hostname.endsWith('.mx') &&
+    mexicoRegions.some(region => word(countryText, region));
+  const countryClue = mexicanRegion || (rule?.aliases || [country]).some(alias => word(countryText,alias)) ||
+    Boolean(rule?.prefix && (phone.startsWith(rule.prefix) || telephone.startsWith(rule.prefix)));
+  const countryVerified = Boolean(structuredCountry || (!structured.countries.length && (inherited?.countryVerified || countryClue)));
+  const evidence:ResearchEvidence = { url, appId: app.id, country, title, countryVerified,
+    topicVerified: Boolean(inherited?.topicVerified || prospectingTerms(app,country).some(term => word(text,term))) };
   if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
   if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
   const visibleEmailText=decode(clean.replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi,'').replace(/<[^>]+>/g,' '));
@@ -104,7 +111,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
-  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:normalize(country)==='brasil'?'pt-BR':'es',timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Dato publicado por la organización; no implica consentimiento del destinatario. WhatsApp solo se registra, sin enviar.${additional}`,history:[],preferredChannel:email?'email':'whatsapp',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Dato publicado por la organización; no implica consentimiento del destinatario. WhatsApp solo se registra, sin enviar.${additional}`,history:[],preferredChannel:email?'email':'whatsapp',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
   return {contact,evidence,reason:email?'Email público verificado':'Solo WhatsApp público; no habilita envío por email'};
 }
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {
@@ -130,11 +137,10 @@ export function relevantSearchLinks(document:string,app:Application,country:stri
    }catch{}
   }
  }
- const rule=countries[normalize(country)];
- const suffix:Record<string,string>={argentina:'.ar',brasil:'.br',mexico:'.mx',chile:'.cl',uruguay:'.uy',paraguay:'.py',colombia:'.co',peru:'.pe',bolivia:'.bo',espana:'.es'};
+ const rule=marketFor(country);
  return [...new Set(entries.flatMap(item=>{try{const u=publicUrl(item.url),text=item.text+' '+u.hostname+u.pathname;
-  const topic=playbook(app).terms.some(t=>word(text,t));
-  const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(suffix[normalize(country)]&&u.hostname.endsWith(suffix[normalize(country)]));
+  const topic=prospectingTerms(app,country).some(t=>word(text,t));
+  const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(rule && u.hostname.endsWith('.'+rule.iso.toLowerCase()));
   return !excluded.test(u.hostname)&&topic&&place?[u.href]:[];
  }catch{return [];}}))].slice(0,10);
 }

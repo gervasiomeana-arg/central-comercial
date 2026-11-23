@@ -19,7 +19,8 @@ export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate
     {editing&&goal&&<form className="cc-goal-form" onSubmit={save}>
       <label>Mes<input type="month" required value={goal.month} onChange={async e=>{const month=e.target.value;if(!month)return;try{const r=await api.getSalesGoal(month);setGoal(r.goal);}catch(e:any){setError(e.message);}}}/></label>
       <label>Clientes nuevos a alcanzar<input type="number" min="0" max="10000" required value={goal.targetClients} onChange={e=>setGoal({...goal,targetClients:Number(e.target.value)})}/></label>
-      <label>Países, separados por comas<input required value={goal.countries.join(', ')} onChange={e=>setGoal({...goal,countries:e.target.value.split(',').map(c=>c.trim())})}/></label>
+      {report?.research.unlimited && goal.directorEnabled ? <p>Funeraria Control: México. Open Voley, Visibility AI y NeuroPlaneta: 35 países de América.</p> :
+        <label>Países, separados por comas<input required value={goal.countries.join(', ')} onChange={e=>setGoal({...goal,countries:e.target.value.split(',').map(c=>c.trim())})}/></label>}
       <label>Máximo de correos al día<input type="number" min="1" max="50" required value={goal.dailyEmailLimit} onChange={e=>setGoal({...goal,dailyEmailLimit:Number(e.target.value)})}/></label>
       {report?.research.unlimited ? <p>Búsqueda de contactos sin cupo diario.</p> :
         <label>Páginas a investigar al día (0 = sin tope)<input type="number" min="0" required value={goal.dailyResearchLimit} onChange={e=>setGoal({...goal,dailyResearchLimit:Number(e.target.value)})}/></label>}

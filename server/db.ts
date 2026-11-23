@@ -1,10 +1,11 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
-import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor, regionalMarkets, normalize } from './sales-director.js';
+import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
 import { cloudMonitorMode, localOperationsEnabled } from './execution-role.js';
+import { americanMarkets, campaignCountryAllowed } from './campaign-markets.js';
 import fs from 'fs';
 import { prepareCampaign } from './campaign-preparation.js';
 import path from 'path';
@@ -209,6 +210,19 @@ class DatabaseManager {
       for (const goal of schema.monthlySalesGoals) {
         if (goal.month >= currentMonth && goal.dailyResearchLimit !== 0) {
           goal.dailyResearchLimit = 0;
+          changed = true;
+        }
+        if (goal.month >= currentMonth && goal.directorEnabled && goal.countries?.join(',') !== americanMarkets.join(',')) {
+          goal.countries = [...americanMarkets];
+          changed = true;
+        }
+      }
+      for (const campaign of schema.campaigns) {
+        if (['activa', 'lista', 'bloqueada_por_configuracion'].includes(campaign.status) &&
+            !campaignCountryAllowed(schema.applications.find(app => app.id === campaign.appId) ?? campaign.appId, campaign.country)) {
+          campaign.status = 'pausada';
+          campaign.blockingReason = 'Campaña fuera del alcance geográfico autorizado.';
+          campaign.updatedAt = new Date().toISOString();
           changed = true;
         }
       }
@@ -724,7 +738,7 @@ class DatabaseManager {
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
     const previous = this.getMonthlyGoal(input.month);
-    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, regionalScopeConfigured: true, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: localOperationsEnabled() ? 0 : input.dailyResearchLimit, updatedAt: new Date().toISOString() };
+    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: localOperationsEnabled() && previous.directorEnabled ? [...americanMarkets] : [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: localOperationsEnabled() ? 0 : input.dailyResearchLimit, updatedAt: new Date().toISOString() };
     const index = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (index < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[index] = goal;
     this.addLog('info', 'campañas', `Objetivo ${goal.month}: ${goal.targetClients} clientes nuevos con primer pago confirmado.`, { enabled: goal.enabled });
@@ -742,7 +756,7 @@ class DatabaseManager {
     validateGoal(current);
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
-    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
+    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets] } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
       directorChannels: ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
@@ -752,18 +766,8 @@ class DatabaseManager {
     this.processSalesDirector(); this.save();
   }
   public processSalesDirector() {
-    let report = this.getSalesGoalReport();
+    const report = this.getSalesGoalReport();
     if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
-    const goal = report.goal;
-    if (process.env.CENTRAL_LOCAL_MODE === 'true' && goal.directorEnabled && !goal.regionalScopeConfigured) {
-      goal.regionalScopeConfigured = true;
-      if (goal.countries.length === 1 && normalize(goal.countries[0]) === 'argentina') {
-        goal.countries = [...goal.countries, ...regionalMarkets.slice(1)];
-        this.addLog('info','campañas','Búsqueda regional activada para las cuatro aplicaciones. Se conservan los cupos, horarios y reglas de autorización.');
-        report = this.getSalesGoalReport();
-      }
-      this.save();
-    }
     const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
     this.data.campaigns.push(...created);
     let changed = created.length > 0;
@@ -807,6 +811,7 @@ class DatabaseManager {
   public campaignInActiveRun(id: string) {
     const goal = this.getMonthlyGoal();
     const campaign = this.getCampaignById(id), app = campaign && this.getApplicationById(campaign.appId);
+    if (campaign && !campaignCountryAllowed(app ?? campaign.appId, campaign.country)) return false;
     if (campaign?.chatManaged) return Boolean(goal.enabled && campaign.goalMonth === goal.month &&
       goal.countries.includes(campaign.country) && app?.status === 'lista' && app.campaignsAllowed);
     if (goal.directorEnabled) {
@@ -822,6 +827,7 @@ class DatabaseManager {
     const country = typeof input.country === 'string' ? input.country.trim() : '';
     if (!country || country.length > 60 || !Number.isInteger(input.maxContacts) || input.maxContacts < 1 || input.maxContacts > 20) throw new Error('Indicá un país y un máximo total de 1 a 20 contactos.');
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowStart || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowEnd || '') || input.sendWindowStart >= input.sendWindowEnd) throw new Error('Revisá el horario de envío.');
+    if (!campaignCountryAllowed(app, country)) throw new Error('El país está fuera del alcance geográfico de la aplicación.');
     const day = accountingDay(), month = day.slice(0,7);
     const goal = { ...this.getMonthlyGoal(month), directorEnabled:false, targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:localOperationsEnabled()?0:20, updatedAt:new Date().toISOString() };
     validateGoal(goal);
@@ -909,7 +915,12 @@ class DatabaseManager {
       return { campaign, error: 'La aplicación asociada a la campaña no existe.' };
     }
 
-    if (app.id === 'app-funeraria' || app.slug === 'funeraria' || app.status === 'en_desarrollo') {
+    if (campaign.status !== 'pausada' && campaign.status !== 'finalizada' &&
+        !campaignCountryAllowed(app, campaign.country)) {
+      return { campaign, error: 'El país está fuera del alcance geográfico de la aplicación.' };
+    }
+
+    if (app.status === 'en_desarrollo' || !app.campaignsAllowed) {
       if (campaign.status === 'activa') {
         campaign.status = 'bloqueada_por_configuracion';
         campaign.blockingReason = `La aplicación ${app.name} se encuentra en desarrollo. Sus campañas están estrictamente bloqueadas hasta autorizar su lanzamiento.`;
@@ -960,7 +971,8 @@ class DatabaseManager {
   public prepareCampaignDrafts(id: string) {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
-    const result = prepareCampaign(campaign, this.getApplicationById(campaign.appId), this.data.contacts, this.data.conversations);
+    const app = this.getApplicationById(campaign.appId);
+    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations);
     this.data.conversations.unshift(...result.drafts);
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);

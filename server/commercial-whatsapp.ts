@@ -1,3 +1,4 @@
+import { campaignCountryAllowed } from './campaign-markets.js';
 import {campaignStrategyReady, orderCommercialConversations} from './sales-director.js';
 import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
@@ -29,6 +30,7 @@ export function claimWhatsApp(id:string,now=new Date()){
    const reply=Boolean(msg.replyToProviderId);
    if(reply){if(!report.goal.answerEmail||msg.reviewStatus!=='approved')continue;}
    else{
+    if (!campaignCountryAllowed(app, contact.country)) continue;
     if(!report.remaining||!campaign?.autoSendWhatsApp||!campaign.channels.includes('whatsapp')||!db.campaignInActiveRun(campaign.id)||!campaignStrategyReady(campaign,db.getApplicationById(campaign.appId))||!['lista','activa','bloqueada_por_configuracion'].includes(campaign.status)||conv.messages.some(m=>m.direction==='inbound'))continue;
     if(campaign.goalMonth&&(campaign.goalMonth!==report.goal.month||!report.goal.countries.includes(campaign.country)))continue;
     if(campaign.mode!=='automatico'&&msg.reviewStatus!=='approved')continue;

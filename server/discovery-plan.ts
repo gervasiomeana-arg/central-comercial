@@ -1,9 +1,11 @@
 import type {Application,Campaign} from '../src/types.js';
-import {normalize,researchQueriesFor,playbook} from './sales-director.js';
+import { marketFor } from './campaign-markets.js';
+import {normalize,researchQueriesFor,prospectingTerms} from './sales-director.js';
 export function prospectQuery(query:string,app:Application,country:string){
  const q=normalize(query),name=normalize(app.slug+' '+app.name);
  const audience=name.includes('voley')?/(club|federac|asociac|associac|escuela|escola|equipo)/:name.includes('visibility')?/(agencia|consultor|empresa|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin)/;
- return q.includes(normalize(country))&&audience.test(q)&&playbook(app).terms.some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
+ return (marketFor(country)?.aliases || [country]).some(alias=>q.includes(normalize(alias)))&&
+   (audience.test(q) || researchQueriesFor(app,country).some(candidate=>normalize(candidate)===q))&&prospectingTerms(app,country).some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
 }
 export function repairDiscoveryPlan(c:Campaign,app:Application){
  if(c.researchDiscoveryVersion===3)return false;
@@ -19,7 +21,10 @@ export function repairDiscoveryPlan(c:Campaign,app:Application){
 }
 export function searchRequest(query:string,country:string,html=false){
  const markets:Record<string,[string,string]>={argentina:['es-AR','ar-es'],brasil:['pt-BR','br-pt'],mexico:['es-MX','mx-es'],chile:['es-CL','cl-es'],uruguay:['es-UY','ar-es'],paraguay:['es-PY','ar-es'],colombia:['es-CO','co-es'],peru:['es-PE','pe-es'],bolivia:['es-BO','ar-es']};
- const market=markets[normalize(country)]||['es-ES','es-es'];
+ const entry=marketFor(country);
+ const language=(entry?.language || 'es').split('-')[0];
+ const languageMarkets: Record<string,string> = { en:'en-US', fr:'fr-CA', nl:'nl-NL', es:'es-US' };
+ const market=markets[normalize(country)]||[entry && ['US','CA','ES'].includes(entry.iso)?language+'-'+entry.iso:languageMarkets[language]||'en-US','wt-wt'];
  const url=new URL(html?'https://html.duckduckgo.com/html/':'https://www.bing.com/search');
  url.searchParams.set('q',query);
  if(html)url.searchParams.set('kl',market[1]);else{url.searchParams.set('format','rss');url.searchParams.set('mkt',market[0]);url.searchParams.set('setlang',market[0]);}
