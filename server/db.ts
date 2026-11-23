@@ -4,7 +4,7 @@ import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, valida
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
-import { cloudMonitorMode } from './execution-role.js';
+import { cloudMonitorMode, localOperationsEnabled } from './execution-role.js';
 import fs from 'fs';
 import { prepareCampaign } from './campaign-preparation.js';
 import path from 'path';
@@ -204,6 +204,22 @@ class DatabaseManager {
   private migrateData(schema: DatabaseSchema): boolean {
     let changed = false;
 
+    if (localOperationsEnabled()) {
+      const currentMonth = accountingDay().slice(0, 7);
+      for (const goal of schema.monthlySalesGoals) {
+        if (goal.month >= currentMonth && goal.dailyResearchLimit !== 0) {
+          goal.dailyResearchLimit = 0;
+          changed = true;
+        }
+      }
+      const research = schema.researchState;
+      if (research.status === 'quota' && !research.blocked) {
+        research.status = 'pending';
+        delete research.detail;
+        changed = true;
+      }
+    }
+
     // Recheck historical discoveries too, including snapshots restored on deploy.
     // Keep the source, notes and messages; never change delivery evidence.
     for (const contact of schema.contacts) {
@@ -321,7 +337,7 @@ class DatabaseManager {
         const hadCorrections = this.migrateData(schema);
         if (hadCorrections) {
           this.saveDirect(schema);
-          console.log('[Central Comercial] Migración aplicada: datos no verificados marcados y excluidos de automatizaciones.');
+          console.log('[Central Comercial] Migración aplicada a los registros comerciales.');
         }
 
         return schema;
@@ -703,12 +719,12 @@ class DatabaseManager {
     const goal = this.getMonthlyGoal(month);
     const progress = goalProgress(goal, this.data.applications, this.data.payments, this.data.clients);
     const apps = progress.apps.map(app => ({ ...app, operations: operationalSummary(this.getApplicationById(app.id)!, month, this.data.contacts, this.data.campaigns, this.data.conversations, this.data.payments, this.data.tasks) }));
-    return { ...progress, apps, worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length }, paused: this.data.scheduler.automationsPaused };
+    return { ...progress, apps, worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length, unlimited: localOperationsEnabled() }, paused: this.data.scheduler.automationsPaused };
   }
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
     const previous = this.getMonthlyGoal(input.month);
-    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, regionalScopeConfigured: true, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: input.dailyResearchLimit, updatedAt: new Date().toISOString() };
+    const goal: MonthlySalesGoal = { directorEnabled: previous.directorEnabled, directorChannels: previous.directorChannels, regionalScopeConfigured: true, month: input.month, targetClients: input.targetClients, enabled: input.enabled, discoverContacts: input.discoverContacts, sendEmail: input.sendEmail, answerEmail: input.answerEmail, countries: [...new Set(input.countries.map(c => c.trim()))], dailyEmailLimit: input.dailyEmailLimit, dailyResearchLimit: localOperationsEnabled() ? 0 : input.dailyResearchLimit, updatedAt: new Date().toISOString() };
     const index = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (index < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[index] = goal;
     this.addLog('info', 'campañas', `Objetivo ${goal.month}: ${goal.targetClients} clientes nuevos con primer pago confirmado.`, { enabled: goal.enabled });
@@ -718,7 +734,7 @@ class DatabaseManager {
       if (app&&!campaign.intelligencePlanId) { campaign.researchQueries = researchQueriesFor(app,campaign.country); campaign.researchQueryVersion=2; }
       campaign.dailyLimit = Math.max(1, Math.floor(goal.dailyEmailLimit / Math.max(1, this.data.applications.filter(a => a.status === 'lista' && a.campaignsAllowed).length)));
     }
-    if(goal.dailyResearchLimit>previous.dailyResearchLimit&&!this.data.researchState.blocked){for(const c of this.data.campaigns.filter(c=>c.goalMonth===goal.month))delete c.researchNextAttemptAt;}
+    if((goal.dailyResearchLimit>previous.dailyResearchLimit || (goal.dailyResearchLimit===0 && previous.dailyResearchLimit>0))&&!this.data.researchState.blocked){for(const c of this.data.campaigns.filter(c=>c.goalMonth===goal.month))delete c.researchNextAttemptAt;}
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
   }
   public startMonthlyDirector() {
@@ -807,7 +823,7 @@ class DatabaseManager {
     if (!country || country.length > 60 || !Number.isInteger(input.maxContacts) || input.maxContacts < 1 || input.maxContacts > 20) throw new Error('Indicá un país y un máximo total de 1 a 20 contactos.');
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowStart || '') || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.sendWindowEnd || '') || input.sendWindowStart >= input.sendWindowEnd) throw new Error('Revisá el horario de envío.');
     const day = accountingDay(), month = day.slice(0,7);
-    const goal = { ...this.getMonthlyGoal(month), directorEnabled:false, targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:20, updatedAt:new Date().toISOString() };
+    const goal = { ...this.getMonthlyGoal(month), directorEnabled:false, targetClients:input.targetClients, enabled:true, discoverContacts:true, sendEmail:true, answerEmail:true, countries:[country], dailyEmailLimit:input.maxContacts, dailyResearchLimit:localOperationsEnabled()?0:20, updatedAt:new Date().toISOString() };
     validateGoal(goal);
     if(goal.targetClients<1)throw new Error('El objetivo mensual debe ser de al menos un cliente.');
     const template = goalCampaigns(goal, [app], [])[0];

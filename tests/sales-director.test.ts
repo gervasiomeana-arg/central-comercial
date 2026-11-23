@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { accountingDay } from '../src/ledger.js';
 import { defaultGoal, goalProgress, goalCampaigns, validateGoal } from '../server/sales-director.js';
 import { commercialCatalog } from '../server/commercial-catalog.js';
 import { extractContact, searchLinks, publicAddress, publicUrl, contactLinks } from '../server/public-web.js';
@@ -36,4 +40,46 @@ test('research records only published contacts with relevant audience and countr
   assert.equal(extractContact(html.replace('Club de voleibol','Restaurante'),'https://clubdelsur.org',apps[0],'Argentina',now),null);
   assert.deepEqual(searchLinks('<rss><item><link>https://clubdelsur.org/</link></item><item><link>http://localhost/</link></item></rss>'),['https://clubdelsur.org/']);
   assert.deepEqual(contactLinks('<a href="/contacto">Contacto</a><a href="https://other.org/contact">Otro</a>','https://clubdelsur.org'),['https://clubdelsur.org/contacto']);
+});
+
+test('el iniciador retoma la cola con una base que ya consumió las 24 consultas', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-unlimited-research-'));
+  const settings = { CENTRAL_LOCAL_MODE: 'true', CENTRAL_DATA_DIR: dir };
+  for (const [key, value] of Object.entries(settings)) {
+    const previous = process.env[key];
+    process.env[key] = value;
+    t.after(() => {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    });
+  }
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const day = accountingDay();
+  const month = day.slice(0, 7);
+  const goal = { ...defaultGoal(month), enabled: true, targetClients: 5, dailyResearchLimit: 24 };
+  const campaign = goalCampaigns(goal, [apps[0]], [])[0];
+  const queued = 'https://club-prueba.test/contacto';
+  campaign.researchQueue = [{ url: queued }];
+  campaign.researchDay = day;
+  campaign.researchCount = 24;
+  fs.writeFileSync(path.join(dir, 'central_comercial_db.json'), JSON.stringify({
+    applications: apps, contacts: [], clients: [], conversations: [], payments: [], subscriptions: [],
+    campaigns: [campaign], monthlySalesGoals: [goal],
+    researchState: { month, day, requests: 24, visited: [], status: 'quota', detail: 'Cupo diario alcanzado.' },
+  }));
+
+  const { db } = await import('../server/db.js');
+  const { researchGoalProspects } = await import('../server/prospect-research.js');
+  assert.equal(db.getMonthlyGoal().dailyResearchLimit, 0);
+  assert.equal(db.getMonthlyGoal().dailyEmailLimit, goal.dailyEmailLimit);
+  assert.equal(db.getResearchState().status, 'pending');
+  assert.equal(db.getResearchState().requests, 24);
+  assert.equal(db.getCampaigns()[0].dailyLimit, campaign.dailyLimit);
+  await researchGoalProspects(async url => {
+    assert.equal(url, queued);
+    return { url, text: '<h1>Club de voleibol Argentina</h1>' };
+  });
+  assert.equal(db.getResearchState().requests, 25);
+  assert.equal(db.getCampaigns()[0].researchCount, 25);
+  assert.notEqual(db.getResearchState().status, 'quota');
 });

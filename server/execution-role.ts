@@ -1,3 +1,5 @@
+export const localOperationsEnabled = () => process.env.CENTRAL_LOCAL_MODE === 'true';
+
 // The published preview keeps its existing protections until a restored cloud service is enabled.
 export const cloudOperationsEnabled = () =>
   process.env.CENTRAL_LOCAL_MODE !== 'true' && process.env.CENTRAL_CLOUD_OPERATIONS === 'true';

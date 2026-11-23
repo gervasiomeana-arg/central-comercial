@@ -21,7 +21,8 @@ export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate
       <label>Clientes nuevos a alcanzar<input type="number" min="0" max="10000" required value={goal.targetClients} onChange={e=>setGoal({...goal,targetClients:Number(e.target.value)})}/></label>
       <label>Países, separados por comas<input required value={goal.countries.join(', ')} onChange={e=>setGoal({...goal,countries:e.target.value.split(',').map(c=>c.trim())})}/></label>
       <label>Máximo de correos al día<input type="number" min="1" max="50" required value={goal.dailyEmailLimit} onChange={e=>setGoal({...goal,dailyEmailLimit:Number(e.target.value)})}/></label>
-      <label>Páginas a investigar al día (0 = sin tope)<input type="number" min="0" required value={goal.dailyResearchLimit} onChange={e=>setGoal({...goal,dailyResearchLimit:Number(e.target.value)})}/></label>
+      {report?.research.unlimited ? <p>Búsqueda de contactos sin cupo diario.</p> :
+        <label>Páginas a investigar al día (0 = sin tope)<input type="number" min="0" required value={goal.dailyResearchLimit} onChange={e=>setGoal({...goal,dailyResearchLimit:Number(e.target.value)})}/></label>}
       <div className="cc-goal-checks">{([{key:'enabled',label:'Activar objetivo'},{key:'discoverContacts',label:'Buscar contactos públicos'},{key:'sendEmail',label:'Enviar campañas por correo'},{key:'answerEmail',label:'Responder consultas con información verificada'}] as const).map(x=><label key={x.key}><input type="checkbox" checked={goal[x.key]} onChange={e=>setGoal({...goal,[x.key]:e.target.checked})}/>{x.label}</label>)}</div>
       <button className="cc-button cc-button-primary" disabled={busy}>{busy?'Guardando…':'Guardar objetivo y plan comercial'}</button>
     </form>}
@@ -42,7 +43,7 @@ function AppOperations({ app, report, onNavigate }: { app: any; report: any; onN
   else if (!ops.contactsAvailable) { next = report.research.blocked ? 'La búsqueda necesita revisión. Podés incorporar contactos con su fuente pública.' : !report.goal.discoverContacts ? 'La búsqueda está desactivada. Podés activarla o incorporar contactos con su fuente.' : report.research.status==='quota' ? 'Se alcanzó el cupo de páginas de hoy; las páginas pendientes se conservan para continuar.' : report.research.lastError ? 'La consulta pública no pudo completarse. El motivo está en el registro de actividad.' : 'Próximo paso: investigar organizaciones que coincidan con este público.'; tab = report.research.lastError ? 'system' : 'contacts'; }
   else if (ops.prepared && !report.worker.send) { next = 'Las notas esperan la conexión del ejecutor a tu correo, en tu computadora.'; tab = 'conversations'; }
   else if (!report.goal.sendEmail) next = 'El envío por correo está desactivado en el objetivo.';
-  else if (ops.acceptedContacts && !ops.responses) next = 'Los correos aceptados esperan respuesta. La búsqueda puede sumar nuevos prospectos dentro del cupo.';
+  else if (ops.acceptedContacts && !ops.responses) next = 'Los correos aceptados esperan respuesta. La búsqueda puede sumar nuevos prospectos.';
   return <article className="cc-app-operations">
     <div className="cc-app-operations-title"><b>{app.name}</b><span className={'cc-status-tag '+(app.ready?'is-ready':'is-pending')}>{app.ready?'En el plan':'En desarrollo'}</span></div>
     <span>{app.ready ? app.audience : 'Fuera de campañas comerciales'}</span>
