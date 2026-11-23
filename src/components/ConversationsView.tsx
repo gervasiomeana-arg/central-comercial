@@ -73,6 +73,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   useEffect(() => { if (focusedConversationId) setSelectedConvId(focusedConversationId); }, [focusedConversationId]);
   const [replyDrafts, setReplyDrafts] = useState<Record<string,string>>({});
   const [search, setSearch] = useState('');
+  const [channel, setChannel] = useState('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [openingClient,setOpeningClient] = useState(false);
@@ -98,7 +99,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
     const app = applications.find(a => a.id === conv.appId);
     const matchesSearch = !search.trim() || `${contact?.orgName || ''} ${contact?.contactPerson || ''} ${app?.name || ''}`.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es'));
     const needsAttention = conv.requiresHumanIntervention && conv.messages.some(m => m.direction === 'inbound');
-    return matchesApp && matchesClassification && matchesSearch && (!attentionOnly || needsAttention);
+    return matchesApp && matchesClassification && matchesSearch && (channel === 'all' || conv.channel === channel) && (!attentionOnly || needsAttention);
   }).sort((a,b) => Number(b.requiresHumanIntervention && b.messages.some(m=>m.direction==='inbound')) - Number(a.requiresHumanIntervention && a.messages.some(m=>m.direction==='inbound')) || b.lastMessageAt.localeCompare(a.lastMessageAt));
 
   const activeConv = filteredConversations.find(c => c.id === selectedConvId) || filteredConversations[0] || null;
@@ -226,6 +227,13 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         <div className="cc-inbox-filters">
           <label>Buscar organización<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, persona o aplicación"/></label>
           <label>Tipo de consulta<select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)}>{[{id:'all',label:'Todas'},{id:'interesado',label:'Interesados'},{id:'solicita_informacion',label:'Información'},{id:'solicita_demostracion',label:'Demostración'},{id:'consulta_precio',label:'Precios'},{id:'quiere_suscribirse',label:'Suscripción'},{id:'informa_pago',label:'Informa pago'},{id:'requiere_intervencion',label:'Requiere tu respuesta'},{id:'no_interesado',label:'Sin interés'},{id:'solicita_baja',label:'Bajas'}].map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+          <label>Canal
+            <select value={channel} onChange={e => setChannel(e.target.value)}>
+              <option value="all">Todos</option>
+              <option value="email">Correo</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
+          </label>
           <label className="cc-inbox-attention-filter"><input type="checkbox" checked={attentionOnly} onChange={e=>setAttentionOnly(e.target.checked)}/>Necesitan mi respuesta</label>
         </div>
       </div>
@@ -283,6 +291,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-1 pt-1.5 border-t border-slate-100 text-[10px]">
                       <span className="font-bold text-blue-800">{app?.name}</span>
+                      <span className="text-slate-600">{conv.channel === 'whatsapp' ? 'WhatsApp' : conv.channel === 'email' ? 'Correo' : conv.channel}</span>
                       <span
                         className={`font-bold px-1.5 py-0.5 rounded ${
                           conv.classification === 'informa_pago'
@@ -381,7 +390,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>{msg.serviceConfirmationId ? `Envío registrado (${msg.serviceConfirmationId})` : 'Registro manual · sin comprobación del proveedor'}</span>
                               </span>
-                            ) : msg.status === 'aceptado_proveedor' ? (<span className="text-emerald-700">Aceptado por el correo · entrega no confirmada</span>) : msg.status === 'entrega_confirmada' ? (<span className="text-emerald-700">Entrega confirmada por el proveedor</span>) : msg.status === 'envio_intentado' ? (<span className="text-amber-700">Envío en curso · esperando confirmación</span>) : msg.status === 'resultado_desconocido' ? (<span className="text-amber-700">Resultado incierto · revisar Enviados antes de reenviar</span>) : msg.status === 'fallido' ? (<span className="text-rose-700">Falló el envío: {msg.serviceError || 'revisar actividad'}</span>) : msg.status === 'preparado' ? (<span className="text-slate-500">Nota preparada · aún no enviada</span>) : msg.status === 'pendiente' ? (
+                            ) : msg.status === 'aceptado_proveedor' ? (<span className="text-emerald-700">Aceptado por {msg.channel === 'whatsapp' ? 'WhatsApp' : 'el proveedor de correo'} · entrega no confirmada</span>) : msg.status === 'entrega_confirmada' ? (<span className="text-emerald-700">Entrega confirmada por el proveedor</span>) : msg.status === 'envio_intentado' ? (<span className="text-amber-700">Envío en curso · esperando confirmación</span>) : msg.status === 'resultado_desconocido' ? (<span className="text-amber-700">Resultado incierto · revisar Enviados antes de reenviar</span>) : msg.status === 'fallido' ? (<span className="text-rose-700">Falló el envío: {msg.serviceError || 'revisar actividad'}</span>) : msg.status === 'preparado' ? (<span className="text-slate-500">Nota preparada · aún no enviada</span>) : msg.status === 'pendiente' ? (
                               <span className="text-amber-700 flex items-center space-x-0.5">
                                 <Clock className="w-3 h-3" />
                                 <span>Borrador en cola (Pendiente de envío con credenciales)</span>
