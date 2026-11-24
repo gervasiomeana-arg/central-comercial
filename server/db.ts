@@ -759,13 +759,13 @@ class DatabaseManager {
     if((goal.dailyResearchLimit>previous.dailyResearchLimit || (goal.dailyResearchLimit===0 && previous.dailyResearchLimit>0))&&!this.data.researchState.blocked){for(const c of this.data.campaigns.filter(c=>c.goalMonth===goal.month))delete c.researchNextAttemptAt;}
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
   }
-  public startMonthlyDirector(preferredChannel?: 'whatsapp') {
+  public startMonthlyDirector(preferredChannel?: 'email' | 'whatsapp') {
     const current = this.getMonthlyGoal();
     validateGoal(current);
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
-    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets] } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
-      directorChannels: preferredChannel === 'whatsapp' || current.directorChannels?.[0] === 'whatsapp'
+    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets], ...(preferredChannel === 'email' ? {sendEmail:true} : {}) } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
+      directorChannels: (preferredChannel ?? current.directorChannels?.[0]) === 'whatsapp'
         ? ['whatsapp', 'email'] : ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;

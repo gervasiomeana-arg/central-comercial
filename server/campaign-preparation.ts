@@ -10,7 +10,7 @@ const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u
 function definitelyRejectedEmail(message: Message) {
   const error = message.serviceError || '';
   return message.status === 'fallido' &&
-    (/^Rebote permanente confirmado: 5\.(?:1|2)\.\d+\b/.test(error) ||
+    (/^Rebote permanente confirmado: 5\.\d{1,3}\.\d{1,3}\b/.test(error) ||
       /^5[0-9]{2}[- ]5\.1\.(?:1|3|10)\b/.test(error));
 }
 

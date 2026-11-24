@@ -47,12 +47,15 @@ async function api(action, payload = {}, area = 'openjarvis') {
   }
   return response.json();
 }
-let ready = false, processing = false, checking = false;
+let ready = false, processing = false, checking = false, lastHealthy = 0;
 async function pulse() {
   if (checking) return;
   checking = true;
   try {
-    try { await inspectJarvis(base, model, jarvisKey); ready = true; } catch { ready = false; }
+    if (!processing || !ready) {
+      try { await inspectJarvis(base, model, jarvisKey); lastHealthy = Date.now(); ready = true; }
+      catch { ready = lastHealthy > 0 && Date.now() - lastHealthy < 60000; }
+    }
     await api('heartbeat', { ready, model: ready ? model : '', assistant: !researchOnly });
     if(ready)process.send?.({type:'healthy'});
   } catch (e) { console.error(e.message); }

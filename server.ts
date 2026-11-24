@@ -376,7 +376,7 @@ adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoa
 adminRouter.post('/automation/director/start', (req,res)=>{
   try {
     const channel = req.body?.preferredChannel;
-    if (channel !== undefined && channel !== 'whatsapp') throw new Error('Canal de prioridad inválido.');
+    if (channel !== undefined && channel !== 'whatsapp' && channel !== 'email') throw new Error('Canal de prioridad inválido.');
     if (channel === 'whatsapp' && !whatsappStatus().ready) throw new Error('WhatsApp todavía no está vinculado al ejecutor.');
     db.startMonthlyDirector(channel);
     void scheduler.tick();

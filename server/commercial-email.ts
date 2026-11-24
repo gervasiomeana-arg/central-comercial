@@ -128,7 +128,7 @@ function legacyBounce(message: Message) {
     message.serviceError?.startsWith('Rebote permanente confirmado:');
 }
 
-export function recordCommercialBounce(input: { references?: unknown; recipient?: unknown; status?: unknown; diagnostic?: unknown }) {
+export function recordCommercialBounce(input: { references?: unknown; recipient?: unknown; status?: unknown; diagnostic?: unknown; reportedAt?: unknown }, persist = true) {
   if (!Array.isArray(input.references) || typeof input.recipient !== 'string' ||
       typeof input.status !== 'string' || !/^5\.\d{1,3}\.\d{1,3}$/.test(input.status)) return { matched: false };
   const recipient = input.recipient.trim().toLowerCase();
@@ -141,7 +141,8 @@ export function recordCommercialBounce(input: { references?: unknown; recipient?
     const wasAlreadyFailed = message.status === 'fallido';
     message.status = 'fallido';
     const diagnostic = typeof input.diagnostic === 'string' ? input.diagnostic.trim().slice(0,350) : '';
-    message.emailFailureAt = new Date().toISOString();
+    const reportedAt = typeof input.reportedAt === 'string' ? Date.parse(input.reportedAt) : NaN;
+    message.emailFailureAt = new Date(Number.isFinite(reportedAt) && reportedAt > 0 && reportedAt <= Date.now() ? reportedAt : Date.now()).toISOString();
     message.serviceError = 'Rebote permanente confirmado: ' + input.status + (diagnostic ? ' · ' + diagnostic : '');
     suppressInvalidEmail(recipient, diagnostic, input.status);
     const campaign = conversation.campaignId ? db.getCampaignById(conversation.campaignId) : undefined;
@@ -149,7 +150,7 @@ export function recordCommercialBounce(input: { references?: unknown; recipient?
       campaign.stats.messagesSent = Math.max(0, campaign.stats.messagesSent - 1);
       campaign.stats.messagesFailed++;
     }
-    db.addLog('warning', 'conversaciones', 'Correo devuelto después de la aceptación SMTP', { messageId: message.id, status: input.status });
+    db.addLog('warning', 'conversaciones', 'Correo devuelto después de la aceptación SMTP', { messageId: message.id, status: input.status }, persist);
     return { matched: true };
   }
   return { matched: false };
@@ -256,6 +257,14 @@ export function registerCommercialEmailRoutes(app: Express) {
         case 'complete': return res.json(completeCommercialEmail(data));
         case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.channel === 'email' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada' || legacyBounce(m))).map(m => ({id:m.providerMessageId, from: m.approvedRecipient || db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
         case 'bounce': worker(data.workerId); return res.json(recordCommercialBounce(data));
+        case 'bounces': {
+          worker(data.workerId);
+          if (!Array.isArray(data.items) || data.items.length > 50) return res.status(400).json({error:'Lote de rebotes inválido.'});
+          let matched = 0;
+          for (const item of data.items) if (item && recordCommercialBounce(item, false).matched) matched++;
+          if (matched) db.save();
+          return res.json({matched});
+        }
         case 'inbound': worker(data.workerId); return res.json(importCommercialReply(data));
         default: return res.status(404).json({error:'Operación desconocida.'});
       }
