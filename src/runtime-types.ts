@@ -6,6 +6,7 @@ export interface RuntimeActivity {
   pendingPromotions: number;
   completedPlans: number;
   campaignsUsingOpenJarvis: number;
+  campaignsAwaitingOpenJarvis?: number;
   statistics: DailyStatistics;
   overview?: RuntimeOverview[];
 }

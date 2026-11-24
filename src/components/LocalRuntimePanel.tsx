@@ -60,7 +60,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     </p>}
     {runtime?.activity && <dl className="grid gap-2 text-sm text-slate-200 sm:grid-cols-3">
       <div><dt>Estrategias recientes completadas</dt><dd className="text-lg">{runtime.activity.completedPlans}</dd></div>
-      <div><dt>Campañas que usan OpenJarvis</dt><dd className="text-lg">{runtime.activity.campaignsUsingOpenJarvis}</dd></div>
+      <div><dt>Campañas con estrategia de OpenJarvis aplicada</dt><dd className="text-lg">{runtime.activity.campaignsUsingOpenJarvis}</dd>{runtime.activity.campaignsAwaitingOpenJarvis !== undefined && <dd>{runtime.activity.campaignsAwaitingOpenJarvis} pendientes de estrategia local</dd>}</div>
       <div><dt>Promociones preparadas</dt><dd className="text-lg">{runtime.activity.pendingPromotions}</dd></div>
       <div className="sm:col-span-3"><dt>Automatizaciones {runtime.activity.paused ? 'pausadas' : 'habilitadas'}</dt>
         {runtime.activity.lastCycleAt && <dd>Último ciclo: {new Date(runtime.activity.lastCycleAt).toLocaleString('es-AR')}.</dd>}

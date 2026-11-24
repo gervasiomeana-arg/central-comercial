@@ -1,4 +1,5 @@
-import { campaignCountryAllowed } from './campaign-markets.js';
+import { whatsappAuthorized, whatsappPhone } from '../src/whatsapp-policy.js';
+import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
 import {usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -8,7 +9,15 @@ import { workerAuthorized } from './channelTests.js';
 import { accountingDay } from '../src/ledger.js';
 import { normalize } from './sales-director.js';
 import { verifiedPriceSummary } from './commercial-catalog.js';
-import type { Application } from '../src/types.js';
+import type { Application, Contact, Conversation, Message } from '../src/types.js';
+
+const whatsappInvitations = {
+  es: 'Si aceptás recibir información y promociones de Central Comercial sobre sus aplicaciones por WhatsApp, respondé solo con WHATSAPP OK seguido de tu número en formato internacional con +.',
+  en: 'If you agree to receive information and promotions from Central Comercial about its apps via WhatsApp, reply only with WHATSAPP OK followed by your international number starting with +.',
+  'pt-BR': 'Se você aceita receber informações e promoções da Central Comercial sobre seus aplicativos pelo WhatsApp, responda apenas WHATSAPP OK seguido do seu número internacional com +.',
+  fr: 'Si vous acceptez de recevoir par WhatsApp des informations et des offres de Central Comercial sur ses applications, répondez uniquement WHATSAPP OK suivi de votre numéro international commençant par +.',
+  nl: 'Als u via WhatsApp informatie en aanbiedingen van Central Comercial over zijn apps wilt ontvangen, antwoord dan alleen met WHATSAPP OK gevolgd door uw internationale nummer met +.',
+};
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export function currentReplyText(text: string) {
@@ -66,9 +75,12 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = contact.email.trim().toLowerCase();
       msg.providerMessageId = `<cc-${randomUUID()}@${status.sender!.split('@')[1]}>`;
       if (campaign && !replying) campaign.status = 'activa';
+      if (!replying && campaign?.autoSendWhatsApp && campaign.channels.includes('whatsapp') && !whatsappAuthorized(contact, now)) {
+        msg.whatsappInvitation = whatsappInvitations[marketLanguage(contact.country)];
+      }
       msg.emailSubject ||= replying ? `Re: ${app.name} · Presentación` : `${app.name} · Presentación para ${contact.orgName}`;
       db.save();
-      return { conversationId: conv.id, messageId: msg.id, lease, recipient: msg.approvedRecipient, subject: msg.emailSubject.replace(/[\r\n]/g,' '), content: msg.content, providerMessageId: msg.providerMessageId, inReplyTo: msg.replyToProviderId };
+      return { conversationId: conv.id, messageId: msg.id, lease, recipient: msg.approvedRecipient, subject: msg.emailSubject.replace(/[\r\n]/g,' '), content: msg.whatsappInvitation ? msg.content + '\n\n' + msg.whatsappInvitation : msg.content, providerMessageId: msg.providerMessageId, inReplyTo: msg.replyToProviderId };
     }
   }
   return null;
@@ -117,6 +129,38 @@ export function recordCommercialBounce(input: { references?: unknown; recipient?
   return { matched: false };
 }
 
+function registerWhatsAppRequest(contact: Contact, conversation: Conversation, source: Message, phone: string, replyId: string) {
+  const canonical = whatsappPhone(phone);
+  const records = db.getContacts();
+  if ((whatsappAuthorized(contact) && whatsappPhone(contact.phone) !== canonical) ||
+      contact.permission === 'revocado' || ['baja_solicitada', 'descartado'].includes(contact.status) ||
+      records.some(c => whatsappPhone(c.phone) === canonical && (c.permission === 'revocado' || c.status === 'baja_solicitada'))) return false;
+  const at = new Date().toISOString();
+  if (contact.phone && whatsappPhone(contact.phone) !== canonical) {
+    contact.history.push({id:randomUUID(), timestamp:at, type:'nota', description:`Teléfono anterior: ${contact.phone}`, author:'Central Comercial'});
+  }
+  contact.phone = phone;
+  contact.preferredChannel = 'whatsapp';
+  contact.whatsappConsent = {granted:true, at, evidence:`Autorización explícita por correo vinculado a la promoción. Mensaje ${replyId}`};
+
+  const campaign = conversation.campaignId ? db.getCampaignById(conversation.campaignId) : undefined;
+  if (!campaign?.autoSendWhatsApp || !campaign.channels.includes('whatsapp') || campaign.mode !== 'automatico' ||
+      contact.status === 'cliente' || !db.campaignInActiveRun(campaign.id)) return true;
+  const related = db.getConversations();
+  const contactsWithPhone = new Set(records.filter(c => whatsappPhone(c.phone) === canonical).map(c => c.id));
+  if (related.some(c => c.appId === conversation.appId && (c.contactId === contact.id || contactsWithPhone.has(c.contactId)) &&
+      c.messages.some(m => m.channel === 'whatsapp' && m.direction === 'outbound'))) return true;
+
+  const id = randomUUID();
+  related.unshift({
+    id, contactId:contact.id, appId:conversation.appId, campaignId:campaign.id, channel:'whatsapp',
+    classification:'sin_clasificar', requiresHumanIntervention:false, createdAt:at, lastMessageAt:at,
+    messages:[{id:randomUUID(), conversationId:id, channel:'whatsapp', direction:'outbound',
+      content:source.content, status:'preparado', approvedRecipient:canonical, createdAt:at}],
+  });
+  return true;
+}
+
 export function importCommercialReply(input: any) {
   if (typeof input.messageId !== 'string' || input.messageId.length > 500 || !Array.isArray(input.references) || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 30000 || input.automatic) throw new Error('Respuesta no válida o automática.');
   input.text = currentReplyText(input.text);
@@ -125,7 +169,13 @@ export function importCommercialReply(input: any) {
   if (!conv) throw new Error('La respuesta no corresponde a un envío registrado.');
   if (db.getConversations().some(c => c.messages.some(m => m.providerMessageId === input.messageId))) return { success:true, duplicate:true };
   const contact = db.getContactById(conv.contactId)!, app = db.getApplicationById(conv.appId)!;
+  const optIn = /^WHATSAPP OK (\+[1-9]\d{9,14})$/i.exec(input.text);
+  const invitation = optIn && conv.messages.find(m => m.channel === 'email' && m.direction === 'outbound' &&
+    m.whatsappInvitation && ['aceptado_proveedor','entrega_confirmada'].includes(m.status) &&
+    input.references.includes(m.providerMessageId));
+  const optedIn = Boolean(optIn && invitation && registerWhatsAppRequest(contact, conv, invitation, optIn[1], input.messageId));
   db.addMessageToConversation(conv.id, { conversationId:conv.id, direction:'inbound', channel:'email', content:input.text, providerMessageId:input.messageId, status:'enviado' });
+  if (optedIn) return {success:true, decision:'whatsapp_opt_in'};
   const decision = replyDecision(input.text, app, contact.country);
   if (decision.kind === 'unsubscribe') { for (const record of db.getContacts().filter(c => c.email.trim().toLowerCase() === contact.email.trim().toLowerCase())) { record.permission = 'revocado'; record.status = 'baja_solicitada'; record.nextFollowUpDate = null; } conv.requiresHumanIntervention = false; }
   else if (decision.kind === 'answer' && db.getMonthlyGoal().answerEmail && !conv.requiresHumanIntervention) {

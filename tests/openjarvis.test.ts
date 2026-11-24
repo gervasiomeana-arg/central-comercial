@@ -121,3 +121,20 @@ test('corrección concede como máximo tres recuperaciones y una por app/país, 
   const restored=new JarvisQueue(f.file,()=>1000000);restored.heartbeat('worker',true,'model');assert.throws(()=>restored.enqueue({...context,app:{...context.app,id:'app-0'}}),/cupo/);
  }finally{fs.rmSync(f.dir,{recursive:true,force:true});}
 });
+
+test('director local programa más de seis mercados en serie y conserva resultados', () => {
+  const f = fixture();
+  try {
+    f.queue.heartbeat('worker', true, 'local-model');
+    for (let i = 0; i < 8; i++) {
+      const ctx = {...context, country:'Mercado ' + i};
+      const id = f.queue.enqueue(ctx, {directorLocal:true});
+      const claim = f.queue.claim('worker')!;
+      assert.equal(claim.id,id);
+      assert.equal(f.queue.claim('worker'),null);
+      f.queue.complete(id,'worker',claim.lease,{strategy});
+    }
+    const reopened = new JarvisQueue(f.file);
+    assert.equal(reopened.status().plans.filter(p=>p.state==='completed').length,8);
+  } finally {fs.rmSync(f.dir,{recursive:true,force:true});}
+});

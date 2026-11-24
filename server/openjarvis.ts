@@ -6,10 +6,11 @@ import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
 import { db } from './db.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {prospectingTerms, normalize} from './sales-director.js';
+import {prospectingTerms, researchQueriesFor, normalize} from './sales-director.js';
 import type { JarvisContext, JarvisPlan, JarvisStatus, JarvisStrategy } from '../src/openjarvis-types.js';
 
 type StoredPlan = JarvisPlan & { planningContractVersion?:number; correctionRecovery?:boolean; workerId?: string; leaseHash?: string };
+export const planningQuotaMessage = 'Se alcanzó el cupo de planificación local. Se conservan los resultados y se retoma al liberar cupo.';
 const digest = (s: string) => createHash('sha256').update(s).digest();
 const text = (v: unknown, max: number) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
 export function validateStrategy(input: unknown): JarvisStrategy {
@@ -80,7 +81,7 @@ export class JarvisQueue {
     const plan=this.plans.find(p=>p.id===id);
     if(plan?.state==='completed'){plan.state='failed';plan.error='Las búsquedas no verifican el país y la actividad institucional requeridos.';plan.updatedAt=this.now();this.save();}
   }
-  enqueue(context: JarvisContext) {
+  enqueue(context: JarvisContext, options: { directorLocal?: boolean } = {}) {
     this.expire();
     // Reuse identical requests, including completed ones, for a day: no repeated model spending.
     const same = this.plans.find(p => p.state !== 'failed' && this.now() - p.createdAt < 86400000 && JSON.stringify(p.context) === JSON.stringify(context));
@@ -88,8 +89,8 @@ export class JarvisQueue {
     if (!this.status().ready) throw new Error('Primero conectá OpenJarvis y su modelo local. No se llamó a una API de pago.');
     const today=this.plans.filter(p=>this.now()-p.createdAt<86400000);
     const sameScope=(p:StoredPlan)=>p.context.app.id===context.app.id&&normalize(p.context.country)===normalize(context.country)&&p.context.goal.month===context.goal.month;
-    const correctionRecovery=today.length>=6;
-    if(correctionRecovery && !(today.some(p=>sameScope(p)&&p.state==='failed'&&!p.planningContractVersion) && !today.some(p=>sameScope(p)&&p.planningContractVersion===2) && today.filter(p=>p.correctionRecovery).length<3)) throw new Error('Se alcanzó el cupo de planificación local. Se conservan los resultados y se retoma al liberar cupo.');
+    const correctionRecovery=!options.directorLocal && today.length>=6;
+    if(correctionRecovery && !(today.some(p=>sameScope(p)&&p.state==='failed'&&!p.planningContractVersion) && !today.some(p=>sameScope(p)&&p.planningContractVersion===2) && today.filter(p=>p.correctionRecovery).length<3)) throw new Error(planningQuotaMessage);
     // One bounded recovery per app/country after this contract correction,
     // at most three in 24h. Old attempts are retained; restarting never resets it.
     const plan: StoredPlan = { id: randomUUID(), context, planningContractVersion:2, correctionRecovery, state: 'queued', createdAt: this.now(), updatedAt: this.now() };
@@ -123,16 +124,16 @@ export class JarvisQueue {
   }
 }
 
-export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: unknown) {
+export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: unknown, options?: { directorLocal?: boolean }) {
   if (!text(appId, 100) || !text(country, 100)) throw new Error('Elegí una aplicación y un país del objetivo mensual.');
   const app = db.getApplicationById(appId as string), report = db.getSalesGoalReport();
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Esta aplicación todavía no está habilitada para campañas.');
   if (!report.goal.countries.includes(country as string) || !campaignCountryAllowed(app, country as string)) throw new Error('El país debe estar incluido en el objetivo mensual.');
   // No contacts, message histories, balances, credentials or unverified offers leave this boundary.
-  return queue.enqueue({ queryRules:{country:country as string,activityTerms:prospectingTerms(app,country as string),institutionalOnly:normalize(app.slug+' '+app.name).includes('neuro')}, app: { id: app.id, name: app.name, description: app.description,
+  return queue.enqueue({ queryRules:{country:country as string,activityTerms:prospectingTerms(app,country as string),examples:researchQueriesFor(app,country as string).slice(0,3),institutionalOnly:normalize(app.slug+' '+app.name).includes('neuro')}, app: { id: app.id, name: app.name, description: app.description,
     audience: app.targetAudience, website: app.website, features: app.verifiedFeatures }, country: country as string,
     goal: { month: report.goal.month, targetClients: report.goal.targetClients, remainingClients: report.remaining,
-      dailyEmailLimit: report.goal.dailyEmailLimit, dailyResearchLimit: report.goal.dailyResearchLimit } });
+      dailyEmailLimit: report.goal.dailyEmailLimit, dailyResearchLimit: report.goal.dailyResearchLimit } }, options);
 }
 export function registerJarvisWorkerRoutes(app: Express, queue: JarvisQueue) {
   app.post('/api/openjarvis/worker/:action', (req, res) => {

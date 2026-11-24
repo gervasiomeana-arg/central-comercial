@@ -231,6 +231,7 @@ export interface Message {
   providerMessageId?: string;
   replyToProviderId?: string;
   replacementMessageId?: string;
+  whatsappInvitation?: string;
   emailSubject?: string;
   sendLease?: string;
   sendWorker?: string;

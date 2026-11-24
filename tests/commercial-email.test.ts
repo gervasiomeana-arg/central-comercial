@@ -87,6 +87,28 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       assert.equal(oldEmail.status,'fallido');
       assert.equal(oldEmail.replacementMessageId,whatsappJob.messageId);
       assert.equal(claimWhatsApp('test-wa',early),null,'only one WhatsApp promotion is queued');
+
+      const requestPhone = '+5491155556789';
+      db.saveContact({...originalContact,id:'whatsapp-request',email:'request@club.test',phone:'',
+        permission:'desconocido',preferredChannel:'email',status:'prospecto',sourceReviewDate:reviewed,
+        history:[],whatsappConsent:undefined});
+      db.prepareCampaignDrafts(campaign.id);
+      const invitation = claimCommercialEmail('test-worker',early);
+      assert.ok(invitation?.content.includes('WHATSAPP OK'));
+      completeCommercialEmail({...invitation,workerId:'test-worker',outcome:'accepted',response:'250 OK'});
+      const acceptance = {messageId:'<consent@test>',from:'request@club.test',
+        references:[invitation.providerMessageId],text:`WHATSAPP OK ${requestPhone}`};
+      assert.throws(()=>importCommercialReply({...acceptance,from:'someone-else@club.test'}));
+      assert.equal(db.getContactById('whatsapp-request').whatsappConsent,undefined);
+      assert.equal(importCommercialReply(acceptance).decision,'whatsapp_opt_in');
+      assert.equal(importCommercialReply(acceptance).duplicate,true);
+      const lead = db.getContactById('whatsapp-request');
+      assert.equal(lead.whatsappConsent.granted,true);
+      assert.equal(lead.permission,'desconocido');
+      const requested = claimWhatsApp('test-wa',new Date());
+      assert.equal(requested?.recipient,requestPhone.slice(1));
+      assert.ok(!requested?.content.includes('WHATSAPP OK'));
+      assert.equal(claimWhatsApp('test-wa',new Date()),null);
     } finally {
       if (oldLocalMode === undefined) delete process.env.CENTRAL_LOCAL_MODE;
       else process.env.CENTRAL_LOCAL_MODE = oldLocalMode;

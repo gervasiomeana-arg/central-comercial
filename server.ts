@@ -95,6 +95,7 @@ app.get('/api/local-runtime/report',(req,res)=>{
   const allCampaigns = db.getCampaigns();
   const campaigns = allCampaigns.filter(c => db.campaignInActiveRun(c.id));
   const activeCampaignIds = new Set(campaigns.map(c => c.id));
+  const planningCampaigns = campaigns.filter(c => c.intelligenceEnabled && ['lista','activa','bloqueada_por_configuracion'].includes(c.status));
   const conversations = db.getConversations();
   const pendingPromotions = conversations.reduce((total, conversation) => {
     if (!conversation.campaignId || !activeCampaignIds.has(conversation.campaignId)) return total;
@@ -118,7 +119,8 @@ app.get('/api/local-runtime/report',(req,res)=>{
       lastCycleAt: schedulerState.lastRunAt || null,
       pendingPromotions,
       completedPlans: jarvisState.plans.filter(plan => plan.state === 'completed').length,
-      campaignsUsingOpenJarvis: campaigns.filter(campaign => Boolean(campaign.intelligencePlanId)).length,
+      campaignsUsingOpenJarvis: planningCampaigns.filter(c => Boolean(c.intelligencePlanId)).length,
+      campaignsAwaitingOpenJarvis: planningCampaigns.filter(c => !c.intelligencePlanId).length,
       statistics: dailyStatistics(apps, db.getContacts(), conversations, 90, now),
       overview,
     },
