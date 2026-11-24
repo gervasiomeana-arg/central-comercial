@@ -15,10 +15,10 @@ function definitelyRejectedEmail(message: Message) {
 }
 
 // Preparation only: this module has no transport, credentials or sending capability.
-export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date()) {
+export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date(), emailOnHold = false) {
   const skipped: Record<string, number> = {};
   const drafts: Conversation[] = [];
-  const replacements: { email: Message; whatsappId: string }[] = [];
+  const replacements: { original: Message; replacementId: string }[] = [];
   const result = (blockedReason?: string) => ({ drafts, replacements, skipped, blockedReason });
   const skip = (reason: string) => { skipped[reason] = (skipped[reason] || 0) + 1; };
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) return result('La aplicación no está habilitada para campañas.');
@@ -42,11 +42,10 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const unlimited = unlimitedCampaignOutreach(campaign);
   if (!unlimited && (!Number.isInteger(campaign.dailyLimit) || campaign.dailyLimit < 1 || campaign.dailyLimit > 500)) return result('El límite diario debe estar entre 1 y 500.');
   const previous = conversations.filter(c => c.campaignId === campaign.id);
-  const alreadyToday = previous.filter(c => {
+  const preparedToday = new Set(previous.filter(c => {
     try { return dates.format(new Date(c.createdAt)) === day; } catch { return false; }
-  }).length;
+  }).map(c => c.contactId));
   if(campaign.maxContacts !== undefined && (!Number.isInteger(campaign.maxContacts)||campaign.maxContacts<1||campaign.maxContacts>500))return result('El máximo total de contactos no es válido.');
-  const remaining = unlimited ? Infinity : Math.max(0, campaign.dailyLimit - alreadyToday);
   const threadsByContact = new Map<string, Conversation[]>();
   const contactMap = new Map(contacts.map(c => [c.id, c]));
   const usedRecipients = new Set<string>();
@@ -68,7 +67,8 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
     const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappAuthorized(contact, now);
-    const whatsappFirst = campaign.channels[0] === 'whatsapp' && campaign.autoSendWhatsApp === true;
+    const preferWhatsApp = campaign.autoSendWhatsApp === true &&
+      (campaign.channels[0] === 'whatsapp' || contact.preferredChannel === 'whatsapp' || emailOnHold);
     const emailAllowed = campaign.channels.includes('email') &&
       (contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
         campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact'));
@@ -79,40 +79,52 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const email = contact.email?.trim().toLowerCase() || '';
     const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;
     const threads = threadsByContact.get(contact.id) || [];
-    let replacedEmail: Message | undefined;
+    let original: Message | undefined;
+    let fallbackChannel: 'email' | 'whatsapp' | undefined;
     if (threads.length) {
       const first = threads[0];
-      if (threads.length === 1 && first.channel === 'email' && first.messages.length === 1 &&
-          !first.requiresHumanIntervention && whatsappAllowed && campaign.autoSendWhatsApp) {
+      if (threads.length === 1 && first.messages.length === 1 && !first.requiresHumanIntervention) {
         const message = first.messages[0];
-        const invalidAddress = !usableContactEmail(email) || contact.undeliverableEmail === email;
-        const unsent = ['preparado', 'pendiente'].includes(message.status) &&
-          !message.attemptedAt && !message.serviceConfirmationId;
-        if (message.direction === 'outbound' && message.channel === 'email' &&
-            !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected' &&
-            (definitelyRejectedEmail(message) || (whatsappFirst && unsent && message.reviewStatus !== 'approved') ||
-              (invalidAddress && (unsent ||
-              (message.status === 'fallido' && message.approvedRecipient === email))))) replacedEmail = message;
+        if (message.direction === 'outbound' && message.channel === first.channel &&
+            !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected') {
+          if (first.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp) {
+            const invalidAddress = !usableContactEmail(email) || contact.undeliverableEmail === email;
+            const unsent = ['preparado', 'pendiente'].includes(message.status) &&
+              !message.attemptedAt && !message.serviceConfirmationId;
+            if (definitelyRejectedEmail(message) || (preferWhatsApp && unsent && message.reviewStatus !== 'approved') ||
+                (invalidAddress && (unsent || (message.status === 'fallido' && message.approvedRecipient === email)))) {
+              fallbackChannel = 'whatsapp';
+            }
+          }
+          if (first.channel === 'whatsapp' && emailUsable && campaign.autoSendEmail &&
+              message.status === 'fallido' && message.attemptedAt && !message.serviceConfirmationId) {
+            fallbackChannel = 'email';
+          }
+          if (fallbackChannel) original = message;
+        }
       }
-      if (!replacedEmail) { skip('Ya preparado en esta campaña'); continue; }
+      if (!original) { skip('Ya preparado en esta campaña'); continue; }
     }
-    const channel = whatsappAllowed && (replacedEmail || whatsappFirst || contact.preferredChannel === 'whatsapp' || !emailUsable)
-      ? 'whatsapp' : emailUsable ? 'email' : undefined;
+    const channel = fallbackChannel ?? (whatsappAllowed && (preferWhatsApp || contact.preferredChannel === 'whatsapp' || !emailUsable)
+      ? 'whatsapp' : emailUsable ? 'email' : undefined);
     if (!channel) { skip('Sin correo utilizable ni WhatsApp autorizado'); continue; }
     const recipient = channel === 'whatsapp' ? whatsappPhone(contact.phone) : email;
     const recipientKey = `${channel}:${recipient}`;
     if (usedRecipients.has(recipientKey)) { skip('Ya preparado en esta campaña'); continue; }
-    if (!replacedEmail && campaign.maxContacts !== undefined && threadsByContact.size >= campaign.maxContacts) {
+    if (!original && campaign.maxContacts !== undefined && threadsByContact.size >= campaign.maxContacts) {
       skip('Máximo total de contactos alcanzado'); continue;
     }
-    if (drafts.length >= remaining) { skip('Límite diario alcanzado'); continue; }
+    if (!unlimited && preparedToday.size >= campaign.dailyLimit && !preparedToday.has(contact.id)) {
+      skip('Límite diario alcanzado'); continue;
+    }
     const values: Record<string, string> = { nombre: contact.contactPerson || contact.orgName, organizacion: contact.orgName, cargo: contact.role || '', pais: contact.country, aplicacion: app.name, web: app.website || '' };
     const id = `conv-${randomUUID()}`;
     const timestamp = now.toISOString();
     const messageId = `msg-${randomUUID()}`;
     const draft: Conversation = { id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel, classification: 'sin_clasificar', requiresHumanIntervention: campaign.mode !== 'automatico', createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: messageId, conversationId: id, direction: 'outbound', channel, content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp }] };
     drafts.push(draft);
-    if (replacedEmail) replacements.push({ email: replacedEmail, whatsappId: messageId });
+    preparedToday.add(contact.id);
+    if (original) replacements.push({ original, replacementId: messageId });
     threadsByContact.set(contact.id, [...threads, draft]);
     usedRecipients.add(recipientKey);
   }

@@ -821,7 +821,7 @@ adminRouter.post('/campaigns', (req, res) => {
 
 adminRouter.post('/campaigns/:id/prepare', (req, res) => {
   if (!db.getCampaignById(req.params.id)) return res.status(404).json({ error: 'Campaña no encontrada' });
-  try { res.json(db.prepareCampaignDrafts(req.params.id)); }
+  try { res.json(db.prepareCampaignDrafts(req.params.id, {emailOnHold: whatsappStatus().ready && Boolean(db.getEmailPromotionHold())})); }
   catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 

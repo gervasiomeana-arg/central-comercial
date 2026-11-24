@@ -78,7 +78,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       db.prepareCampaignDrafts(campaign.id);
 
       const {TEST_RECIPIENTS} = await import(pathToFileURL(path.join(directory,'server','channelTests.ts')).href);
-      const {claimWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
+      const {claimWhatsApp,completeWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
       whatsappHeartbeat('test-wa',true,TEST_RECIPIENTS.whatsapp);
       const whatsappJob = claimWhatsApp('test-wa',early);
       assert.ok(whatsappJob);
@@ -109,6 +109,26 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       assert.equal(requested?.recipient,requestPhone.slice(1));
       assert.ok(!requested?.content.includes('WHATSAPP OK'));
       assert.equal(claimWhatsApp('test-wa',new Date()),null);
+
+      db.startMonthlyDirector('whatsapp');
+      db.saveContact({
+        ...originalContact, id:'whatsapp-first', email:'alternate@club.test', phone:'+5491155559876',
+        permission:'autorizado', sourceReviewDate:reviewed, history:[],
+        whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed},
+      });
+      db.prepareCampaignDrafts(campaign.id);
+      const whatsappFirst = claimWhatsApp('test-wa',new Date());
+      assert.equal(whatsappFirst?.recipient,'5491155559876');
+      completeWhatsApp({...whatsappFirst,workerId:'test-wa',outcome:'rejected'});
+      db.prepareCampaignDrafts(campaign.id);
+      db.prepareCampaignDrafts(campaign.id);
+      const alternate = claimCommercialEmail('test-worker',new Date());
+      assert.equal(alternate?.recipient,'alternate@club.test');
+      assert.equal(db.getConversationById(whatsappFirst!.conversationId).messages[0].replacementMessageId,alternate?.messageId);
+      assert.equal(claimCommercialEmail('test-worker',new Date()),null);
+      completeCommercialEmail({...alternate,workerId:'test-worker',outcome:'rejected',response:'550 5.1.1 Unknown mailbox'});
+      db.prepareCampaignDrafts(campaign.id);
+      assert.equal(claimWhatsApp('test-wa',new Date()),null,'a failed fallback never switches back to the original channel');
     } finally {
       if (oldLocalMode === undefined) delete process.env.CENTRAL_LOCAL_MODE;
       else process.env.CENTRAL_LOCAL_MODE = oldLocalMode;

@@ -1,5 +1,6 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
+import {emailPromotionHold,exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
+import {whatsappAuthorized} from '../src/whatsapp-policy.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
@@ -862,6 +863,17 @@ class DatabaseManager {
   }
   public getAutonomousRunReport(whatsappReady=false) {
     const run = this.data.autonomousRun, worker = this.getCommercialEmailStatus();
+    const showWhatsAppBlocker = (campaigns: Campaign[], blockers: string[]) => {
+      const markets = new Set(campaigns.filter(c => c.autoSendWhatsApp && c.channels.includes('whatsapp') &&
+        ['lista', 'activa', 'bloqueada_por_configuracion'].includes(c.status))
+        .flatMap(c => c.country.split(',').map(country => JSON.stringify([c.appId, normalize(country.trim()), normalize(c.language.trim())]))));
+      if (!markets.size) return;
+      if (!whatsappReady) blockers.push('El ejecutor de WhatsApp no está listo para la cola comercial.');
+      if (!this.data.contacts.some(contact => contact.status !== 'cliente' && whatsappAuthorized(contact) &&
+          contact.interestedAppIds?.some(appId => markets.has(JSON.stringify([appId, normalize(contact.country?.trim() || ''), normalize(contact.language?.trim() || '')]))))) {
+        blockers.push('Ningún contacto de estas campañas tiene WhatsApp autorizado en su ficha.');
+      }
+    };
     if (!run) {
       const report = this.getSalesGoalReport();
       if (!report.goal.directorEnabled) return {run:null,paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers:[]};
@@ -870,6 +882,7 @@ class DatabaseManager {
       if (this.data.scheduler.automationsPaused) blockers.push('El director está pausado.');
       if (report.goal.sendEmail && !worker.send) blockers.push('Falta la conexión de envío de correo.');
       if (report.goal.answerEmail && !worker.read) blockers.push('Falta la conexión del buzón de respuestas.');
+      showWhatsAppBlocker(campaigns, blockers);
       if (campaigns.some(c => !campaignStrategyReady(c,this.getApplicationById(c.appId)))) blockers.push('Falta una estrategia comercial válida del catálogo o de OpenJarvis.');
       if (this.data.researchState.lastError) blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
       return {run:null,director:{month:report.goal.month,target:report.goal.targetClients,achieved:report.achieved,remaining:report.remaining,
@@ -883,8 +896,10 @@ class DatabaseManager {
     const threads=this.data.conversations.filter(c=>c.campaignId===run.campaignId);
     const messages=threads.flatMap(c=>c.messages);
     const contacted=new Set(threads.map(c=>c.contactId));
-    const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&usableContactEmail(c.email)&&c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
-    const prepared=messages.filter(m=>m.direction==='outbound'&&m.status==='preparado'&&m.reviewStatus!=='rejected').length;
+    const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&
+      ((campaign?.channels.includes('email') && usableContactEmail(c.email) && c.email.trim().toLowerCase() !== c.undeliverableEmail) ||
+        (campaign?.channels.includes('whatsapp') && whatsappAuthorized(c))) && c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
+    const prepared=messages.filter(m=>m.direction==='outbound'&&m.status==='preparado'&&!m.replacementMessageId&&m.reviewStatus!=='rejected').length;
     const accepted=messages.filter(m=>m.direction==='outbound'&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
     const received=messages.filter(m=>m.direction==='inbound'&&m.providerMessageId).length;
     const answered=messages.filter(m=>m.direction==='outbound'&&m.replyToProviderId&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
@@ -895,7 +910,7 @@ class DatabaseManager {
     if(app?.status!=='lista'||!app?.campaignsAllowed)blockers.push('La aplicación no está habilitada para vender.');
     if(campaign?.channels.includes('email')&&!worker.send)blockers.push('Envío bloqueado: el ejecutor de correo no está conectado.');
     if(campaign?.channels.includes('email')&&!worker.read)blockers.push('Recepción bloqueada: falta conectar el buzón de respuestas.');
-    if(campaign?.channels.includes('whatsapp')&&!whatsappReady)blockers.push('WhatsApp pendiente de vincular.');
+    showWhatsAppBlocker(campaign ? [campaign] : [], blockers);
     if(campaign?.intelligenceEnabled&&!campaign.intelligencePlanId)blockers.push(campaign.intelligenceError||'Esperando una estrategia válida de OpenJarvis.');
     if(this.data.researchState.day===accountingDay() && this.getMonthlyGoal().dailyResearchLimit>0 && this.data.researchState.requests>=this.getMonthlyGoal().dailyResearchLimit)blockers.push('Se alcanzó el cupo de páginas de investigación de hoy; se retoma el próximo día.');
     if(this.data.researchState.lastError && this.data.researchState.lastError!=='Cupo diario de investigación alcanzado.')blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
@@ -983,12 +998,16 @@ class DatabaseManager {
     return { campaign };
   }
 
-  public prepareCampaignDrafts(id: string, {persist = true} = {}) {
+  public getEmailPromotionHold(now = new Date()) {
+    return emailPromotionHold(this.data.conversations.flatMap(c => c.messages), now.getTime());
+  }
+
+  public prepareCampaignDrafts(id: string, {persist = true, emailOnHold = false} = {}) {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
-    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations);
-    for (const { email, whatsappId } of result.replacements) email.replacementMessageId = whatsappId;
+    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date(), emailOnHold);
+    for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
     if (result.drafts.length) this.data.conversations = [...result.drafts, ...this.data.conversations];
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);

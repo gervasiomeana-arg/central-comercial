@@ -72,7 +72,10 @@ export function completeWhatsApp(input:any){
  if(['aceptado_proveedor','fallido','resultado_desconocido'].includes(msg.status)&&msg.providerEvidence)return {success:true};
  if(!['envio_intentado','resultado_desconocido'].includes(msg.status))throw new Error('El intento ya terminó.');
  const accepted=input.outcome==='accepted'&&Number.isInteger(input.ack)&&input.ack>=1&&typeof input.providerId==='string'&&input.providerId.trim().length>0&&input.providerId.length<500&&typeof input.chatId==='string'&&/^[\w.-]+@(?:c\.us|lid)$/.test(input.chatId);
- msg.status=accepted?'aceptado_proveedor':input.outcome==='rejected'?'fallido':'resultado_desconocido';msg.providerEvidence=accepted?'WhatsApp confirmó recepción por su servidor (ACK >= 1). No confirma lectura.':'No hubo confirmación de aceptación; no se repite automáticamente.';
+ const rejected=input.outcome==='rejected';
+ msg.status=accepted?'aceptado_proveedor':rejected?'fallido':'resultado_desconocido';
+ msg.providerEvidence=accepted?'WhatsApp confirmó recepción por su servidor (ACK >= 1). No confirma lectura.':
+  rejected?'WhatsApp rechazó el envío o el número no tiene cuenta registrada.':'No hubo confirmación de aceptación; no se repite automáticamente.';
  if(typeof input.chatId==='string'&&/^[\w.-]+@(?:c\.us|lid)$/.test(input.chatId))msg.providerChatId=input.chatId;
  if(accepted){msg.providerMessageId=input.providerId;msg.serviceConfirmationId=input.providerId;msg.acceptedAt=new Date().toISOString();const contact=db.getContactById(conv.contactId)!;if(contact.status==='prospecto')contact.status='contactado';}
  db.save();return {success:true};

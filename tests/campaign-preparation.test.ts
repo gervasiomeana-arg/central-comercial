@@ -80,8 +80,8 @@ test('replaces definitely bounced email once and never switches on uncertain or 
   email.serviceError = 'Rebote permanente confirmado: 5.1.1';
   const alternate = prepareCampaign(whatsappCampaign, app, [lead], [original], now);
   assert.equal(alternate.drafts[0]?.channel, 'whatsapp');
-  assert.equal(alternate.replacements[0]?.email.id, email.id);
-  assert.equal(alternate.replacements[0]?.whatsappId, alternate.drafts[0]?.messages[0].id);
+  assert.equal(alternate.replacements[0]?.original.id, email.id);
+  assert.equal(alternate.replacements[0]?.replacementId, alternate.drafts[0]?.messages[0].id);
   assert.equal(prepareCampaign(whatsappCampaign, app, [lead], [original, ...alternate.drafts], now).drafts.length, 0);
 });
 
@@ -106,7 +106,24 @@ test('la prioridad explícita de WhatsApp cambia un borrador sin intento y conse
   const priority = {...whatsappCampaign, dailyLimit:3, channels:['whatsapp','email']} as Campaign;
   const selected = prepareCampaign(priority, app, [granted, ungranted], [emailDraft], now);
   assert.deepEqual(selected.drafts.map(d=>d.channel), ['whatsapp','email']);
-  assert.equal(selected.replacements[0]?.email.id,emailDraft.messages[0].id);
+  assert.equal(selected.replacements[0]?.original.id,emailDraft.messages[0].id);
   emailDraft.messages[0].status='aceptado_proveedor';
   assert.equal(prepareCampaign(priority, app, [granted], [emailDraft], now).drafts.length,0);
+});
+
+test('usa WhatsApp durante la pausa de correo y conserva el lugar del borrador reemplazado', () => {
+  const oneRecipient = { ...whatsappCampaign, dailyLimit: 1 };
+  const granted = contact('one', optIn);
+  const ungranted = contact('two');
+  const [emailDraft] = prepareCampaign(oneRecipient, app, [granted], [], now).drafts;
+
+  const prepared = prepareCampaign(oneRecipient, app, [granted, ungranted], [emailDraft], now, true);
+  assert.deepEqual(prepared.drafts.map(draft => draft.channel), ['whatsapp']);
+  assert.equal(prepared.replacements[0]?.original.id, emailDraft.messages[0].id);
+  assert.equal(prepareCampaign(oneRecipient, app, [ungranted], [], now, true).drafts[0]?.channel, 'email');
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now, true).drafts[0]?.channel, 'whatsapp');
+
+  emailDraft.messages[0].status = 'resultado_desconocido';
+  emailDraft.messages[0].attemptedAt = now.toISOString();
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [emailDraft], now, true).drafts.length, 0);
 });
