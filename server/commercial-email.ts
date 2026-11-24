@@ -53,6 +53,8 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const promotionHold = emailPromotionHold(all, now.getTime());
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   if (!directorUnlimited && all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
+  const whatsappFallbacks = new Set(all.filter(m => m.channel === 'whatsapp' && m.status === 'fallido' && m.replacementMessageId)
+    .map(m => m.replacementMessageId));
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
@@ -64,10 +66,14 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       else {
         if (promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
         if (campaign?.channels[0] === 'whatsapp' && campaign.autoSendWhatsApp &&
-            msg.reviewStatus !== 'approved' && whatsappAuthorized(contact, now)) continue;
+            msg.reviewStatus !== 'approved' && whatsappAuthorized(contact, now) && !whatsappFallbacks.has(msg.id)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
-        if (campaign.maxContacts !== undefined && db.getConversations().filter(c=>c.campaignId===campaign.id).flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&!m.replyToProviderId&&m.attemptedAt).length >= campaign.maxContacts) continue;
+        if (campaign.maxContacts !== undefined) {
+          const attemptedContacts = new Set(db.getConversations().filter(c => c.campaignId === campaign.id &&
+            c.messages.some(m => m.direction === 'outbound' && !m.replyToProviderId && m.attemptedAt)).map(c => c.contactId));
+          if (!attemptedContacts.has(conv.contactId) && attemptedContacts.size >= campaign.maxContacts) continue;
+        }
         if (campaign.mode !== 'automatico' && msg.reviewStatus !== 'approved') continue;
         const unlimited = directorUnlimited && unlimitedCampaignOutreach(campaign);
         if (!unlimited && campaign.dailyLimit < 1) continue;

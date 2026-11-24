@@ -4,6 +4,7 @@ import { db } from './db.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
 import {cloudBatchesEnabled,diagnosticMode} from './execution-role.js';
 import { batchWindow, type CommercialBatch } from './batch-window.js';
+import { whatsappStatus } from './commercial-whatsapp.js';
 const batchWindowActive = (phase: CommercialBatch) => batchWindow() === phase;
 
 class CommercialScheduler {
@@ -117,6 +118,7 @@ class CommercialScheduler {
       }
 
       const goal = db.getSalesGoalProgress();
+      const emailOnHold = whatsappStatus().ready && Boolean(db.getEmailPromotionHold(now));
       const marketsWithContacts = new Set(contacts.flatMap(contact => (contact.interestedAppIds || [])
         .map(appId => JSON.stringify([appId,normalize(contact.country).trim()]))));
       for (const campaign of phase === 'revisar' ? [] : campaigns) {
@@ -125,7 +127,7 @@ class CommercialScheduler {
         if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
         if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
           // All preparations in this synchronous loop are persisted together below.
-          try { db.prepareCampaignDrafts(campaign.id, {persist: false}); }
+          try { db.prepareCampaignDrafts(campaign.id, {persist: false, emailOnHold}); }
           catch (error) { db.addLog('error', 'campañas', `No se pudo preparar la campaña ${campaign.name}`, { error: String(error) }, false); }
         }
       }
