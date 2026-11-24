@@ -568,6 +568,7 @@ adminRouter.post('/contacts', (req, res) => {
       website: body.website || '',
       email: body.email || '',
       phone: body.phone || '',
+      whatsappConsent: body.whatsappConsent,
       source: body.source || 'Carga manual directa',
       sourceReviewDate: body.sourceReviewDate || new Date().toISOString().split('T')[0],
       interestedAppIds: body.interestedAppIds || [],

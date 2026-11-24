@@ -47,6 +47,19 @@ test('diagnostic PC confirms connections but never gives any email, WhatsApp or 
   const report=await fetch(base+'/api/local-runtime/report',{headers:{Authorization:`Bearer ${key}`}}).then(r=>r.json());assert.deepEqual(report.connections,{email:false,whatsapp:false,intelligence:false});assert.ok(!JSON.stringify(report).includes(key));
  });
 });
+
+test('la ficha nueva conserva la autorización de WhatsApp al guardarla', async () => {
+ await withServer(true, async (base, key) => {
+  const whatsappConsent = {granted: true, at: new Date().toISOString(), evidence: 'Permiso de prueba simulado'};
+  const response = await request(base, key, '/api/contacts', {
+   orgName: 'Club ficticio', phone: '+5491100000001', country: 'Argentina', whatsappConsent,
+  });
+  assert.equal(response.status, 200);
+  const created = await response.json();
+  const saved = await fetch(base + '/api/contacts/' + created.id).then(r => r.json());
+  assert.deepEqual(saved.whatsappConsent, whatsappConsent);
+ });
+});
 test('Funeraria participates in autonomous research, preserving IDs, history, countries and commercial terms',()=>{
  const app=commercialCatalog().find(a=>a.slug==='funeraria')!;
  const historical={...app,id:'preserved-id',commercialCatalogVersion:'2026-11-12.2',status:'en_desarrollo' as const,campaignsAllowed:false,internalNotes:'Nota del propietario',countries:['Chile']};
