@@ -8,7 +8,7 @@ import { accountingDay } from '../src/ledger.js';
 import { defaultGoal, goalProgress, goalCampaigns, validateGoal } from '../server/sales-director.js';
 import { commercialCatalog } from '../server/commercial-catalog.js';
 import { extractContact, searchLinks, publicAddress, publicUrl, contactLinks } from '../server/public-web.js';
-import type { Client, PaymentRecord } from '../src/types.js';
+import type { Client, Contact, PaymentRecord } from '../src/types.js';
 const apps = commercialCatalog(), now = new Date('2026-11-12T15:00:00Z');
 
 test('November defaults to five clients; future months remain editable and inactive',()=>{
@@ -98,11 +98,14 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   assert.equal(db.getResearchState().status, 'pending');
   assert.equal(db.getResearchState().requests, 24);
   assert.equal(db.getCampaigns()[0].dailyLimit, campaign.dailyLimit);
-  const existing = {
+  const existing: Contact = {
     id: 'existing-club', orgName: 'Club de prueba', email: 'info@club-prueba.test', phone: '',
     website: 'https://club-prueba.test', source: 'https://club-prueba.test',
     interestedAppIds: [campaign.appId], permission: 'desconocido', status: 'prospecto', history: [],
-  } as ReturnType<typeof db.getContacts>[number];
+    contactPerson: '', role: '', orgType: 'Club', country: campaign.country, language: campaign.language,
+    timezone: campaign.timezone, sourceReviewDate: day, assignedTo: '', notes: '',
+    preferredChannel: 'email', nextFollowUpDate: null, createdAt: day, updatedAt: day,
+  };
   db.getContacts().push(existing);
   await researchGoalProspects(async url => {
     assert.equal(url, queued);
