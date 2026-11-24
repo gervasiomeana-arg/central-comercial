@@ -19,6 +19,15 @@ export function orderCommercialConversations(conversations: Conversation[], now:
   return [...conversations].sort((a,b)=>(attempts.get(a.appId)||0)-(attempts.get(b.appId)||0));
 }
 
+export function unlimitedDirectorOutreach(goal: MonthlySalesGoal) {
+  return localOperationsEnabled() && Boolean(goal.directorEnabled);
+}
+
+export function unlimitedCampaignOutreach(campaign: Campaign) {
+  return campaign.dailyLimit === 0 && campaign.mode === 'automatico' &&
+    Boolean(campaign.goalMonth && campaign.id.startsWith(`goal-${campaign.goalMonth}-`));
+}
+
 export function defaultGoal(month: string): MonthlySalesGoal {
   return { month, targetClients: month === '2026-11' ? 5 : 0, enabled: month === '2026-11', discoverContacts: true, sendEmail: true, answerEmail: true, countries: ['Argentina'], dailyEmailLimit: 10, dailyResearchLimit: localOperationsEnabled() ? 0 : 40, updatedAt: new Date().toISOString() };
 }
@@ -171,7 +180,7 @@ export function operationalSummary(
     contactsAvailable: pool.length,
     prepared: attempted.filter(m => {
       const contact = contactById.get(m.contactId);
-      return m.direction === 'outbound' && m.status === 'preparado' && m.reviewStatus !== 'rejected' && inMonth(m.createdAt) && contact && !['descartado','baja_solicitada'].includes(contact.status) && contact.permission !== 'revocado' && (m.channel === 'email' ? usableContactEmail(contact.email) : m.channel === 'whatsapp' && whatsappAuthorized(contact));
+      return m.direction === 'outbound' && m.status === 'preparado' && !m.replacementMessageId && m.reviewStatus !== 'rejected' && inMonth(m.createdAt) && contact && !['descartado','baja_solicitada'].includes(contact.status) && contact.permission !== 'revocado' && (m.channel === 'email' ? usableContactEmail(contact.email) : m.channel === 'whatsapp' && whatsappAuthorized(contact));
     }).length,
     acceptedContacts: new Set(accepted.map(m => m.contactId)).size,
     responses: new Set(received.map(c => c.contactId)).size,

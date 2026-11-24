@@ -1,6 +1,6 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
-import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
+import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
@@ -733,7 +733,7 @@ class DatabaseManager {
     const goal = this.getMonthlyGoal(month);
     const progress = goalProgress(goal, this.data.applications, this.data.payments, this.data.clients);
     const apps = progress.apps.map(app => ({ ...app, operations: operationalSummary(this.getApplicationById(app.id)!, month, this.data.contacts, this.data.campaigns, this.data.conversations, this.data.payments, this.data.tasks) }));
-    return { ...progress, apps, worker: this.getCommercialEmailStatus(), research: { ...this.data.researchState, visited: this.data.researchState.visited.length, unlimited: localOperationsEnabled() }, paused: this.data.scheduler.automationsPaused };
+    return { ...progress, apps, worker: this.getCommercialEmailStatus(), unlimitedOutreach: unlimitedDirectorOutreach(goal), research: { ...this.data.researchState, visited: this.data.researchState.visited.length, unlimited: localOperationsEnabled() }, paused: this.data.scheduler.automationsPaused };
   }
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
@@ -762,7 +762,7 @@ class DatabaseManager {
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
     delete this.data.autonomousRun;
     this.data.scheduler.automationsPaused = false;
-    this.addLog('info', 'campañas', `Director mensual activado: ${goal.targetClients} clientes; campañas y públicos seleccionados por Central dentro de ${goal.countries.join(', ')}. Los límites guardados siguen vigentes.`);
+    this.addLog('info', 'campañas', `Director mensual activado: ${goal.targetClients} clientes; campañas y públicos seleccionados por Central dentro de ${goal.countries.join(', ')}. Campañas del director actualizadas.`);
     this.processSalesDirector(); this.save();
   }
   public processSalesDirector() {
@@ -772,7 +772,7 @@ class DatabaseManager {
     this.data.campaigns.push(...created);
     let changed = created.length > 0;
     if (report.goal.directorEnabled) {
-      const channels = report.goal.directorChannels || ['email'];
+      const channels = [...new Set([...(report.goal.directorChannels || ['email'] as const), 'whatsapp' as const])];
       for (const c of this.data.campaigns.filter(c => !c.chatManaged && this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
         if(app && repairDiscoveryPlan(c,app)){changed=true;this.addLog('info','contactos','Búsqueda reparada: consultas de prospectos y cola anterior archivada; el cupo global consumido se conserva.',{campaignId:c.id});}
@@ -785,6 +785,11 @@ class DatabaseManager {
           }
         }
         if(c.status==='lista'&&campaignStrategyReady(c,app)){c.status='activa';c.updatedAt=new Date().toISOString();changed=true;}
+        if (unlimitedDirectorOutreach(report.goal) && c.mode === 'automatico' && c.dailyLimit !== 0) {
+          c.dailyLimit = 0;
+          c.updatedAt = new Date().toISOString();
+          changed = true;
+        }
         if (!c.intelligenceEnabled || c.channels.join(',') !== channels.join(',') || c.autoSendEmail !== (report.goal.sendEmail && channels.includes('email')) || c.autoSendWhatsApp !== channels.includes('whatsapp')) {
           Object.assign(c, { intelligenceEnabled: true, channels: [...channels], autoPrepare: true,
             autoSendEmail: report.goal.sendEmail && channels.includes('email'), autoSendWhatsApp: channels.includes('whatsapp'), updatedAt: new Date().toISOString() });
@@ -973,12 +978,13 @@ class DatabaseManager {
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
     const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations);
-    this.data.conversations.unshift(...result.drafts);
+    for (const { email, whatsappId } of result.replacements) email.replacementMessageId = whatsappId;
+    this.data.conversations = [...result.drafts, ...this.data.conversations];
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);
     campaign.stats.contactsCount = new Set(conversations.map(c => c.contactId)).size;
-    campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && m.reviewStatus !== 'rejected').length;
-    if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de correo preparados para ${campaign.name}. Sin envíos.`, { campaignId: id });
+    campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && !m.replacementMessageId && m.reviewStatus !== 'rejected').length;
+    if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de promoción preparados para ${campaign.name}. Sin envíos.`, { campaignId: id });
     this.save();
     return campaign.lastPreparation;
   }
@@ -1352,7 +1358,7 @@ class DatabaseManager {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
-          if ((m.status === 'pendiente' || m.status === 'preparado') && m.reviewStatus !== 'rejected') messagesPending++;
+          if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') messagesPending++;
           else if (m.status === 'enviado' || (m.status === 'aceptado_proveedor' && m.acceptedAt && m.serviceConfirmationId)) messagesSent++;
           else if (m.status === 'fallido') messagesFailed++;
           else if (m.status === 'resultado_desconocido') messagesUnknown++;

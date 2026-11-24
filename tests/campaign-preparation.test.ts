@@ -57,3 +57,36 @@ test('public business outreach must be explicitly enabled and never overrides re
   assert.equal(prepareCampaign({...campaign,allowPublicEmail:true}, app, [publicContact], [], now).drafts.length,1);
   assert.equal(prepareCampaign({...campaign,allowPublicEmail:true}, app, [{...publicContact,permission:'revocado'}], [], now).drafts.length,0);
 });
+
+const whatsappCampaign = {...campaign, channels: ['email', 'whatsapp'], autoSendWhatsApp: true, mode: 'automatico'} as Campaign;
+const optIn = { phone: '+54 911 5555-1234', whatsappConsent: { granted: true, evidence: 'Aceptó promociones por WhatsApp', at: '2026-11-01' } };
+
+test('selects WhatsApp when email is unusable, only with recorded permission', () => {
+  const allowed = contact('one', {...optIn, email: 'bad'});
+  assert.equal(prepareCampaign(whatsappCampaign, app, [allowed], [], now).drafts[0]?.channel, 'whatsapp');
+  assert.equal(prepareCampaign(whatsappCampaign, app, [{...allowed, whatsappConsent: undefined}], [], now).drafts.length, 0);
+  assert.equal(prepareCampaign(whatsappCampaign, app, [{...allowed, email:'info@club.test'}], [], now).drafts[0]?.channel, 'email');
+});
+
+test('replaces definitely bounced email once and never switches on uncertain or refused delivery', () => {
+  const lead = contact('one', optIn);
+  const original = prepareCampaign(whatsappCampaign, app, [lead], [], now).drafts[0];
+  const [email] = original.messages;
+  email.attemptedAt = now.toISOString();
+  email.status = 'resultado_desconocido';
+  assert.equal(prepareCampaign(whatsappCampaign, app, [lead], [original], now).drafts.length, 0);
+  email.status = 'fallido'; email.serviceError = '550 5.7.1 Rejected by policy';
+  assert.equal(prepareCampaign(whatsappCampaign, app, [lead], [original], now).drafts.length, 0);
+  email.serviceError = 'Rebote permanente confirmado: 5.1.1';
+  const alternate = prepareCampaign(whatsappCampaign, app, [lead], [original], now);
+  assert.equal(alternate.drafts[0]?.channel, 'whatsapp');
+  assert.equal(alternate.replacements[0]?.email.id, email.id);
+  assert.equal(alternate.replacements[0]?.whatsappId, alternate.drafts[0]?.messages[0].id);
+  assert.equal(prepareCampaign(whatsappCampaign, app, [lead], [original, ...alternate.drafts], now).drafts.length, 0);
+});
+
+test('prepares beyond the usual daily limit for an uncapped director campaign', () => {
+  const director = {...whatsappCampaign, id:'goal-2026-11-voley-argentina', goalMonth:'2026-11', dailyLimit:0};
+  const leads = ['one','two','three'].map(id => contact(id));
+  assert.equal(prepareCampaign(director, app, leads, [], now).drafts.length, 3);
+});

@@ -7,7 +7,7 @@ export class DraftReviewError extends Error {
 }
 
 export function reviewEmailDraft(message: Message, input: { action: string; expectedRevision: number; content?: string }, context: { app?: Application; contact?: Contact; actor: string; replyReceivedIds?: string[]; allowPublicEmail?: boolean }, now = new Date()): Message {
-  if (!['email','whatsapp'].includes(message.channel) || message.direction !== 'outbound' || message.status !== 'preparado' || message.serviceConfirmationId || message.attemptedAt) throw new DraftReviewError('Solo se pueden revisar borradores que no tuvieron intentos de envío.', 409);
+  if (!['email','whatsapp'].includes(message.channel) || message.direction !== 'outbound' || message.status !== 'preparado' || message.replacementMessageId || message.serviceConfirmationId || message.attemptedAt) throw new DraftReviewError('Solo se pueden revisar borradores que no tuvieron intentos de envío.', 409);
   if (!Number.isInteger(input.expectedRevision) || input.expectedRevision !== (message.draftRevision || 0)) throw new DraftReviewError('Este borrador cambió. Actualizá la conversación antes de continuar.', 409);
   if (!['edit', 'approve', 'reject'].includes(input.action)) throw new DraftReviewError('Acción de revisión no válida.');
   const updated = { ...message, draftRevision: (message.draftRevision || 0) + 1 };

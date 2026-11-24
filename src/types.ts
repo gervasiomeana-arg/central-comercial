@@ -230,6 +230,7 @@ export interface Message {
   providerChatId?:string;
   providerMessageId?: string;
   replyToProviderId?: string;
+  replacementMessageId?: string;
   emailSubject?: string;
   sendLease?: string;
   sendWorker?: string;
