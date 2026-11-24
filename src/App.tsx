@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {PromoVideoStudio} from './components/PromoVideoStudio.js';
 import { Header } from './components/Header.js';
 import { StatisticsView } from './components/StatisticsView.js';
@@ -73,6 +73,38 @@ export default function App() {
   const [geminiConfigured, setGeminiConfigured] = useState(false);
   const [deployment,setDeployment]=useState({local:false,migrated:false,monitor:false,diagnostic:false,cloud:false,outbound:false,batches:false});
   const [loading, setLoading] = useState(true);
+  const [automationReport, setAutomationReport] = useState<Awaited<ReturnType<typeof api.getAutonomousRun>>>(null);
+  const [automationReportError, setAutomationReportError] = useState('');
+  const automationRequest = useRef(0);
+  const refreshAutomationReport = useCallback(async () => {
+    const request = ++automationRequest.current;
+    try {
+      const report = await api.getAutonomousRun();
+      if (request !== automationRequest.current) return;
+      setAutomationReport(report);
+      setAutomationReportError('');
+    } catch {
+      if (request === automationRequest.current) setAutomationReportError('No se pudo actualizar el estado del director.');
+    }
+  }, []);
+  const applyAutomationReport = useCallback((report: Awaited<ReturnType<typeof api.getAutonomousRun>>) => {
+    automationRequest.current++;
+    setAutomationReport(report);
+    setAutomationReportError('');
+  }, []);
+  const canReadAutomation = Boolean(authStatus?.authenticated && !authStatus.googleSignIn && !deployment.monitor);
+  useEffect(() => {
+    if (!canReadAutomation) {
+      applyAutomationReport(null);
+      return;
+    }
+    void refreshAutomationReport();
+    const timer = setInterval(() => void refreshAutomationReport(), 20000);
+    return () => {
+      clearInterval(timer);
+      automationRequest.current++;
+    };
+  }, [canReadAutomation, refreshAutomationReport, applyAutomationReport]);
 
   // Modals
   const [focusedClientId,setFocusedClientId] = useState<string|null>(null);
@@ -173,7 +205,8 @@ export default function App() {
         const res = await api.pauseAutomations();
         setScheduler(res.scheduler);
       }
-      loadData();
+      void loadData();
+      if (canReadAutomation) void refreshAutomationReport();
     } catch (err: any) {
       alert(`Error al cambiar estado de automatizaciones: ${err.message}`);
     }
@@ -371,6 +404,10 @@ export default function App() {
             ) : (
               <DashboardView
                 onRefresh={loadData}
+                automationReport={automationReport}
+                automationReportError={automationReportError}
+                applyAutomationReport={applyAutomationReport}
+                refreshAutomationReport={refreshAutomationReport}
                 onOpenGuidedCampaign={() => setCurrentTab('campaigns')}
                 onOpenEmailSandbox={() => setCurrentTab('system')}
                 metrics={metrics}

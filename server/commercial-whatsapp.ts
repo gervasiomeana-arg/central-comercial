@@ -19,7 +19,12 @@ export function whatsappHeartbeat(id:string,ready:boolean,account:string){
 export function claimWhatsApp(id:string,now=new Date()){
  worker(id);const report=db.getSalesGoalReport();if(report.paused||!report.goal.enabled)return null;
  const all=db.getConversations().flatMap(c=>c.messages);
- for(const m of all)if(m.channel==='whatsapp'&&m.status==='envio_intentado'&&(m.sendDeadline||0)<now.getTime()){m.status='resultado_desconocido';m.serviceError='Sin confirmación: no se reenvía automáticamente.';}db.save();
+ const expired = all.filter(m => m.channel === 'whatsapp' && m.status === 'envio_intentado' && (m.sendDeadline || 0) < now.getTime());
+ for (const m of expired) {
+  m.status = 'resultado_desconocido';
+  m.serviceError = 'Sin confirmación: no se reenvía automáticamente.';
+ }
+ if (expired.length) db.save();
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
  if(!directorUnlimited&&all.filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
  const conversations=report.goal.directorEnabled?orderCommercialConversations(db.getConversations(),now):db.getConversations();

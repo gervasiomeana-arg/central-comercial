@@ -8,6 +8,10 @@ import type { DashboardMetrics, Application, CommercialTask, AutomationPipelineS
 
 interface DashboardViewProps {
   onRefresh: () => Promise<void>;
+  automationReport: React.ComponentProps<typeof ActivationControl>['report'];
+  automationReportError: string;
+  applyAutomationReport: React.ComponentProps<typeof ActivationControl>['onReportChanged'];
+  refreshAutomationReport: () => Promise<void>;
   metrics: DashboardMetrics | null; executiveSummary?: ExecutiveSummary | null;
   applications: Application[]; tasks: CommercialTask[]; campaigns?: Campaign[]; contacts?: Contact[];
   pipelineStatus?: AutomationPipelineStatus | null; persistenceStatus?: PersistenceStatus | null;
@@ -37,7 +41,9 @@ export function DashboardView(props: DashboardViewProps) {
   return <div className="cc-dashboard">
     <div className="cc-page-hero">
       <div><p className="cc-eyebrow">CENTRAL DE OPERACIONES</p><h1>Tu operación,<br className="cc-hero-break"/> en perspectiva<span className="cc-heading-dot">.</span></h1><p className="cc-hero-description">El pulso de tus aplicaciones, tus conversaciones y tus próximos clientes.</p></div>
-      <ActivationControl applications={applications} paused={metrics.automationsPaused} onChanged={props.onRefresh}/>
+      <ActivationControl applications={applications} paused={metrics.automationsPaused} onChanged={props.onRefresh}
+        report={props.automationReport} reportError={props.automationReportError}
+        onReportChanged={props.applyAutomationReport} refreshReport={props.refreshAutomationReport}/>
     </div>
 
     <div className="cc-summary-toolbar">
