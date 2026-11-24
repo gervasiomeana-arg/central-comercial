@@ -919,7 +919,7 @@ adminRouter.post('/conversations/:id/messages/:messageId/review', (req, res) => 
     db.saveConversation(conversation);
     if (conversation.campaignId) {
       const campaign = db.getCampaignById(conversation.campaignId);
-      if (campaign) campaign.stats.messagesPending = db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && m.reviewStatus !== 'rejected').length;
+      if (campaign) campaign.stats.messagesPending = db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && !m.replacementMessageId && m.reviewStatus !== 'rejected').length;
     }
     db.addLog('info', 'conversaciones', 'Revisión de borrador de email guardada. Sin envío.', { conversationId: conversation.id, messageId: updated.id, action, revision: updated.draftRevision });
     db.save();

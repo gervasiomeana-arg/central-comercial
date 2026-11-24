@@ -209,12 +209,12 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                     </div>
                     <div>
                       <span className="block text-slate-400">Límite diario:</span>
-                      <span className="font-semibold text-slate-800">{camp.dailyLimit} envíos / día</span>
+                      <span className="font-semibold text-slate-800">{camp.dailyLimit === 0 ? 'Sin cupo diario' : `${camp.dailyLimit} envíos / día`}</span>
                     </div>
                     <div>
                       <span className="block text-slate-400">Ventana horaria ({camp.timezone}):</span>
                       <span className="font-semibold text-slate-800">
-                        {camp.sendWindowStart} a {camp.sendWindowEnd}
+                        {camp.dailyLimit === 0 ? 'Todo el día' : `${camp.sendWindowStart} a ${camp.sendWindowEnd}`}
                       </span>
                     </div>
                     <div>

@@ -12,7 +12,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     for(const folder of ['server','src','data'])await fs.mkdir(path.join(directory,folder));
     await fs.writeFile(path.join(directory,'package.json'),'{"type":"module"}');
     await fs.symlink(path.resolve('node_modules'),path.join(directory,'node_modules'),'junction');
-    for(const name of ['db.ts','data-directory.ts','execution-role.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','channelTests.ts','discovery-plan.ts', 'campaign-markets.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    for(const name of ['db.ts','data-directory.ts','execution-role.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','commercial-whatsapp.ts','channelTests.ts','discovery-plan.ts', 'campaign-markets.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
     await fs.copyFile(new URL('../src/whatsapp-policy.ts',import.meta.url),path.join(directory,'src','whatsapp-policy.ts'));
     await fs.copyFile(new URL('../src/email-policy.ts',import.meta.url),path.join(directory,'src','email-policy.ts'));
     await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
@@ -54,5 +54,42 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     assert.equal(replyDecision('Quiero un descuento',app,'Argentina').kind,'human');assert.equal(replyDecision('precio',app,'Brasil').kind,'human');
     assert.equal(replyDecision('Quiero contratar',app,'Argentina').kind,'purchase');
     assert.ok(!replyDecision('precio',commercialCatalog()[2],'Argentina').text?.includes('99'));
+
+    const oldLocalMode = process.env.CENTRAL_LOCAL_MODE;
+    process.env.CENTRAL_LOCAL_MODE = 'true';
+    try {
+      db.saveMonthlyGoal({...db.getMonthlyGoal(),dailyEmailLimit:1});
+      db.startMonthlyDirector();
+      const {accountingDay} = await import(pathToFileURL(path.join(directory,'src','ledger.ts')).href);
+      const early = new Date(`${accountingDay(now)}T08:00:00Z`);
+      const reviewed = new Date(early.getTime() - 86400000).toISOString();
+      db.saveContact({
+        ...originalContact, id:'fallback-contact', orgName:'Club canal alternativo', email:'fallback@club.test',
+        phone:'+54 911 5555-1234', permission:'autorizado', sourceReviewDate:reviewed,
+        whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed}
+      });
+      assert.equal(campaign.dailyLimit,0);
+      db.prepareCampaignDrafts(campaign.id);
+      const firstAttempt = claimCommercialEmail('test-worker',early);
+      assert.ok(firstAttempt, 'director claims promotions beyond the internal daily limit and outside the former send window');
+      assert.equal(firstAttempt.recipient,'fallback@club.test');
+      completeCommercialEmail({...firstAttempt,workerId:'test-worker',outcome:'rejected',response:'550 5.1.1 Unknown mailbox'});
+      db.prepareCampaignDrafts(campaign.id);
+      db.prepareCampaignDrafts(campaign.id);
+
+      const {TEST_RECIPIENTS} = await import(pathToFileURL(path.join(directory,'server','channelTests.ts')).href);
+      const {claimWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
+      whatsappHeartbeat('test-wa',true,TEST_RECIPIENTS.whatsapp);
+      const whatsappJob = claimWhatsApp('test-wa',early);
+      assert.ok(whatsappJob);
+      assert.equal(whatsappJob.recipient,'5491155551234');
+      const oldEmail = db.getConversationById(firstAttempt.conversationId).messages[0];
+      assert.equal(oldEmail.status,'fallido');
+      assert.equal(oldEmail.replacementMessageId,whatsappJob.messageId);
+      assert.equal(claimWhatsApp('test-wa',early),null,'only one WhatsApp promotion is queued');
+    } finally {
+      if (oldLocalMode === undefined) delete process.env.CENTRAL_LOCAL_MODE;
+      else process.env.CENTRAL_LOCAL_MODE = oldLocalMode;
+    }
   }finally{await fs.rm(directory,{recursive:true,force:true});}
 });

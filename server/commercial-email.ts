@@ -1,6 +1,6 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
 import {usableContactEmail} from '../src/email-policy.js';
-import {campaignStrategyReady, orderCommercialConversations} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
 import { db } from './db.js';
@@ -37,13 +37,14 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const all = db.getConversations().flatMap(c => c.messages);
   for (const m of all) if (m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime()) { m.status = 'resultado_desconocido'; m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.'; }
   db.save();
-  if (all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
+  const directorUnlimited = unlimitedDirectorOutreach(goal);
+  if (!directorUnlimited && all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
     if (contact.undeliverableEmail === contact.email?.trim().toLowerCase() || !usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
     for (const msg of conv.messages) {
-      if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
+      if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
@@ -52,10 +53,12 @@ export function claimCommercialEmail(id: string, now = new Date()) {
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined && db.getConversations().filter(c=>c.campaignId===campaign.id).flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&!m.replyToProviderId&&m.attemptedAt).length >= campaign.maxContacts) continue;
         if (campaign.mode !== 'automatico' && msg.reviewStatus !== 'approved') continue;
+        const unlimited = directorUnlimited && unlimitedCampaignOutreach(campaign);
+        if (!unlimited && campaign.dailyLimit < 1) continue;
         const day = new Intl.DateTimeFormat('en-CA', { timeZone: campaign.timezone }).format(now);
         const time = new Intl.DateTimeFormat('en-GB', { timeZone: campaign.timezone, hour:'2-digit', minute:'2-digit', hour12:false }).format(now);
-        if (day < campaign.startDate || day > campaign.endDate || time < campaign.sendWindowStart || time >= campaign.sendWindowEnd) continue;
-        if (db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= campaign.dailyLimit) continue;
+        if (day < campaign.startDate || day > campaign.endDate || (!unlimited && (time < campaign.sendWindowStart || time >= campaign.sendWindowEnd))) continue;
+        if (!unlimited && db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= campaign.dailyLimit) continue;
       }
       if (!replying && conv.requiresHumanIntervention && db.getTasks().some(t => t.relatedId === conv.id && t.status === 'pendiente')) continue;
       if (msg.approvedRecipient && msg.approvedRecipient.toLowerCase() !== contact.email.trim().toLowerCase()) continue;

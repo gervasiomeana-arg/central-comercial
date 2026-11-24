@@ -1,5 +1,5 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {campaignStrategyReady, orderCommercialConversations} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
 import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
 import {db} from './db.js';
@@ -20,7 +20,8 @@ export function claimWhatsApp(id:string,now=new Date()){
  worker(id);const report=db.getSalesGoalReport();if(report.paused||!report.goal.enabled)return null;
  const all=db.getConversations().flatMap(c=>c.messages);
  for(const m of all)if(m.channel==='whatsapp'&&m.status==='envio_intentado'&&(m.sendDeadline||0)<now.getTime()){m.status='resultado_desconocido';m.serviceError='Sin confirmación: no se reenvía automáticamente.';}db.save();
- if(all.filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
+ const directorUnlimited=unlimitedDirectorOutreach(report.goal);
+ if(!directorUnlimited&&all.filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
  const conversations=report.goal.directorEnabled?orderCommercialConversations(db.getConversations(),now):db.getConversations();
  for(const conv of conversations.filter(c=>c.channel==='whatsapp')){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
@@ -34,10 +35,18 @@ export function claimWhatsApp(id:string,now=new Date()){
     if(!report.remaining||!campaign?.autoSendWhatsApp||!campaign.channels.includes('whatsapp')||!db.campaignInActiveRun(campaign.id)||!campaignStrategyReady(campaign,db.getApplicationById(campaign.appId))||!['lista','activa','bloqueada_por_configuracion'].includes(campaign.status)||conv.messages.some(m=>m.direction==='inbound'))continue;
     if(campaign.goalMonth&&(campaign.goalMonth!==report.goal.month||!report.goal.countries.includes(campaign.country)))continue;
     if(campaign.mode!=='automatico'&&msg.reviewStatus!=='approved')continue;
-    const day=accountingDay(now),time=new Intl.DateTimeFormat('en-GB',{timeZone:campaign.timezone,hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
-    if(day<campaign.startDate||day>campaign.endDate||time<campaign.sendWindowStart||time>=campaign.sendWindowEnd)continue;
-    const attempted=db.getConversations().filter(c=>c.campaignId===campaign.id).flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&!m.replyToProviderId&&m.attemptedAt);
-    if(campaign.maxContacts!==undefined&&attempted.length>=campaign.maxContacts||attempted.filter(m=>accountingDay(new Date(m.attemptedAt!))===day).length>=campaign.dailyLimit)continue;
+    const unlimited=directorUnlimited&&unlimitedCampaignOutreach(campaign);
+    if(!unlimited&&campaign.dailyLimit<1)continue;
+    const day=new Intl.DateTimeFormat('en-CA',{timeZone:campaign.timezone}).format(now),time=new Intl.DateTimeFormat('en-GB',{timeZone:campaign.timezone,hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
+    if(day<campaign.startDate||day>campaign.endDate||(!unlimited&&(time<campaign.sendWindowStart||time>=campaign.sendWindowEnd)))continue;
+    if (campaign.maxContacts !== undefined || !unlimited) {
+      const attempts = db.getConversations().filter(c => c.campaignId === campaign.id)
+        .flatMap(c => c.messages.filter(m => m.direction === 'outbound' && !m.replyToProviderId && m.attemptedAt)
+          .map(m => ({ at: m.attemptedAt!, contactId: c.contactId })));
+      const attemptedContacts = new Set(attempts.map(attempt => attempt.contactId));
+      if (campaign.maxContacts !== undefined && !attemptedContacts.has(conv.contactId) && attemptedContacts.size >= campaign.maxContacts) continue;
+      if (!unlimited && attempts.filter(attempt => accountingDay(new Date(attempt.at)) === accountingDay(now)).length >= campaign.dailyLimit) continue;
+    }
    }
    if(!reply&&db.getTasks().some(t=>t.relatedId===conv.id&&t.status==='pendiente'))continue;
    const recipient=whatsappPhone(contact.phone);if(msg.approvedRecipient&&msg.approvedRecipient!==recipient)continue;
