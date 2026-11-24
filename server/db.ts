@@ -863,7 +863,7 @@ class DatabaseManager {
       if (campaigns.some(c => !campaignStrategyReady(c,this.getApplicationById(c.appId)))) blockers.push('Falta una estrategia comercial válida del catálogo o de OpenJarvis.');
       if (this.data.researchState.lastError) blockers.push(`Búsqueda: ${this.data.researchState.lastError}`);
       return {run:null,director:{month:report.goal.month,target:report.goal.targetClients,achieved:report.achieved,remaining:report.remaining,
-        countries:report.goal.countries,dailyLimit:report.goal.dailyEmailLimit,channels:report.goal.directorChannels,
+        countries:report.goal.countries,dailyLimit:report.goal.dailyEmailLimit,unlimitedOutreach:report.unlimitedOutreach,channels:report.goal.directorChannels,
         campaigns:campaigns.map(c=>({id:c.id,app:this.getApplicationById(c.appId)?.name,country:c.country,status:c.status,
           audience:c.researchSegment,strategyReady:campaignStrategyReady(c,this.getApplicationById(c.appId)),strategySource:c.intelligencePlanId?'OpenJarvis':c.catalogStrategy?'Catálogo verificado':'Pendiente',error:campaignStrategyReady(c,this.getApplicationById(c.appId))?undefined:c.intelligenceError,intelligenceNote:c.intelligenceError})),
         apps:report.apps.filter(a=>a.ready)},paused:this.data.scheduler.automationsPaused,worker,stages:[],blockers,
