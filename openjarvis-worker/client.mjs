@@ -61,7 +61,14 @@ export async function generateStrategy(base, model, context, apiKey) {
   const content = choice.message.content.trim().replace(/^<think>[\s\S]*?<\/think>\s*/, '').replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/, '$1');
   if (content.length > 15000) throw new Error('Estrategia demasiado extensa.');
   let parsed;
-  try { parsed = JSON.parse(content); } catch { throw modelFailure('MODEL_JSON', 'El modelo devolvió texto que no es un objeto JSON completo.'); }
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const fenced = [...content.matchAll(/```json\s*([\s\S]*?)```/gi)];
+    if (fenced.length !== 1) throw modelFailure('MODEL_JSON', 'El modelo devolvió texto que no es un objeto JSON completo.');
+    try { parsed = JSON.parse(fenced[0][1]); }
+    catch { throw modelFailure('MODEL_JSON', 'El modelo devolvió texto que no es un objeto JSON completo.'); }
+  }
   return checkedStrategy(parsed);
 }
 export async function answerQuestion(base, model, job, apiKey) {

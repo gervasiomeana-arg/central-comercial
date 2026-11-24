@@ -111,9 +111,10 @@ export function PcMonitorOverview({ appId, onStatistics, onConnections }: {
   }, []);
 
   const summary = runtime?.online ? runtime.activity?.overview?.find(item => item.appId === appId) : undefined;
-  const receivedAt = runtime?.receivedAt && new Intl.DateTimeFormat('es-AR', {
+  const summaryTime = runtime?.reportAt ?? runtime?.receivedAt;
+  const receivedAt = summaryTime && new Intl.DateTimeFormat('es-AR', {
     dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires',
-  }).format(runtime.receivedAt);
+  }).format(summaryTime);
   const kpis = summary ? [
     { label: 'Contactos', value: summary.contactsTotal, detail: summary.contactsVerified + ' con fuente registrada', Icon: Users },
     { label: 'Mensajes enviados registrados', value: summary.messagesSent, detail: summary.messagesPending + ' pendientes', Icon: Send },
@@ -129,6 +130,7 @@ export function PcMonitorOverview({ appId, onStatistics, onConnections }: {
         <p className="cc-hero-description">Consultá los totales de tu operación desde cualquier computadora.</p>
       </div>
     </div>
+    {runtime?.reportUnavailable && <p role="status" className="cc-muted">El servidor local tarda en actualizar. La hora indica cuándo se confirmó el último reporte.</p>}
     {summary ? <>
       <div className="cc-summary-toolbar">
         <div className="cc-summary-status">

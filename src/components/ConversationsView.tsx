@@ -609,7 +609,7 @@ function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations,
         let ready: boolean | null;
         if (viewingPcRecords) {
           const runtime = await api.getLocalRuntime();
-          ready = runtime.online ? runtime.connections?.whatsapp ?? null : null;
+          ready = runtime.online && !runtime.reportUnavailable ? runtime.connections?.whatsapp ?? null : null;
         } else {
           ready = (await api.getRealChannelTests()).whatsappReady;
         }

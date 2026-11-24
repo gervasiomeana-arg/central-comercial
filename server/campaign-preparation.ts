@@ -6,7 +6,6 @@ import type { Application, Campaign, Contact, Conversation, Message } from '../s
 import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
 
 const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const localDay = (date: Date, timezone: string) => new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 
 function definitelyRejectedEmail(message: Message) {
   const error = message.serviceError || '';
@@ -33,14 +32,18 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const variables = [...campaign.messageTemplate.matchAll(/\{([^{}]+)\}/g)].map(m => m[1]);
   if (variables.some(v => !allowed.has(v))) return result('La plantilla contiene variables desconocidas.');
   let day: string;
-  try { day = localDay(now, campaign.timezone); } catch { return result('La zona horaria de la campaña no es válida.'); }
+  let dates: Intl.DateTimeFormat;
+  try {
+    dates = new Intl.DateTimeFormat('en-CA', {timeZone:campaign.timezone, year:'numeric', month:'2-digit', day:'2-digit'});
+    day = dates.format(now);
+  } catch { return result('La zona horaria de la campaña no es válida.'); }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(campaign.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(campaign.endDate) || campaign.endDate < campaign.startDate) return result('Revisá las fechas de la campaña.');
   if (day < campaign.startDate || day > campaign.endDate) return result('La campaña está fuera de su período de preparación.');
   const unlimited = unlimitedCampaignOutreach(campaign);
   if (!unlimited && (!Number.isInteger(campaign.dailyLimit) || campaign.dailyLimit < 1 || campaign.dailyLimit > 500)) return result('El límite diario debe estar entre 1 y 500.');
   const previous = conversations.filter(c => c.campaignId === campaign.id);
   const alreadyToday = previous.filter(c => {
-    try { return localDay(new Date(c.createdAt), campaign.timezone) === day; } catch { return false; }
+    try { return dates.format(new Date(c.createdAt)) === day; } catch { return false; }
   }).length;
   if(campaign.maxContacts !== undefined && (!Number.isInteger(campaign.maxContacts)||campaign.maxContacts<1||campaign.maxContacts>500))return result('El máximo total de contactos no es válido.');
   const remaining = unlimited ? Infinity : Math.max(0, campaign.dailyLimit - alreadyToday);

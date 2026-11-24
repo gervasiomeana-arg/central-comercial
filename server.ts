@@ -310,7 +310,8 @@ adminRouter.post('/assistant/messages', async (req, res) => {
       const pc = localRuntime.status();
       const summary = pc.activity?.overview?.find(item=>item.appId===appId);
       const appName = db.getApplicationById(appId)?.name || 'Todas las aplicaciones';
-      const received = pc.receivedAt ? new Date(pc.receivedAt).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',hour12:false}) : '';
+      const summaryTime = pc.reportAt ?? pc.receivedAt;
+      const received = summaryTime ? new Date(summaryTime).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',hour12:false}) : '';
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
       const asksPastActivity = /\b(anoche|ayer|semana pasada|mes pasado)\b/i.test(question);
       const asksDailyActivity = /pa[ií]s|mercado|hoy|trabajaste/i.test(question);

@@ -28,6 +28,8 @@ export interface LocalRuntimeState {
   model?: string;
   backupAt?: number;
   receivedAt?: number;
+  reportAt?: number;
+  reportUnavailable?: boolean;
   diagnosticMode?: boolean;
   connections?: {email:boolean;whatsapp:boolean;intelligence:boolean};
   sourceFingerprint?: string;
