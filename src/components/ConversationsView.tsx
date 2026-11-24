@@ -1,3 +1,5 @@
+import { api } from '../api.js';
+import { whatsappAuthorized } from '../whatsapp-policy.js';
 import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
 import React, { useState, useEffect } from 'react';
 import {
@@ -31,6 +33,7 @@ import type {
 interface ConversationsViewProps {
   conversations: Conversation[];
   focusedConversationId?: string | null;
+  viewingPcRecords?: boolean;
   contacts: Contact[];
   applications: Application[];
   campaigns: Campaign[];
@@ -55,6 +58,7 @@ interface ConversationsViewProps {
 export const ConversationsView: React.FC<ConversationsViewProps> = ({
   conversations,
   focusedConversationId,
+  viewingPcRecords = false,
   contacts,
   applications,
   campaigns,
@@ -238,6 +242,8 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         </div>
       </div>
 
+      {channel === 'whatsapp' && <WhatsAppOverview viewingPcRecords={viewingPcRecords}
+        contacts={contacts} campaigns={campaigns} conversations={conversations} appFilter={selectedAppFilter}/>}
       {replyError && <p className="cc-inbox-feedback is-error" role="alert">{replyError}</p>}
       {feedback && <p className="cc-inbox-feedback" role="status">{feedback}</p>}
       {/* Main Inbox: 2 Columns */}
@@ -587,3 +593,48 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   );
 };
 
+
+function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations, appFilter}: {
+  viewingPcRecords: boolean;
+  contacts: Contact[];
+  campaigns: Campaign[];
+  conversations: Conversation[];
+  appFilter: string;
+}) {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        let ready: boolean | null;
+        if (viewingPcRecords) {
+          const runtime = await api.getLocalRuntime();
+          ready = runtime.online ? runtime.connections?.whatsapp ?? null : null;
+        } else {
+          ready = (await api.getRealChannelTests()).whatsappReady;
+        }
+        if (!cancelled) setConnected(ready);
+      } catch {
+        if (!cancelled) setConnected(null);
+      }
+    };
+    void refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [viewingPcRecords]);
+
+  const inScope = (appId: string) => appFilter === 'all' || appId === appFilter;
+  const enabled = campaigns.filter(c => inScope(c.appId) && c.autoSendWhatsApp && c.channels.includes('whatsapp') &&
+    ['lista', 'activa'].includes(c.status)).length;
+  const authorized = contacts.filter(c => (appFilter === 'all' || c.interestedAppIds.includes(appFilter)) && whatsappAuthorized(c)).length;
+  const outgoing = conversations.filter(c => inScope(c.appId)).flatMap(c => c.messages).filter(m =>
+    m.direction === 'outbound' && m.channel === 'whatsapp');
+  const pending = outgoing.filter(m => (m.status === 'preparado' || m.status === 'pendiente') && m.reviewStatus !== 'rejected').length;
+  const accepted = outgoing.filter(m => (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada') && m.serviceConfirmationId).length;
+
+  return <section aria-label="Estado comercial de WhatsApp" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+    <p className="font-semibold">WhatsApp {connected === true ? 'vinculado' : connected === false ? 'pendiente de vincular' : 'sin estado reciente de conexión'}</p>
+    <p className="mt-1">{authorized} contactos con autorización registrada · {enabled} campañas con envío habilitado · {pending} mensajes preparados o pendientes · {accepted} envíos confirmados por el proveedor</p>
+    {authorized === 0 && <p className="mt-1">Para enviar promociones, Central necesita una autorización de WhatsApp registrada en la ficha del contacto.</p>}
+  </section>;
+}

@@ -22,14 +22,20 @@ export function reviewEmailDraft(message: Message, input: { action: string; expe
     if (input.action === 'approve') {
       if (!context.app || context.app.status !== 'lista' || !context.app.campaignsAllowed) throw new DraftReviewError('La aplicación no está habilitada para promoción.');
       const replying = Boolean(message.replyToProviderId && context.replyReceivedIds?.includes(message.replyToProviderId));
-      const permitted = context.contact && (context.contact.permission === 'autorizado' || (context.contact.permission === 'desconocido' && (replying || (context.allowPublicEmail === true && context.contact.outreachBasis === 'public_business_contact'))));
-      if (!context.contact || !permitted || ['descartado', 'baja_solicitada'].includes(context.contact.status) || (context.contact.status === 'cliente' && !replying)) throw new DraftReviewError('El contacto ya no está habilitado para esta promoción o respuesta.');
-      if(message.channel==='whatsapp'){if(!whatsappAuthorized(context.contact,now))throw new DraftReviewError('Falta registrar autorización de WhatsApp.');}
-      else if (!usableContactEmail(context.contact.email)) throw new DraftReviewError('El contacto no tiene un email válido; no se admiten direcciones de ejemplo.');
-      const sourceReviewedAt = Date.parse(context.contact.sourceReviewDate);
-      if (!context.contact.source?.trim() || !Number.isFinite(sourceReviewedAt) || sourceReviewedAt > now.getTime()) throw new DraftReviewError('Revisá la fuente del contacto antes de aprobar la nota.');
+      const contact = context.contact;
+      if (!contact || contact.permission === 'revocado' || ['descartado', 'baja_solicitada'].includes(contact.status) || (contact.status === 'cliente' && !replying)) throw new DraftReviewError('El contacto ya no está habilitado para esta promoción o respuesta.');
+      if (message.channel === 'whatsapp') {
+        if (!whatsappAuthorized(contact, now)) throw new DraftReviewError('Falta registrar autorización de WhatsApp.');
+      } else {
+        const permitted = contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
+          (replying || (context.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact')));
+        if (!permitted) throw new DraftReviewError('El contacto ya no está habilitado para esta promoción o respuesta.');
+        if (!usableContactEmail(contact.email)) throw new DraftReviewError('El contacto no tiene un email válido; no se admiten direcciones de ejemplo.');
+      }
+      const sourceReviewedAt = Date.parse(contact.sourceReviewDate);
+      if (!contact.source?.trim() || !Number.isFinite(sourceReviewedAt) || sourceReviewedAt > now.getTime()) throw new DraftReviewError('Revisá la fuente del contacto antes de aprobar la nota.');
       if (!message.content.trim() || /\{[^{}]+\}/.test(message.content)) throw new DraftReviewError('Completá la nota antes de aprobarla.');
-      updated.approvedRecipient = message.channel==='whatsapp'?whatsappPhone(context.contact.phone):context.contact.email.trim().toLowerCase();
+      updated.approvedRecipient = message.channel==='whatsapp'?whatsappPhone(contact.phone):contact.email.trim().toLowerCase();
     }
     if (input.action === 'reject') delete updated.approvedRecipient;
     updated.reviewStatus = input.action === 'approve' ? 'approved' : 'rejected';
