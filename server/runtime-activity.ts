@@ -8,7 +8,8 @@ export function validateActivity(value: RuntimeActivity): RuntimeActivity {
   if (!value || typeof value.paused !== 'boolean' ||
       (value.lastCycleAt !== null && (typeof value.lastCycleAt !== 'string' || !Number.isFinite(Date.parse(value.lastCycleAt)))) ||
       !isCount(value.pendingPromotions) || !isCount(value.completedPlans) ||
-      !isCount(value.campaignsUsingOpenJarvis)) throw new Error('Resumen de actividad inválido.');
+      !isCount(value.campaignsUsingOpenJarvis) ||
+      (value.campaignsAwaitingOpenJarvis !== undefined && !isCount(value.campaignsAwaitingOpenJarvis))) throw new Error('Resumen de actividad inválido.');
   const { dates, series } = value.statistics || {};
   if (!Array.isArray(dates) || dates.length !== 90 ||
       dates.some((date, i) => typeof date !== 'string' || !validDay(date) ||
@@ -42,5 +43,6 @@ export function validateActivity(value: RuntimeActivity): RuntimeActivity {
     completedPlans: value.completedPlans, campaignsUsingOpenJarvis: value.campaignsUsingOpenJarvis,
     statistics: { dates: [...dates], series: cleanSeries },
     ...(overview ? { overview } : {}),
+    ...(value.campaignsAwaitingOpenJarvis !== undefined ? { campaignsAwaitingOpenJarvis: value.campaignsAwaitingOpenJarvis } : {}),
   };
 }

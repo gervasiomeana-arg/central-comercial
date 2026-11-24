@@ -3,7 +3,7 @@ import { marketFor } from './campaign-markets.js';
 import {normalize,researchQueriesFor,prospectingTerms} from './sales-director.js';
 export function prospectQuery(query:string,app:Application,country:string){
  const q=normalize(query),name=normalize(app.slug+' '+app.name);
- const audience=name.includes('voley')?/(club|federac|asociac|associac|escuela|escola|equipo)/:name.includes('visibility')?/(agencia|consultor|empresa|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin)/;
+ const audience=name.includes('voley')?/(club|federac|asociac|associac|associat|escuela|escola|school|equipe|equipo|team|vereniging)/:name.includes('visibility')?/(agencia|agency|agence|bureau|consult|empresa|business|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin|center|school|foundation|clinic|education|stichting|onderwijs|fondation|ecole|clinique)/;
  return (marketFor(country)?.aliases || [country]).some(alias=>q.includes(normalize(alias)))&&
    (audience.test(q) || researchQueriesFor(app,country).some(candidate=>normalize(candidate)===q))&&prospectingTerms(app,country).some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
 }

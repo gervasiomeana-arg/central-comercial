@@ -384,7 +384,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                               : 'bg-blue-600 text-white rounded-tr-xs shadow-xs'
                           }`}
                         >
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <p className="whitespace-pre-wrap">{msg.content}{msg.whatsappInvitation && `\n\n${msg.whatsappInvitation}`}</p>
                         </div>
 
                         {onReviewDraft && msg.direction === 'outbound' && ['email','whatsapp'].includes(msg.channel) && msg.status === 'preparado' && !msg.replacementMessageId && <DraftReviewPanel key={`${msg.id}-${msg.draftRevision || 0}`} message={msg} recipient={msg.channel==='whatsapp'?activeContact?.phone:activeContact?.email} onReview={input => onReviewDraft(activeConv.id, msg.id, input)}/>}
@@ -635,6 +635,6 @@ function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations,
   return <section aria-label="Estado comercial de WhatsApp" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
     <p className="font-semibold">WhatsApp {connected === true ? 'vinculado' : connected === false ? 'pendiente de vincular' : 'sin estado reciente de conexión'}</p>
     <p className="mt-1">{authorized} contactos con autorización registrada · {enabled} campañas con envío habilitado · {pending} mensajes preparados o pendientes · {accepted} envíos confirmados por el proveedor</p>
-    {authorized === 0 && <p className="mt-1">Para enviar promociones, Central necesita una autorización de WhatsApp registrada en la ficha del contacto.</p>}
+    {authorized === 0 && <p className="mt-1">Las promociones por correo de campañas con WhatsApp habilitado invitan al destinatario a autorizar el canal. Si ya recibiste una autorización, podés registrarla en la ficha del contacto.</p>}
   </section>;
 }
