@@ -26,8 +26,9 @@ const save=()=>{fs.writeFileSync(journalFile+'.tmp',JSON.stringify(journal),{mod
 const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('549')?'54'+digits.slice(3):digits;};
 let whatsappReady=false,running=false,stopping=false,verified=false;
 async function api(action,body={},area='channel-tests'){
- const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(15000),redirect:'error'});
- if(!response.ok){const error=new Error(`Central Comercial respondio HTTP ${response.status}`);error.httpStatus=response.status;throw error;}
+ const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(20000),redirect:'error'})
+   .catch(error => { throw new Error(`No se pudo consultar ${area}/${action}: ${error.message}`); });
+ if(!response.ok){const error=new Error(`Central Comercial respondió HTTP ${response.status} en ${area}/${action}`);error.httpStatus=response.status;throw error;}
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
@@ -81,23 +82,23 @@ async function tick(){
   const ready = whatsappReady && Boolean(account);
   // The authenticated commercial endpoint verifies the linked account against the owner.
   await api('heartbeat',{ready,account},'commercial-whatsapp');
-  await api('heartbeat',{email:false,whatsapp:ready});
+  await api('heartbeat',{email:false,whatsapp:ready}).catch(error => console.log(`Verificación de canales pendiente: ${error.message}`));
   if (ready && !verified) {
    verified=true;
    process.send?.({type:'healthy'});
    console.log('WhatsApp personal vinculado a Central Comercial.');
   }
-  if (ready) await ownerReportTick(account);
-  for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
-  if(!ready || !whatsappReady)return;
+  if (ready) await ownerReportTick(account).catch(error => console.log(`Informe personal pendiente: ${error.message}`));
+  if (!ready || !whatsappReady) return;
   await commercial.tick();
+  for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
   const {job}=await api('claim');if(!job)return;
   if(job.channel!=='whatsapp'||canonicalPhone(job.recipient)!==canonicalPhone(account))throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
   if(journal[job.id]){const previous=journal[job.id];await api('complete',{id:job.id,lease:job.lease,result:previous.result});previous.reported=true;save();return;}
   const entry=journal[job.id]={id:job.id,lease:job.lease,result:{state:'resultado_desconocido',evidence:'Intento iniciado; ante una interrupcion no se reenvia automaticamente.'}};save();
   try{entry.result=await sendWhatsAppTest(client,job);}catch{entry.result={state:'resultado_desconocido',evidence:'WhatsApp no confirmo el resultado. Revisar antes de reenviar.'};}
   save();await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();
- }catch(error){console.log(error.httpStatus===401?'El servidor rechazo la clave de enlace. Revise la configuracion compartida con el correo.':error.httpStatus===409?'Hay otro ejecutor de comprobaciones activo. Cierre el anterior y espere a que se desconecte.':`Conexion pendiente: ${error.message||'revise Internet'}`);}
+ }catch(error){console.log(error.httpStatus===401?'El servidor rechazo la clave de enlace. Revise la configuracion compartida con el correo.':`Conexion pendiente: ${error.message||'revise Internet'}`);}
  finally{running=false;}
 }
 console.log('Preparando WhatsApp dentro del inicio único de Central Comercial.');

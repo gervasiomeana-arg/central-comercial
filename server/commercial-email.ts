@@ -41,7 +41,7 @@ function worker(id: string) {
   return status;
 }
 export function claimCommercialEmail(id: string, now = new Date()) {
-  const status = worker(id), report = db.getSalesGoalReport(), goal = report.goal;
+  const status = worker(id), report = db.getSalesGoalProgress(), goal = report.goal;
   if (!status.send || report.paused || !goal.enabled) return null;
   const all = db.getConversations().flatMap(c => c.messages);
   const expired = all.filter(m => m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime());

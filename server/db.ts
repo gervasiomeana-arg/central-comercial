@@ -405,12 +405,15 @@ class DatabaseManager {
   private performRotatingBackup() {
     try {
       if (!fs.existsSync(DB_FILE)) return;
+      const now = new Date();
+      if (localOperationsEnabled() && this.lastBackupTime &&
+          now.getTime() - Date.parse(this.lastBackupTime) < 60000) return;
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const timestamp = now.toISOString().replace(/[:.]/g, '-');
       const backupPath = path.join(BACKUPS_DIR, `db_backup_${timestamp}.json`);
 
       fs.copyFileSync(DB_FILE, backupPath);
-      this.lastBackupTime = new Date().toISOString();
+      this.lastBackupTime = now.toISOString();
 
       // Keep max 10 backups
       const files = fs.readdirSync(BACKUPS_DIR)
@@ -729,12 +732,16 @@ class DatabaseManager {
   }
 
   public getMonthlyGoal(month = accountingDay().slice(0, 7)) { return this.data.monthlySalesGoals.find(g => g.month === month) || defaultGoal(month); }
-  public getSalesGoalReport(month = accountingDay().slice(0, 7)) {
+  public getSalesGoalProgress(month = accountingDay().slice(0, 7)) {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Mes no válido.');
     const goal = this.getMonthlyGoal(month);
-    const progress = goalProgress(goal, this.data.applications, this.data.payments, this.data.clients);
+    return { ...goalProgress(goal, this.data.applications, this.data.payments, this.data.clients),
+      paused: this.data.scheduler.automationsPaused };
+  }
+  public getSalesGoalReport(month = accountingDay().slice(0, 7)) {
+    const progress = this.getSalesGoalProgress(month);
     const apps = progress.apps.map(app => ({ ...app, operations: operationalSummary(this.getApplicationById(app.id)!, month, this.data.contacts, this.data.campaigns, this.data.conversations, this.data.payments, this.data.tasks) }));
-    return { ...progress, apps, worker: this.getCommercialEmailStatus(), unlimitedOutreach: unlimitedDirectorOutreach(goal), research: { ...this.data.researchState, visited: this.data.researchState.visited.length, unlimited: localOperationsEnabled() }, paused: this.data.scheduler.automationsPaused };
+    return { ...progress, apps, worker: this.getCommercialEmailStatus(), unlimitedOutreach: unlimitedDirectorOutreach(progress.goal), research: { ...this.data.researchState, visited: this.data.researchState.visited.length, unlimited: localOperationsEnabled() } };
   }
   public saveMonthlyGoal(input: MonthlySalesGoal) {
     validateGoal(input);
@@ -767,7 +774,7 @@ class DatabaseManager {
     this.processSalesDirector(); this.save();
   }
   public processSalesDirector() {
-    const report = this.getSalesGoalReport();
+    const report = this.getSalesGoalProgress();
     if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
     const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
     this.data.campaigns.push(...created);

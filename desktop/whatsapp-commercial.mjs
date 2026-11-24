@@ -53,7 +53,13 @@ export function commercialWhatsAppRunner({client,stateDir,call}){
  client.on('message',inbound);
  async function flush(){for(const [id,result]of Object.entries(state.outcomes)){try{await call('complete',result);}catch(error){if(error.httpStatus!==409)throw error;}delete state.outcomes[id];save();}}
  async function tick(){
-  await flush();const routing=await call('routing');state.routes=Object.fromEntries(routing.routes.map(r=>[r.chatId,true]));save();
+  await flush();
+  const routing = await call('routing');
+  const routes = Object.fromEntries(routing.routes.map(r => [r.chatId, true]));
+  if (Object.keys(routes).length !== Object.keys(state.routes).length || Object.keys(routes).some(chatId => !state.routes[chatId])) {
+   state.routes = routes;
+   save();
+  }
   for(const [id,message]of Object.entries(state.inbound)){try{await call('inbound',message);}catch(error){if(error.httpStatus!==409)throw error;}delete state.inbound[id];save();}
   const {job}=await call('claim');if(!job)return;
   const fingerprint=createHash('sha256').update(JSON.stringify([job.recipient,job.content])).digest('hex'),known=state.done[job.messageId];

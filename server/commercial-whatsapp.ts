@@ -17,18 +17,23 @@ export function whatsappHeartbeat(id:string,ready:boolean,account:string){
  if(active&&Date.now()-active.at<90000&&active.id!==id)throw new Error('Ya hay otro ejecutor WhatsApp activo.');active={id,at:Date.now(),ready};
 }
 export function claimWhatsApp(id:string,now=new Date()){
- worker(id);const report=db.getSalesGoalReport();if(report.paused||!report.goal.enabled)return null;
- const all=db.getConversations().flatMap(c=>c.messages);
- const expired = all.filter(m => m.channel === 'whatsapp' && m.status === 'envio_intentado' && (m.sendDeadline || 0) < now.getTime());
+ worker(id);const report=db.getSalesGoalProgress();if(report.paused||!report.goal.enabled)return null;
+ const threads = db.getConversations().filter(c => c.channel === 'whatsapp');
+ if (!threads.length) return null;
+ const expired = threads.flatMap(c => c.messages).filter(m => m.channel === 'whatsapp' && m.status === 'envio_intentado' && (m.sendDeadline || 0) < now.getTime());
  for (const m of expired) {
   m.status = 'resultado_desconocido';
   m.serviceError = 'Sin confirmación: no se reenvía automáticamente.';
  }
  if (expired.length) db.save();
+ const candidates = threads.filter(c => c.messages.some(m => m.direction === 'outbound' && m.channel === 'whatsapp' &&
+   m.status === 'preparado' && m.reviewStatus !== 'rejected' && !m.attemptedAt));
+ if (!candidates.length) return null;
+ const history = db.getConversations();
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
- if(!directorUnlimited&&all.filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
- const conversations=report.goal.directorEnabled?orderCommercialConversations(db.getConversations(),now):db.getConversations();
- for(const conv of conversations.filter(c=>c.channel==='whatsapp')){
+ if(!directorUnlimited&&history.flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
+ const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
+ for(const conv of conversations){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
   if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappAuthorized(contact,now))continue;
   for(const msg of conv.messages){
