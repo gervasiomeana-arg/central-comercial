@@ -32,7 +32,7 @@ export async function intelligenceCycle(){
 }
 async function runIntelligenceCycle(){
  if(!queue||db.getSchedulerState().automationsPaused)return;
- const report=db.getSalesGoalReport();if(!report.goal.enabled||!report.remaining)return;
+ const report=db.getSalesGoalProgress();if(!report.goal.enabled||!report.remaining)return;
  const campaigns=db.getCampaigns().filter(c=>db.campaignInActiveRun(c.id)&&c.goalMonth===report.goal.month&&['activa','lista','bloqueada_por_configuracion'].includes(c.status));
  const assignedByApp=new Map<string,number>();
  for(const c of campaigns){

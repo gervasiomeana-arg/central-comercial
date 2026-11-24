@@ -17,7 +17,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
   if(running)return;
   running=true;
   try {
-    const report=db.getSalesGoalReport(), goal=report.goal, state=db.getResearchState(), day=accountingDay();
+    const report=db.getSalesGoalProgress(), goal=report.goal, state=db.getResearchState(), day=accountingDay();
     if(!goal.enabled||!goal.discoverContacts||report.paused)return;
     if(state.month!==goal.month)Object.assign(state,{month:goal.month,day,requests:0,visited:[],status:'pending',detail:undefined,lastError:undefined});
     if(state.day!==day)Object.assign(state,{day,requests:0,status:'pending',detail:undefined});
@@ -99,7 +99,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       const intent=round>regions.length+1?['contacto institucional','email comercial','sitio oficial','asociación regional'][Math.floor(round/Math.max(1,regions.length))%4]:'';
       const query=fallback||[base,region,intent].filter(Boolean).join(' ');outcome.query=query;
       // Advance once per search, including failures; never repeat a single daily query forever.
-      if(!fallback){campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;}db.save();
+      if(!fallback){campaign.researchQueryIndex=(campaign.researchQueryIndex||0)+1;campaign.researchQueriesToday=(campaign.researchQueriesToday||0)+1;}
       try{
         const rss=await fetchPage(searchRequest(query,country,Boolean(fallback)));
         if(/anomaly-modal|challenge-form|<title>[^<]*captcha/i.test(rss.text)){state.blocked=true;throw new Error('El buscador requiere verificación humana. No se eludirá.');}
@@ -108,7 +108,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         if(!fallback&&!links.length)campaign.researchSearchFallbackQuery=query;else delete campaign.researchSearchFallbackQuery;
         // A search that returns only previously seen URLs is also exhausted.
         if(!added && !fallback && links.length){campaign.researchSearchFallbackQuery=query;}
-        db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados, ${added} enlaces nuevos para revisar; ${links.length-added} repetidos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'});
+        db.addLog('info','contactos',`Consulta pública para ${app.name}: ${links.length} resultados, ${added} enlaces nuevos para revisar; ${links.length-added} repetidos.`,{campaignId:campaign.id,query,provider:fallback?'DuckDuckGo HTML':'Bing RSS'}, false);
         state.lastSuccess=new Date().toISOString();delete state.lastError;
         reason(outcome,added?'Enlaces nuevos pendientes de verificación':links.length?'Resultados repetidos, sin enlaces nuevos':'Consulta sin páginas nuevas de organizaciones');
       }catch(error:any){
@@ -122,7 +122,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         const retryField=fallback?'fallbackRetryAt':'primaryRetryAt';
         if(!state.blocked)state[retryField]=Date.now()+30*60*1000;
         db.addLog('warning','contactos','La consulta pública no pudo completarse.',{campaignId:campaign.id,query,reason:state.lastError});
-        db.save();return;
+        return;
       }
       index=queue.findIndex(item=>(item.retryAt||0)<=Date.now());
     }
@@ -132,8 +132,8 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       try{
         const page=await fetchPage(candidate.url);outcome.checked++;
         const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context);
-        db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url});
-        if(db.getSchedulerState().automationsPaused)return;
+        db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url}, false);
+        if(db.getSchedulerState().automationsPaused){ db.save(); return; }
         queue.splice(index,1);seenCanonical.add(candidateKey(candidate));campaign.researchSeenUrls=[...seenCanonical].slice(-5000);
         reason(outcome,reviewed.reason);
         if(reviewed.contact){
@@ -177,6 +177,5 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     if(!state.blocked&&remaining()<=0){state.status='quota';state.detail='Cupo diario alcanzado. La cola se conserva para mañana.';}
     campaign.researchLastOutcome=outcome;
     db.addLog('info','contactos',`Investigación ${app.name}: ${outcome.created} contactos nuevos, ${outcome.checked} páginas revisadas.`,{campaignId:campaign.id,...outcome,pendingPages:queue.length,requestsToday:state.requests});
-    db.save();
   }finally{running=false;}
 }

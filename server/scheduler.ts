@@ -116,7 +116,7 @@ class CommercialScheduler {
         }
       }
 
-      const goal = db.getSalesGoalReport();
+      const goal = db.getSalesGoalProgress();
       const marketsWithContacts = new Set(contacts.flatMap(contact => (contact.interestedAppIds || [])
         .map(appId => JSON.stringify([appId,normalize(contact.country).trim()]))));
       for (const campaign of phase === 'revisar' ? [] : campaigns) {

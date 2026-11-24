@@ -8,10 +8,10 @@ import { americanMarkets, campaignCountryAllowed, marketLanguage, marketSearchNa
 export { normalize } from './campaign-markets.js';
 
 // Give each application an opportunity before one with more drafts takes another turn.
-export function orderCommercialConversations(conversations: Conversation[], now: Date) {
+export function orderCommercialConversations(conversations: Conversation[], now: Date, history = conversations) {
   const day = accountingDay(now);
   const attempts = new Map<string,number>();
-  for (const conversation of conversations) {
+  for (const conversation of history) {
     const count = conversation.messages.filter(message => message.direction === 'outbound' &&
       !message.replyToProviderId && message.attemptedAt && accountingDay(new Date(message.attemptedAt)) === day).length;
     attempts.set(conversation.appId, (attempts.get(conversation.appId) || 0) + count);

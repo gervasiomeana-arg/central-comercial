@@ -126,7 +126,7 @@ export class JarvisQueue {
 
 export function enqueueJarvisPlan(queue: JarvisQueue, appId: unknown, country: unknown, options?: { directorLocal?: boolean }) {
   if (!text(appId, 100) || !text(country, 100)) throw new Error('Elegí una aplicación y un país del objetivo mensual.');
-  const app = db.getApplicationById(appId as string), report = db.getSalesGoalReport();
+  const app = db.getApplicationById(appId as string), report = db.getSalesGoalProgress();
   if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Esta aplicación todavía no está habilitada para campañas.');
   if (!report.goal.countries.includes(country as string) || !campaignCountryAllowed(app, country as string)) throw new Error('El país debe estar incluido en el objetivo mensual.');
   // No contacts, message histories, balances, credentials or unverified offers leave this boundary.
