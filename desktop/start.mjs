@@ -39,7 +39,10 @@ function launch(name, command, args, options = {}) {
   if(stopping)return null;
   const at = Date.now();
   const effectiveArgs=command===process.execPath?args:[path.join(root,'desktop','managed-native.mjs'),command,...args];
-  const child = spawn(process.execPath, effectiveArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], ...options });
+  const background = name === 'intelligence' || name === 'ollama';
+  const child = spawn(process.execPath, effectiveArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], ...options,
+    ...(background ? {env:{...(options.env || process.env), CENTRAL_NATIVE_BACKGROUND:'true'}} : {}),
+  });
   children.add(child);
   if (['email', 'whatsapp', 'intelligence'].includes(name)) components[name] = 'running';
   // Keep output only in this window. In particular, QR codes are never sent to the app.

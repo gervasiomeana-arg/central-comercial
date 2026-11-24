@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 const [command, ...args] = process.argv.slice(2);
 if (!process.send || !command) throw new Error('Este componente solo se inicia desde Central Comercial.');
 const child = spawn(command, args, { stdio: 'inherit', windowsHide: true });
+if (process.platform === 'win32' && process.env.CENTRAL_NATIVE_BACKGROUND === 'true' && child.pid) {
+  try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); }
+  catch { console.log('Windows conserva la prioridad de proceso actual.'); }
+}
 let ending = false;
 function stop(code = 75) {
   if (ending) return; ending = true;

@@ -56,22 +56,44 @@ async function send(){
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
   const validity=String(imap.mailbox.uidValidity);if(state.validity!==validity){state.validity=validity;state.uid=Math.max(0,Number(imap.mailbox.uidNext)-51);save();}
-  if (state.bounceReviewValidity !== validity) {
-    const recent = await imap.search({since:new Date(Date.now()-7*86400000), or:[{from:'mailer-daemon'},{from:'postmaster'}]}, {uid:true});
-    if (!Array.isArray(recent)) throw new Error('No se pudo revisar el historial de rebotes.');
-    const historical = recent.filter(uid=>uid<=state.uid).slice(-250);
-    if (historical.length) await readMessages(historical, threads, true);
-    state.bounceReviewValidity=validity;
+  if (state.bounceReviewValidity !== validity && state.bounceReview?.validity !== validity) {
+    try {
+      const recent = await imap.search({since:new Date(Date.now()-7*86400000), or:[{from:'mailer-daemon'},{from:'postmaster'}]}, {uid:true});
+      if (Array.isArray(recent)) {
+        state.bounceReview = {validity, uids:recent.filter(uid=>uid<=state.uid).slice(-250)};
+        save();
+      }
+    } catch (error) {
+      if (!imap.usable) throw error;
+      console.error('Revisión histórica pendiente:', error.message);
+    }
+  }
+  const upper = Math.min(Number(imap.mailbox.uidNext) - 1, state.uid + 30);
+  if (upper > state.uid) {
+    await readMessages(`${state.uid+1}:${upper}`, threads);
+    state.uid = upper;
     save();
   }
-  const upper=Number(imap.mailbox.uidNext)-1;if(upper<=state.uid)return;
-  await readMessages(`${state.uid+1}:${upper}`, threads);
-  state.uid=upper;save();
+  if (state.bounceReview?.validity === validity) {
+    const uids = state.bounceReview.uids.slice(0, 12);
+    try {
+      if (uids.length) await readMessages(uids, threads, true);
+      state.bounceReview.uids.splice(0, uids.length);
+      if (!state.bounceReview.uids.length) {
+        state.bounceReviewValidity = validity;
+        delete state.bounceReview;
+      }
+      save();
+    } catch (error) {
+      if (!imap.usable) throw error;
+      console.error('Lote histórico pendiente:', error.message);
+    }
+  }
 }
 async function readMessages(range, threads, onlyBounces = false) {
   const pending=[];
   // Collect first. Never run another IMAP command inside the fetch iterator.
-  for await(const message of imap.fetch(range,{uid:true,headers:['message-id','in-reply-to','references','auto-submitted','content-type'],envelope:true,size:true},{uid:true})){
+  for await(const message of imap.fetch(range,{uid:true,headers:['message-id','in-reply-to','references','auto-submitted','content-type'],envelope:true,size:true,internalDate:true},{uid:true})){
     const headers=message.headers?.toString('utf8')||'', from=message.envelope?.from?.[0]?.address?.toLowerCase();
     const refs=headers.match(/<[^<>\r\n]+>/g)||[];
     const automatic=/auto-submitted:\s*(?!no\b)/i.test(headers);
@@ -80,15 +102,19 @@ async function readMessages(range, threads, onlyBounces = false) {
     const dsn = /^content-type:\s*multipart\/report[^\r\n]*report-type\s*=\s*"?delivery-status/im.test(unfolded) &&
       /^(mailer-daemon|postmaster)@/i.test(from || '');
     if (dsn || (!onlyBounces && !automatic && threads.some(t => t.from === from && refs.includes(t.id)))) {
-      pending.push({ uid: message.uid, from, refs, headers, dsn });
+      pending.push({ uid: message.uid, from, refs, headers, dsn, reportedAt:message.internalDate });
     }
   }
+  const bounces = [];
   for (const entry of pending) {
     const message = await imap.fetchOne(entry.uid, { source: true }, { uid: true });
-    if (!message?.source) throw new Error('No se pudo leer una notificación vinculada.');
+    if (!message) continue;
+    if (!message.source) throw new Error('No se pudo leer una notificación vinculada.');
     const mail = await simpleParser(message.source, { skipHtmlToText:true, skipTextToHtml:true, keepDeliveryStatus:true });
     if (entry.dsn) {
-      for (const bounce of collectBounces(mail, entry.headers, threads, entry.from)) await api('bounce', bounce);
+      bounces.push(...collectBounces(mail, entry.headers, threads, entry.from).map(bounce => ({
+        ...bounce, reportedAt:entry.reportedAt,
+      })));
     } else if (mail.messageId && mail.text?.trim()) {
       try {
         await api('inbound', { from:entry.from, messageId:mail.messageId, references:entry.refs, text:mail.text.slice(0,30000), automatic:false });
@@ -98,6 +124,7 @@ async function readMessages(range, threads, onlyBounces = false) {
       }
     }
   }
+  for (let i=0; i<bounces.length; i+=50) await api('bounces', {items:bounces.slice(i,i+50)});
 }
 let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();try{await read();}catch(error){if(!imap?.usable)throw error;console.error("Lectura del buzón pendiente:",error.message);return;}await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
 const stop=()=>{imap?.close();smtp.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
