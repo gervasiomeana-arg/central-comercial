@@ -759,13 +759,14 @@ class DatabaseManager {
     if((goal.dailyResearchLimit>previous.dailyResearchLimit || (goal.dailyResearchLimit===0 && previous.dailyResearchLimit>0))&&!this.data.researchState.blocked){for(const c of this.data.campaigns.filter(c=>c.goalMonth===goal.month))delete c.researchNextAttemptAt;}
     this.processSalesDirector(); this.save(); return this.getSalesGoalReport(goal.month);
   }
-  public startMonthlyDirector() {
+  public startMonthlyDirector(preferredChannel?: 'whatsapp') {
     const current = this.getMonthlyGoal();
     validateGoal(current);
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
     const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets] } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
-      directorChannels: ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
+      directorChannels: preferredChannel === 'whatsapp' || current.directorChannels?.[0] === 'whatsapp'
+        ? ['whatsapp', 'email'] : ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
     delete this.data.autonomousRun;
@@ -1360,6 +1361,7 @@ class DatabaseManager {
     let messagesPending = 0;
     let messagesSent = 0;
     let messagesFailed = 0;
+    let messagesBounced = 0;
     let messagesUnknown = 0;
     let responsesReceived = 0;
 
@@ -1368,8 +1370,11 @@ class DatabaseManager {
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
           if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') messagesPending++;
-          else if (m.status === 'enviado' || (m.status === 'aceptado_proveedor' && m.acceptedAt && m.serviceConfirmationId)) messagesSent++;
-          else if (m.status === 'fallido') messagesFailed++;
+          else if (['enviado','aceptado_proveedor','entrega_confirmada'].includes(m.status) && m.serviceConfirmationId) messagesSent++;
+          else if (m.status === 'fallido') {
+            messagesFailed++;
+            if (m.channel === 'email' && /^Rebote permanente confirmado:/.test(m.serviceError || '')) messagesBounced++;
+          }
           else if (m.status === 'resultado_desconocido') messagesUnknown++;
         } else if (m.direction === 'inbound') {
           responsesReceived++;
@@ -1387,6 +1392,7 @@ class DatabaseManager {
       messagesPending,
       messagesSent,
       messagesFailed,
+      messagesBounced,
       messagesUnknown,
       responsesReceived,
       interestedCount: contacts.filter(c => c.status === 'interesado').length,

@@ -68,6 +68,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
     const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappAuthorized(contact, now);
+    const whatsappFirst = campaign.channels[0] === 'whatsapp' && campaign.autoSendWhatsApp === true;
     const emailAllowed = campaign.channels.includes('email') &&
       (contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
         campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact'));
@@ -89,12 +90,13 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
           !message.attemptedAt && !message.serviceConfirmationId;
         if (message.direction === 'outbound' && message.channel === 'email' &&
             !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected' &&
-            (definitelyRejectedEmail(message) || (invalidAddress && (unsent ||
+            (definitelyRejectedEmail(message) || (whatsappFirst && unsent && message.reviewStatus !== 'approved') ||
+              (invalidAddress && (unsent ||
               (message.status === 'fallido' && message.approvedRecipient === email))))) replacedEmail = message;
       }
       if (!replacedEmail) { skip('Ya preparado en esta campaña'); continue; }
     }
-    const channel = whatsappAllowed && (replacedEmail || contact.preferredChannel === 'whatsapp' || !emailUsable)
+    const channel = whatsappAllowed && (replacedEmail || whatsappFirst || contact.preferredChannel === 'whatsapp' || !emailUsable)
       ? 'whatsapp' : emailUsable ? 'email' : undefined;
     if (!channel) { skip('Sin correo utilizable ni WhatsApp autorizado'); continue; }
     const recipient = channel === 'whatsapp' ? whatsappPhone(contact.phone) : email;

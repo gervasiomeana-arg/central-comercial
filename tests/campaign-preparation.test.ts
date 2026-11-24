@@ -98,3 +98,15 @@ test('channel-specific WhatsApp authorization works independently of the general
   assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, permission:'revocado'}], [], now).drafts.length, 0);
   assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, whatsappConsent:undefined}], [], now).drafts.length, 0);
 });
+
+test('la prioridad explícita de WhatsApp cambia un borrador sin intento y conserva el correo de quienes no autorizaron', () => {
+  const granted = contact('one', optIn);
+  const ungranted = contact('two');
+  const emailDraft = prepareCampaign(whatsappCampaign, app, [granted], [], now).drafts[0];
+  const priority = {...whatsappCampaign, dailyLimit:3, channels:['whatsapp','email']} as Campaign;
+  const selected = prepareCampaign(priority, app, [granted, ungranted], [emailDraft], now);
+  assert.deepEqual(selected.drafts.map(d=>d.channel), ['whatsapp','email']);
+  assert.equal(selected.replacements[0]?.email.id,emailDraft.messages[0].id);
+  emailDraft.messages[0].status='aceptado_proveedor';
+  assert.equal(prepareCampaign(priority, app, [granted], [emailDraft], now).drafts.length,0);
+});

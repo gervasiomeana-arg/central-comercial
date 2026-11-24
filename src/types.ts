@@ -407,6 +407,7 @@ export interface DashboardMetrics {
   messagesPending: number;
   messagesSent: number;
   messagesFailed: number;
+  messagesBounced?: number;
   messagesUnknown: number;
   responsesReceived: number;
   interestedCount: number;
