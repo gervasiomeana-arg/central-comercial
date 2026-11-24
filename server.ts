@@ -86,6 +86,11 @@ const pcRecords = new PcRecordsRelay();
 registerLocalRuntimeRoutes(app, localRuntime, workerId =>
   cloudMonitorMode() && googleAdminConfig() ? pcRecords.claim(workerId) : undefined);
 registerPcRecordsRoutes(app, localRuntime, pcRecords);
+app.get('/api/local-runtime/ready',(req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  if (!localMode || !workerAuthorized(req.headers.authorization)) return res.status(401).json({error:'Computadora no autorizada.'});
+  res.json({instance:process.env.CENTRAL_BACKEND_INSTANCE});
+});
 app.get('/api/local-runtime/report',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!localMode || !workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
@@ -128,9 +133,6 @@ app.get('/api/local-runtime/report',(req,res)=>{
 });
 registerCheckpointRoute(app);
 registerCommercialBatches(app, requireAdminAuth, () => jarvis.status().ready, () => jarvis.pendingPlanning());
-
-// Start background task runner
-if (!publishedProxy) scheduler.start(30000);
 
 // --- PUBLIC AUTH & HEALTH ROUTES ---
 
@@ -371,7 +373,16 @@ adminRouter.post('/channel-tests', (req, res) => {
 adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalReport(typeof req.query.month === 'string' ? req.query.month : undefined)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 
-adminRouter.post('/automation/director/start', (req,res)=>{try{db.startMonthlyDirector();void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
+adminRouter.post('/automation/director/start', (req,res)=>{
+  try {
+    const channel = req.body?.preferredChannel;
+    if (channel !== undefined && channel !== 'whatsapp') throw new Error('Canal de prioridad inválido.');
+    if (channel === 'whatsapp' && !whatsappStatus().ready) throw new Error('WhatsApp todavía no está vinculado al ejecutor.');
+    db.startMonthlyDirector(channel);
+    void scheduler.tick();
+    res.json(db.getAutonomousRunReport(whatsappStatus().ready));
+  } catch(error:any) { res.status(400).json({error:error.message}); }
+});
 adminRouter.get('/automation/run', (req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.json(db.getAutonomousRunReport(whatsappStatus().ready));
@@ -1231,8 +1242,13 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, localMode?'127.0.0.1':'0.0.0.0', () => {
+  const listener = app.listen(PORT, localMode?'127.0.0.1':'0.0.0.0', () => {
+    if (!publishedProxy) scheduler.start(30000);
     console.log(`[Central Comercial] Servidor activo en http://${localMode?'127.0.0.1':'0.0.0.0'}:${PORT}`);
+  });
+  listener.on('error', (error: NodeJS.ErrnoException) => {
+    console.error(`[Central Comercial] No pudo abrir el puerto ${PORT} (${error.code || error.message}).`);
+    process.exit(error.code === 'EADDRINUSE' ? 78 : 75);
   });
 }
 

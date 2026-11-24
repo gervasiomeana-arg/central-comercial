@@ -33,6 +33,7 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
+let backendStarted = false;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
   if(stopping)return null;
@@ -49,11 +50,13 @@ function launch(name, command, args, options = {}) {
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
   });
   let ended = false;
-  const onExit = code => {
+  const onExit = (code, signal) => {
     if (ended) return; ended = true; children.delete(child);
     if (name in components) components[name] = 'stopped';
     if (stopping) return;
     issues.add('component_stopped');
+    log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
+    if (name === 'backend' && !backendStarted) return;
     if (code === 78) { log(name, 'Se necesita revisar la autorización. No se reintenta hasta corregirla.'); return; }
     const count = Date.now() - at > 600000 ? 1 : (restartCounts.get(name) || 0) + 1; restartCounts.set(name, count);
     const wait = retryDelay(count); log(name, `Recuperación automática en ${Math.round(wait / 1000)} segundos. Se conserva el registro de trabajos.`);
@@ -91,10 +94,29 @@ if (!dependenciesReady(root) || !fs.existsSync(path.join(root, 'dist', 'index.ht
 }
 const records=await prepareLocalRecords(root,runtimeDir,config);
 config.url=new URL('http://127.0.0.1:39300');
-launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DIAGNOSTIC_MODE:String(diagnosticMode),CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,PORT:'39300'}});
-let backendReady=false;
-for(let attempt=0;attempt<30;attempt++){try{const status=await fetch(new URL('/api/status',config.url),{signal:AbortSignal.timeout(1000)}).then(r=>r.json());if(status.appName==='Central Comercial'&&status.localMode&&status.diagnosticMode===diagnosticMode){backendReady=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,1000));}
-if(!backendReady)throw new Error('El servidor local no inició. Se conservan los registros para el próximo intento.');
+const instance = randomUUID();
+const backend = launch('backend',process.execPath,['--import','tsx',path.join(root,'server.ts')],{cwd:root,env:{...jarvisEnvironment(profileDirectory()),NODE_ENV:'production',CENTRAL_LOCAL_MODE:'true',CENTRAL_DIAGNOSTIC_MODE:String(diagnosticMode),CENTRAL_DATA_DIR:records,CHANNEL_TEST_WORKER_KEY:config.key,CENTRAL_BACKEND_INSTANCE:instance,PORT:'39300'}});
+const deadline = Date.now() + 90000;
+while (!stopping && backend?.pid && backend.exitCode === null && !backend.signalCode && Date.now() < deadline) {
+  try {
+    const response = await fetch(new URL('/api/local-runtime/ready',config.url),{
+      headers:{Authorization:`Bearer ${config.key}`},signal:AbortSignal.timeout(3000),redirect:'error',
+    });
+    if (response.ok && (await response.json()).instance === instance) {
+      backendStarted = true;
+      break;
+    }
+  } catch {}
+  await new Promise(resolve=>setTimeout(resolve,1000));
+}
+if (!backendStarted) {
+  if (backend?.exitCode === 78) {
+    log('central', 'Hay otra aplicación usando el puerto local. Se conservan los registros; revisá el proceso que ocupa el puerto.');
+    process.exit(78);
+  }
+  if (backend?.exitCode === null && !backend.signalCode) backend.kill();
+  throw new Error('El servidor local no confirmó el arranque de este iniciador. Se conservan los registros.');
+}
 function profileDirectory(){return path.join(runtimeDir,'intelligence');}
 const emailWorker = path.join(config.directory, 'worker.mjs');
 if (fs.existsSync(emailWorker) && fs.existsSync(path.join(config.directory, 'node_modules'))) { upgradeWorker(path.join(root, 'email-worker', 'journal.mjs'), path.join(config.directory,'journal.mjs')); upgradeWorker(path.join(root, 'email-worker', 'worker.mjs'), emailWorker); launch('email', process.execPath, [emailWorker], { cwd: config.directory,env:{...process.env,CENTRAL_URL:config.url.href} }); }

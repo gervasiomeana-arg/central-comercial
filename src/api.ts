@@ -86,7 +86,7 @@ export const api = {
   applyAssistantCampaign: (entryId: string) => fetchJson<import('./assistant-types.js').AssistantState>(`/api/assistant/messages/${encodeURIComponent(entryId)}/apply-campaign`, { method: 'POST' }),
   getJarvisStatus: () => fetchJson<import('./openjarvis-types.js').JarvisStatus>('/api/openjarvis'),
   prepareJarvisPlan: (appId: string, country: string) => fetchJson<{ id: string }>('/api/openjarvis/plans', { method: 'POST', body: JSON.stringify({ appId, country }) }),
-  startMonthlyDirector:()=>fetchJson<any>('/api/automation/director/start',{method:'POST',body:'{}'}),
+  startMonthlyDirector:(preferredChannel?: 'whatsapp')=>fetchJson<any>('/api/automation/director/start',{method:'POST',body:JSON.stringify({preferredChannel})}),
   getAutonomousRun:()=>fetchJson<any>('/api/automation/run'),
   startAutonomousRun:(input:import('./types.js').StartAutonomousInput)=>fetchJson<any>('/api/automation/start',{method:'POST',body:JSON.stringify(input)}),
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
