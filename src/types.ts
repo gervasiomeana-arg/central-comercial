@@ -232,6 +232,7 @@ export interface Message {
   replyToProviderId?: string;
   replacementMessageId?: string;
   whatsappInvitation?: string;
+  emailFailureAt?: string;
   emailSubject?: string;
   sendLease?: string;
   sendWorker?: string;

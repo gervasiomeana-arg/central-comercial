@@ -18,7 +18,7 @@ export function finishMessage(state, job, result) {
   state.done[job.messageId] = { fingerprint: fingerprint(job), outcome: result.outcome, response: result.response };
 }
 
-export function collectBounces(mail, originalHeaders, threads) {
+export function collectBounces(mail, originalHeaders, threads, sender) {
   const deliveryParts = mail.attachments.filter(part => part.contentType === 'message/delivery-status');
   const originalParts = mail.attachments.filter(part => ['text/rfc822-headers','message/rfc822'].includes(part.contentType));
   const ids = new Set((originalHeaders.match(/<[^<>\r\n]+>/g) || []));
@@ -35,7 +35,18 @@ export function collectBounces(mail, originalHeaders, threads) {
       const status = block.match(/^Status:[ \t]*(5\.\d{1,3}\.\d{1,3})[ \t]*\r?$/im)?.[1];
       if (!address || !status || !/^Action:[ \t]*failed[ \t]*\r?$/im.test(block)) continue;
       const references = threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id);
-      if (references.length) bounces.push({ recipient: address, status, references });
+      const diagnostic = block.match(/^Diagnostic-Code:[ \t]*smtp;[ \t]*([^\r\n]+)/im)?.[1];
+      if (references.length) bounces.push({ recipient: address, status, references, diagnostic });
+    }
+  }
+  if (!bounces.length && /^mailer-daemon@(?:googlemail|gmail)\.com$/i.test(sender || '') &&
+      originalParts.length && typeof mail.text === 'string') {
+    const address = mail.text.match(/^(?:Your message (?:wasn't delivered to |to )|There was a problem delivering your message to )([^\s<>]+@[^\s<>]+?)(?=[.,]?(?:\s|$))/im)?.[1]?.toLowerCase();
+    const response = mail.text.match(/^The response(?: from the remote server)? was:[ \t]*\r?\n\s*(5\d{2})(?:[ -]+(5\.\d{1,3}\.\d{1,3}))?[^\r\n]*/im);
+    const references = address ? threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id) : [];
+    if (address && response && references.length) {
+      const diagnostic = response[0].split(/\r?\n/).slice(1).join(' ').trim().slice(0,350);
+      bounces.push({ recipient:address, status:response[2] || '5.0.0', references, diagnostic });
     }
   }
   return bounces;

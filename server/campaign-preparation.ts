@@ -89,7 +89,8 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
           !message.attemptedAt && !message.serviceConfirmationId;
         if (message.direction === 'outbound' && message.channel === 'email' &&
             !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected' &&
-            (definitelyRejectedEmail(message) || (invalidAddress && unsent))) replacedEmail = message;
+            (definitelyRejectedEmail(message) || (invalidAddress && (unsent ||
+              (message.status === 'fallido' && message.approvedRecipient === email))))) replacedEmail = message;
       }
       if (!replacedEmail) { skip('Ya preparado en esta campaña'); continue; }
     }

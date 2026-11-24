@@ -56,17 +56,30 @@ async function send(){
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
   const validity=String(imap.mailbox.uidValidity);if(state.validity!==validity){state.validity=validity;state.uid=Math.max(0,Number(imap.mailbox.uidNext)-51);save();}
+  if (state.bounceReviewValidity !== validity) {
+    const recent = await imap.search({since:new Date(Date.now()-7*86400000), or:[{from:'mailer-daemon'},{from:'postmaster'}]}, {uid:true});
+    if (!Array.isArray(recent)) throw new Error('No se pudo revisar el historial de rebotes.');
+    const historical = recent.filter(uid=>uid<=state.uid).slice(-250);
+    if (historical.length) await readMessages(historical, threads, true);
+    state.bounceReviewValidity=validity;
+    save();
+  }
   const upper=Number(imap.mailbox.uidNext)-1;if(upper<=state.uid)return;
+  await readMessages(`${state.uid+1}:${upper}`, threads);
+  state.uid=upper;save();
+}
+async function readMessages(range, threads, onlyBounces = false) {
   const pending=[];
   // Collect first. Never run another IMAP command inside the fetch iterator.
-  for await(const message of imap.fetch(`${state.uid+1}:${upper}`,{uid:true,headers:['message-id','in-reply-to','references','auto-submitted','content-type'],envelope:true,size:true},{uid:true})){
+  for await(const message of imap.fetch(range,{uid:true,headers:['message-id','in-reply-to','references','auto-submitted','content-type'],envelope:true,size:true},{uid:true})){
     const headers=message.headers?.toString('utf8')||'', from=message.envelope?.from?.[0]?.address?.toLowerCase();
     const refs=headers.match(/<[^<>\r\n]+>/g)||[];
     const automatic=/auto-submitted:\s*(?!no\b)/i.test(headers);
     if (message.size > 1000000) continue;
-    const dsn = /content-type:\s*multipart\/report[^\r\n]*(?:\r?\n[ \t].*)*report-type\s*=\s*"?delivery-status/i.test(headers) &&
+    const unfolded = headers.replace(/\r?\n[ \t]+/g, ' ');
+    const dsn = /^content-type:\s*multipart\/report[^\r\n]*report-type\s*=\s*"?delivery-status/im.test(unfolded) &&
       /^(mailer-daemon|postmaster)@/i.test(from || '');
-    if (dsn || (!automatic && threads.some(t => t.from === from && refs.includes(t.id)))) {
+    if (dsn || (!onlyBounces && !automatic && threads.some(t => t.from === from && refs.includes(t.id)))) {
       pending.push({ uid: message.uid, from, refs, headers, dsn });
     }
   }
@@ -75,14 +88,18 @@ async function read(){
     if (!message?.source) throw new Error('No se pudo leer una notificación vinculada.');
     const mail = await simpleParser(message.source, { skipHtmlToText:true, skipTextToHtml:true, keepDeliveryStatus:true });
     if (entry.dsn) {
-      for (const bounce of collectBounces(mail, entry.headers, threads)) await api('bounce', bounce);
+      for (const bounce of collectBounces(mail, entry.headers, threads, entry.from)) await api('bounce', bounce);
     } else if (mail.messageId && mail.text?.trim()) {
-      await api('inbound', { from:entry.from, messageId:mail.messageId, references:entry.refs, text:mail.text.slice(0,30000), automatic:false });
+      try {
+        await api('inbound', { from:entry.from, messageId:mail.messageId, references:entry.refs, text:mail.text.slice(0,30000), automatic:false });
+      } catch (error) {
+        if (error.status !== 400) throw error;
+        console.error('Una respuesta requiere revisión manual. Se conserva en el buzón.');
+      }
     }
   }
-  state.uid=upper;save();
 }
-let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();try{await read();}catch(error){if(!imap?.usable)throw error;console.error("Lectura del buzón pendiente:",error.message);}await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
+let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();try{await read();}catch(error){if(!imap?.usable)throw error;console.error("Lectura del buzón pendiente:",error.message);return;}await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
 const stop=()=>{imap?.close();smtp.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 if(process.send)process.on('disconnect',stop);
 const batch = env.CENTRAL_EMAIL_BATCH;
@@ -93,6 +110,7 @@ if (batch === 'enviar' || batch === 'revisar') {
   await flush();
   if (batch === 'revisar') await read();
   else {
+   await read();
    while (await send()) {
     if (authBlocked) throw new Error('La autorización del correo requiere revisión.');
     await new Promise(resolve => setTimeout(resolve, 1500));
