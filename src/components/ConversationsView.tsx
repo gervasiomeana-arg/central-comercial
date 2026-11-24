@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { emailPromotionHold } from '../email-policy.js';
 import { whatsappAuthorized } from '../whatsapp-policy.js';
 import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
 import React, { useState, useEffect } from 'react';
@@ -94,6 +95,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [newConvAppId, setNewConvAppId] = useState(applications[0]?.id || '');
   const [newConvInitialMsg, setNewConvInitialMsg] = useState('');
 
+  const emailHoldUntil = emailPromotionHold(conversations.flatMap(c => c.messages));
   const filteredConversations = conversations.filter(conv => {
     const matchesApp =
       selectedAppFilter === 'all' || conv.appId === selectedAppFilter;
@@ -242,6 +244,9 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
         </div>
       </div>
 
+      {emailHoldUntil && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Promociones por correo en pausa por fallos confirmados a cinco destinatarios en la última hora. Próxima revisión {new Date(emailHoldUntil).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Argentina/Buenos_Aires'})}.
+      </p>}
       {channel === 'whatsapp' && <WhatsAppOverview viewingPcRecords={viewingPcRecords}
         contacts={contacts} campaigns={campaigns} conversations={conversations} appFilter={selectedAppFilter}/>}
       {replyError && <p className="cc-inbox-feedback is-error" role="alert">{replyError}</p>}

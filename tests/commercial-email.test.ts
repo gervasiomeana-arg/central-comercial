@@ -115,3 +115,34 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     }
   }finally{await fs.rm(directory,{recursive:true,force:true});}
 });
+
+test('recupera avisos de Gmail sin parte DSN y conserva el diagnóstico real', async () => {
+  const {collectBounces} = await import('../email-worker/journal.mjs');
+  const recipient = 'contacto@institucion.test';
+  const id = '<cc-prueba@sender.test>';
+  const threads = [{ id, from: recipient }];
+  const mail = {
+    attachments:[{contentType:'message/delivery-status',content:Buffer.from('')},
+      {contentType:'text/rfc822-headers',content:Buffer.from(`Message-ID: ${id}\r\n`)}],
+    text:`** Address not found **\r\n\r\nYour message wasn't delivered to ${recipient} because the address couldn't be found.\r\n\r\nThe response from the remote server was:\r\n550 5.7.1 Recipient address rejected: User unknown in local recipient table`,
+  };
+  assert.deepEqual(collectBounces(mail, '', threads, 'mailer-daemon@googlemail.com'), [{
+    recipient, status:'5.7.1', references:[id], diagnostic:'550 5.7.1 Recipient address rejected: User unknown in local recipient table',
+  }]);
+  assert.deepEqual(collectBounces(mail, '', threads, 'unknown@other.test'), []);
+  assert.deepEqual(collectBounces(mail, '', [{id,from:'other@institucion.test'}], 'mailer-daemon@googlemail.com'), []);
+  assert.deepEqual(collectBounces({...mail,text:mail.text.replace('550 5.7.1','450 4.7.1')}, '', threads, 'mailer-daemon@googlemail.com'), []);
+});
+
+test('pone en pausa nuevas promociones tras fallos confirmados a cinco destinatarios distintos', async () => {
+  const {emailPromotionHold} = await import('../src/email-policy.js');
+  const now = Date.parse('2026-11-24T14:30:00Z');
+  const failed = Array.from({length:5},(_,i)=>({
+    channel:'email', direction:'outbound', status:'fallido', approvedRecipient:`contact-${i}@institucion.test`,
+    emailFailureAt:new Date(now-(i+1)*60000).toISOString(),
+  })) as Parameters<typeof emailPromotionHold>[0];
+  assert.equal(emailPromotionHold(failed,now),now+55*60000);
+  assert.equal(emailPromotionHold([...failed.slice(0,4),failed[0]],now),undefined);
+  assert.equal(emailPromotionHold(failed.map((m,i)=>i===0?{...m,replyToProviderId:'reply'}:m),now),undefined);
+  assert.equal(emailPromotionHold(failed,now+55*60000),undefined);
+});

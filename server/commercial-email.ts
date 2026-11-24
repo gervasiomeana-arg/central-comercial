@@ -1,6 +1,6 @@
 import { whatsappAuthorized, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {usableContactEmail} from '../src/email-policy.js';
+import {emailPromotionHold, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -50,6 +50,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.';
   }
   if (expired.length) db.save();
+  const promotionHold = emailPromotionHold(all, now.getTime());
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   if (!directorUnlimited && all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
@@ -61,7 +62,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       const replying = Boolean(msg.replyToProviderId);
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
-        if (!campaignCountryAllowed(app, contact.country)) continue;
+        if (promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined && db.getConversations().filter(c=>c.campaignId===campaign.id).flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&!m.replyToProviderId&&m.attemptedAt).length >= campaign.maxContacts) continue;
@@ -102,32 +103,51 @@ export function completeCommercialEmail(input: any) {
     if (contact.status === 'prospecto') contact.status = 'contactado';
     contact.history.push({ id: randomUUID(), type:'mensaje_enviado', timestamp:msg.acceptedAt, description:'Correo aceptado por SMTP. No confirma entrega ni lectura.', author:'Central Comercial' });
     if (conv.campaignId) { const c = db.getCampaignById(conv.campaignId); if(c) c.stats.messagesSent++; }
-  } else msg.serviceError = String(input.response || 'Sin confirmación del proveedor').slice(0,500);
+  } else {
+    msg.serviceError = String(input.response || 'Sin confirmación del proveedor').slice(0,500);
+    if (msg.status === 'fallido' && /^5\d{2}(?:[ -]|$)/.test(msg.serviceError)) {
+      msg.emailFailureAt = new Date().toISOString();
+      if (msg.approvedRecipient) suppressInvalidEmail(msg.approvedRecipient, msg.serviceError);
+    }
+  }
   db.addLog(accepted ? 'info' : 'warning', 'conversaciones', `Correo ${msg.status}`, { conversationId:conv.id, messageId:msg.id }); db.save(); return { success:true };
 }
-export function recordCommercialBounce(input: { references?: unknown; recipient?: unknown; status?: unknown }) {
+function suppressInvalidEmail(recipient: string, diagnostic: string, status?: string) {
+  const invalidMailbox = ['5.1.1', '5.1.3', '5.1.10'].includes(status || '') ||
+    /\b5\.1\.(?:1|3|10)\b|\b(?:no such user|user unknown|unknown recipient|recipient unknown|mailbox does not exist|recipient (?:address )?(?:does not exist|not found))\b/i.test(diagnostic);
+  if (!invalidMailbox) return;
+  for (const contact of db.getContacts().filter(c => c.email?.trim().toLowerCase() === recipient)) {
+    contact.undeliverableEmail = recipient;
+  }
+}
+
+function legacyBounce(message: Message) {
+  return message.status === 'fallido' && !message.emailFailureAt &&
+    message.serviceError?.startsWith('Rebote permanente confirmado:');
+}
+
+export function recordCommercialBounce(input: { references?: unknown; recipient?: unknown; status?: unknown; diagnostic?: unknown }) {
   if (!Array.isArray(input.references) || typeof input.recipient !== 'string' ||
       typeof input.status !== 'string' || !/^5\.\d{1,3}\.\d{1,3}$/.test(input.status)) return { matched: false };
   const recipient = input.recipient.trim().toLowerCase();
   for (const conversation of db.getConversations()) {
     const message = conversation.messages.find(m => m.direction === 'outbound' && m.channel === 'email' &&
-      m.status === 'aceptado_proveedor' && m.providerMessageId && input.references instanceof Array &&
+      (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada' || legacyBounce(m)) &&
+      m.providerMessageId && input.references instanceof Array &&
       input.references.includes(m.providerMessageId) && m.approvedRecipient === recipient);
     if (!message) continue;
+    const wasAlreadyFailed = message.status === 'fallido';
     message.status = 'fallido';
-    message.serviceError = 'Rebote permanente confirmado: ' + input.status;
-    if (['5.1.1', '5.1.3', '5.1.10'].includes(input.status)) {
-      for (const contact of db.getContacts().filter(c => c.email?.trim().toLowerCase() === recipient)) {
-        contact.undeliverableEmail = recipient;
-      }
-    }
+    const diagnostic = typeof input.diagnostic === 'string' ? input.diagnostic.trim().slice(0,350) : '';
+    message.emailFailureAt = new Date().toISOString();
+    message.serviceError = 'Rebote permanente confirmado: ' + input.status + (diagnostic ? ' · ' + diagnostic : '');
+    suppressInvalidEmail(recipient, diagnostic, input.status);
     const campaign = conversation.campaignId ? db.getCampaignById(conversation.campaignId) : undefined;
-    if (campaign) {
+    if (campaign && !wasAlreadyFailed) {
       campaign.stats.messagesSent = Math.max(0, campaign.stats.messagesSent - 1);
       campaign.stats.messagesFailed++;
     }
-    db.addLog('warning', 'conversaciones', 'Correo devuelto después de la aceptación SMTP', { messageId: message.id });
-    db.save();
+    db.addLog('warning', 'conversaciones', 'Correo devuelto después de la aceptación SMTP', { messageId: message.id, status: input.status });
     return { matched: true };
   }
   return { matched: false };
@@ -232,7 +252,7 @@ export function registerCommercialEmailRoutes(app: Express) {
           return res.json(dailyCommercialDigest(data.day,status.sender));
         }
         case 'complete': return res.json(completeCommercialEmail(data));
-        case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.channel === 'email' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada')).map(m => ({id:m.providerMessageId, from: m.approvedRecipient || db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
+        case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.channel === 'email' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada' || legacyBounce(m))).map(m => ({id:m.providerMessageId, from: m.approvedRecipient || db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
         case 'bounce': worker(data.workerId); return res.json(recordCommercialBounce(data));
         case 'inbound': worker(data.workerId); return res.json(importCommercialReply(data));
         default: return res.status(404).json({error:'Operación desconocida.'});
