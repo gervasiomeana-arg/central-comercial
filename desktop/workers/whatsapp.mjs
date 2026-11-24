@@ -88,9 +88,9 @@ async function tick(){
    process.send?.({type:'healthy'});
    console.log('WhatsApp personal vinculado a Central Comercial.');
   }
-  if (ready) await ownerReportTick(account).catch(error => console.log(`Informe personal pendiente: ${error.message}`));
   if (!ready || !whatsappReady) return;
-  await commercial.tick();
+  await commercial.tick().catch(error => console.log(`Cola comercial WhatsApp pendiente: ${error.message}`));
+  await ownerReportTick(account).catch(error => console.log(`Informe personal pendiente: ${error.message}`));
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
   const {job}=await api('claim');if(!job)return;
   if(job.channel!=='whatsapp'||canonicalPhone(job.recipient)!==canonicalPhone(account))throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');

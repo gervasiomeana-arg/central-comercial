@@ -1,4 +1,4 @@
-import type { Application, Campaign, Conversation, MonthlySalesGoal, PaymentRecord, Client } from '../src/types.js';
+import type { Application, Campaign, Conversation, MonthlySalesGoal, PaymentRecord, Client, Message } from '../src/types.js';
 import { localOperationsEnabled } from './execution-role.js';
 import { accountingDay, validDay } from '../src/ledger.js';
 import {usableContactEmail} from '../src/email-policy.js';
@@ -190,4 +190,21 @@ export function operationalSummary(
     questions,
     campaigns: campaigns.filter(c => c.appId === app.id && c.goalMonth === month).map(c => ({ id: c.id, name: c.name, country: c.country, status: c.status, language: c.language, lastPreparedAt: c.lastPreparation?.at, researchedAt: c.lastResearchAt }))
   };
+}
+
+// Both promotion channels share a daily contact quota. Replies still count as individual messages.
+export function dailyOutreachKeys(conversations: Conversation[], now: Date, campaignId?: string) {
+  const day = accountingDay(now);
+  return new Set(conversations.flatMap(thread => {
+    if (campaignId && thread.campaignId !== campaignId) return [];
+    return thread.messages.filter(message => message.direction === 'outbound' && message.attemptedAt &&
+      accountingDay(new Date(message.attemptedAt)) === day && (!campaignId || !message.replyToProviderId))
+      .map(message => outreachKey(thread, message));
+  }));
+}
+
+export function outreachKey(thread: Conversation, message: Message) {
+  return thread.campaignId && !message.replyToProviderId
+    ? JSON.stringify([thread.campaignId, thread.contactId])
+    : message.id;
 }

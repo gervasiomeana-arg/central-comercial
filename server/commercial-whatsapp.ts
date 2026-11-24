@@ -1,12 +1,11 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
 import {db} from './db.js';
 import {workerAuthorized,TEST_RECIPIENTS} from './channelTests.js';
 import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
 import {replyDecision,currentReplyText,dailyCommercialDigest} from './commercial-email.js';
-import {accountingDay} from '../src/ledger.js';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const canonical=(s:string)=>whatsappPhone(s).replace(/^549/,'54');
 let active:{id:string;at:number;ready:boolean}|undefined;
@@ -27,21 +26,23 @@ export function claimWhatsApp(id:string,now=new Date()){
  }
  if (expired.length) db.save();
  const candidates = threads.filter(c => c.messages.some(m => m.direction === 'outbound' && m.channel === 'whatsapp' &&
-   m.status === 'preparado' && m.reviewStatus !== 'rejected' && !m.attemptedAt));
+   m.status === 'preparado' && !m.replacementMessageId && m.reviewStatus !== 'rejected' && !m.attemptedAt));
  if (!candidates.length) return null;
  const history = db.getConversations();
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
- if(!directorUnlimited&&history.flatMap(c=>c.messages).filter(m=>m.direction==='outbound'&&m.attemptedAt&&accountingDay(new Date(m.attemptedAt))===accountingDay(now)).length>=report.goal.dailyEmailLimit)return null;
+ const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(history, now);
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
  for(const conv of conversations){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
   if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappAuthorized(contact,now))continue;
   for(const msg of conv.messages){
-   if(msg.direction!=='outbound'||msg.channel!=='whatsapp'||msg.status!=='preparado'||msg.reviewStatus==='rejected'||msg.attemptedAt)continue;
+   if(msg.direction!=='outbound'||msg.channel!=='whatsapp'||msg.status!=='preparado'||msg.replacementMessageId||msg.reviewStatus==='rejected'||msg.attemptedAt)continue;
    const reply=Boolean(msg.replyToProviderId);
    if(reply){if(!report.goal.answerEmail||msg.reviewStatus!=='approved')continue;}
    else{
-    if (!campaignCountryAllowed(app, contact.country)) continue;
+    if (contact.status === 'cliente' || !campaignCountryAllowed(app, contact.country)) continue;
+    const reviewedAt = Date.parse(contact.sourceReviewDate);
+    if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) continue;
     if(!report.remaining||!campaign?.autoSendWhatsApp||!campaign.channels.includes('whatsapp')||!db.campaignInActiveRun(campaign.id)||!campaignStrategyReady(campaign,db.getApplicationById(campaign.appId))||!['lista','activa','bloqueada_por_configuracion'].includes(campaign.status)||conv.messages.some(m=>m.direction==='inbound'))continue;
     if(campaign.goalMonth&&(campaign.goalMonth!==report.goal.month||!report.goal.countries.includes(campaign.country)))continue;
     if(campaign.mode!=='automatico'&&msg.reviewStatus!=='approved')continue;
@@ -49,17 +50,19 @@ export function claimWhatsApp(id:string,now=new Date()){
     if(!unlimited&&campaign.dailyLimit<1)continue;
     const day=new Intl.DateTimeFormat('en-CA',{timeZone:campaign.timezone}).format(now),time=new Intl.DateTimeFormat('en-GB',{timeZone:campaign.timezone,hour:'2-digit',minute:'2-digit',hour12:false}).format(now);
     if(day<campaign.startDate||day>campaign.endDate||(!unlimited&&(time<campaign.sendWindowStart||time>=campaign.sendWindowEnd)))continue;
-    if (campaign.maxContacts !== undefined || !unlimited) {
-      const attempts = db.getConversations().filter(c => c.campaignId === campaign.id)
-        .flatMap(c => c.messages.filter(m => m.direction === 'outbound' && !m.replyToProviderId && m.attemptedAt)
-          .map(m => ({ at: m.attemptedAt!, contactId: c.contactId })));
-      const attemptedContacts = new Set(attempts.map(attempt => attempt.contactId));
-      if (campaign.maxContacts !== undefined && !attemptedContacts.has(conv.contactId) && attemptedContacts.size >= campaign.maxContacts) continue;
-      if (!unlimited && attempts.filter(attempt => accountingDay(new Date(attempt.at)) === accountingDay(now)).length >= campaign.dailyLimit) continue;
+    if (campaign.maxContacts !== undefined) {
+      const attemptedContacts = new Set(history.filter(c => c.campaignId === campaign.id &&
+        c.messages.some(m => m.direction === 'outbound' && !m.replyToProviderId && m.attemptedAt)).map(c => c.contactId));
+      if (!attemptedContacts.has(conv.contactId) && attemptedContacts.size >= campaign.maxContacts) continue;
+    }
+    if (!unlimited) {
+      const sentToday = dailyOutreachKeys(history, now, campaign.id);
+      if (sentToday.size >= campaign.dailyLimit && !sentToday.has(outreachKey(conv, msg))) continue;
     }
    }
    if(!reply&&db.getTasks().some(t=>t.relatedId===conv.id&&t.status==='pendiente'))continue;
    const recipient=whatsappPhone(contact.phone);if(msg.approvedRecipient&&msg.approvedRecipient!==recipient)continue;
+   if (!directorUnlimited && dailyContacts.size >= report.goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
    const lease=randomUUID();Object.assign(msg,{sendLease:hash(lease),sendWorker:id,sendDeadline:now.getTime()+120000,status:'envio_intentado',attemptedAt:now.toISOString(),approvedRecipient:recipient});db.save();
    return {conversationId:conv.id,messageId:msg.id,lease,recipient,content:msg.content};
   }
@@ -77,7 +80,16 @@ export function completeWhatsApp(input:any){
  msg.providerEvidence=accepted?'WhatsApp confirmó recepción por su servidor (ACK >= 1). No confirma lectura.':
   rejected?'WhatsApp rechazó el envío o el número no tiene cuenta registrada.':'No hubo confirmación de aceptación; no se repite automáticamente.';
  if(typeof input.chatId==='string'&&/^[\w.-]+@(?:c\.us|lid)$/.test(input.chatId))msg.providerChatId=input.chatId;
- if(accepted){msg.providerMessageId=input.providerId;msg.serviceConfirmationId=input.providerId;msg.acceptedAt=new Date().toISOString();const contact=db.getContactById(conv.contactId)!;if(contact.status==='prospecto')contact.status='contactado';}
+ const campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
+ if (accepted) {
+  msg.providerMessageId = msg.serviceConfirmationId = input.providerId;
+  msg.acceptedAt = new Date().toISOString();
+  const contact = db.getContactById(conv.contactId);
+  if (contact?.status === 'prospecto') contact.status = 'contactado';
+  if (campaign) campaign.stats.messagesSent++;
+ } else if (rejected && campaign) {
+  campaign.stats.messagesFailed++;
+ }
  db.save();return {success:true};
 }
 export function whatsappRouting(){return db.getConversations().filter(c=>c.channel==='whatsapp').flatMap(c=>c.messages.filter(m=>m.direction==='outbound'&&['aceptado_proveedor','resultado_desconocido'].includes(m.status)&&m.providerChatId).map(m=>({chatId:m.providerChatId!,conversationId:c.id})));}

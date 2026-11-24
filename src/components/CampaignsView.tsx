@@ -57,7 +57,9 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
       country: 'Brasil',
       language: 'pt-BR',
       segment: 'Clubes y federaciones',
-      channels: ['email'],
+      channels: ['email', 'whatsapp'],
+      autoSendEmail: true,
+      autoSendWhatsApp: true,
       messageTemplate: 'Olá {nombre},\n\nGostaria de apresentar nossa plataforma para a equipe do {organizacion}.\n\nConheça os serviços em nosso site oficial.\n\nPodemos agendar uma demonstração?',
       followUpTemplates: [
         'Olá {nombre}, tudo bem? Queria verificar se você pôde analisar a mensagem anterior.'
@@ -176,7 +178,7 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                   </div>
 
                   <p className="text-xs text-slate-600 leading-relaxed">{camp.objective}</p>
-                  {camp.autoPrepare && <p className="text-xs text-blue-700">Preparación automática de correos habilitada{camp.status === 'borrador' ? ' · Cambiá a Lista para iniciarla.' : '.'}</p>}
+                  {camp.autoPrepare && <p className="text-xs text-blue-700">Preparación automática de promociones habilitada{camp.status === 'borrador' ? ' · Cambiá a Lista para iniciarla.' : '.'}</p>}
 
                   {/* Blocking Reason Callout */}
                   {isBlocked && (
@@ -423,7 +425,27 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="flex gap-3 items-start mb-4 p-3 bg-blue-50 rounded-lg"><input type="checkbox" checked={editingCampaign.autoPrepare === true} onChange={e => setEditingCampaign({ ...editingCampaign, autoPrepare: e.target.checked })}/><span>Preparar correos automáticamente<br/><small>Usa esta plantilla y los contactos autorizados del país, idioma y segmento elegidos. Funciona en estado Lista o Activa, respeta el límite diario y no envía mensajes. WhatsApp permanece pendiente.</small></span></label>
+                    <label className="flex gap-3 items-start mb-4 p-3 bg-blue-50 rounded-lg"><input type="checkbox" checked={editingCampaign.autoPrepare === true} onChange={e => setEditingCampaign({ ...editingCampaign, autoPrepare: e.target.checked })}/><span>Preparar promociones automáticamente<br/><small>Usa esta plantilla y los contactos elegibles del país, idioma y segmento elegidos.</small></span></label>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Canal de la campaña
+                      <select
+                        value={editingCampaign.channels.includes('whatsapp') ? editingCampaign.channels.includes('email') ? 'email,whatsapp' : 'whatsapp' : 'email'}
+                        onChange={event => {
+                          const channels = event.target.value.split(',') as Campaign['channels'];
+                          setEditingCampaign({
+                            ...editingCampaign,
+                            channels,
+                            autoSendEmail: channels.includes('email'),
+                            autoSendWhatsApp: channels.includes('whatsapp'),
+                          });
+                        }}
+                        className="w-full border border-slate-300 rounded-lg p-2"
+                      >
+                        <option value="email">Email</option>
+                        <option value="whatsapp">WhatsApp autorizado</option>
+                        <option value="email,whatsapp">Email y WhatsApp (50/50)</option>
+                      </select>
+                    </label>
                     <label className="font-bold text-slate-700 block mb-1">Modo de Envío</label>
                     <select
                       value={editingCampaign.mode}

@@ -765,7 +765,7 @@ class DatabaseManager {
     validateGoal(current);
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
-    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets], ...(preferredChannel === 'email' ? {sendEmail:true} : {}) } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
+    const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets], sendEmail: true } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
       directorChannels: (preferredChannel ?? current.directorChannels?.[0]) === 'whatsapp'
         ? ['whatsapp', 'email'] : ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
@@ -962,7 +962,6 @@ class DatabaseManager {
       const needsWhatsapp = campaign.channels.includes('whatsapp');
 
       const emailConn = this.data.connectors.find(c => c.type === 'email_smtp');
-      const whatsappConn = this.data.connectors.find(c => c.type === 'whatsapp_cloud');
 
       const missing: string[] = [];
       if (needsEmail && emailConn?.status !== 'conectado'&&!this.getCommercialEmailStatus().send) missing.push('Ejecutor de correo');
@@ -1008,6 +1007,13 @@ class DatabaseManager {
     const app = this.getApplicationById(campaign.appId);
     const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date(), emailOnHold);
     for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
+    for (const { thread, message, channel } of result.moves) {
+      thread.channel = message.channel = channel;
+      message.draftRevision = (message.draftRevision ?? 0) + 1;
+      delete message.approvedRecipient;
+      delete message.whatsappInvitation;
+      delete message.emailSubject;
+    }
     if (result.drafts.length) this.data.conversations = [...result.drafts, ...this.data.conversations];
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);

@@ -58,7 +58,7 @@ test('public business outreach must be explicitly enabled and never overrides re
   assert.equal(prepareCampaign({...campaign,allowPublicEmail:true}, app, [{...publicContact,permission:'revocado'}], [], now).drafts.length,0);
 });
 
-const whatsappCampaign = {...campaign, channels: ['email', 'whatsapp'], autoSendWhatsApp: true, mode: 'automatico'} as Campaign;
+const whatsappCampaign = {...campaign, channels: ['email', 'whatsapp'], autoSendWhatsApp: true, autoSendEmail: true, mode: 'automatico'} as Campaign;
 const optIn = { phone: '+54 911 5555-1234', whatsappConsent: { granted: true, evidence: 'Aceptó promociones por WhatsApp', at: '2026-11-01' } };
 
 test('selects WhatsApp when email is unusable, only with recorded permission', () => {
@@ -99,16 +99,30 @@ test('channel-specific WhatsApp authorization works independently of the general
   assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, whatsappConsent:undefined}], [], now).drafts.length, 0);
 });
 
-test('la prioridad explícita de WhatsApp cambia un borrador sin intento y conserva el correo de quienes no autorizaron', () => {
-  const granted = contact('one', optIn);
-  const ungranted = contact('two');
-  const emailDraft = prepareCampaign(whatsappCampaign, app, [granted], [], now).drafts[0];
-  const priority = {...whatsappCampaign, dailyLimit:3, channels:['whatsapp','email']} as Campaign;
-  const selected = prepareCampaign(priority, app, [granted, ungranted], [emailDraft], now);
-  assert.deepEqual(selected.drafts.map(d=>d.channel), ['whatsapp','email']);
-  assert.equal(selected.replacements[0]?.original.id,emailDraft.messages[0].id);
-  emailDraft.messages[0].status='aceptado_proveedor';
-  assert.equal(prepareCampaign(priority, app, [granted], [emailDraft], now).drafts.length,0);
+test('una campaña mixta reparte los contactos por mitades y respeta su canal disponible', () => {
+  const mixed = {...whatsappCampaign, dailyLimit: 4};
+  const leads = [
+    ...['one','two','three','four'].map(id => contact(id)),
+    contact('five', {...optIn, phone: '+5491155551235'}),
+    contact('six', {...optIn, phone: '+5491155551236'}),
+  ];
+  const selected = prepareCampaign(mixed, app, leads, [], now);
+  assert.deepEqual(selected.drafts.map(d => d.channel), ['email', 'whatsapp', 'email', 'whatsapp']);
+  assert.equal(new Set(selected.drafts.map(d => d.contactId)).size, 4);
+  assert.equal(prepareCampaign(mixed, app, leads, selected.drafts, now).drafts.length, 0);
+});
+
+test('reequilibra borradores automáticos existentes y conserva los correos aprobados o ya intentados', () => {
+  const mixed = {...whatsappCampaign, dailyLimit: 4};
+  const leads = ['one','two','three','four'].map((id, index) => contact(id, {...optIn, phone: '+549115555123' + index}));
+  const seeded = prepareCampaign({...mixed, channels:['email']}, app, leads, [], now).drafts;
+  seeded[0].messages[0].attemptedAt = now.toISOString();
+  seeded[0].messages[0].status = 'aceptado_proveedor';
+  seeded[1].messages[0].reviewStatus = 'approved';
+  const { moves, drafts, replacements } = prepareCampaign(mixed, app, leads, seeded, now);
+  assert.equal(drafts.length, 0);
+  assert.equal(replacements.length, 0);
+  assert.deepEqual(moves.map(move => [move.thread.contactId, move.channel]), [['three','whatsapp'], ['four','whatsapp']]);
 });
 
 test('usa WhatsApp durante la pausa de correo y conserva el lugar del borrador reemplazado', () => {
@@ -118,8 +132,8 @@ test('usa WhatsApp durante la pausa de correo y conserva el lugar del borrador r
   const [emailDraft] = prepareCampaign(oneRecipient, app, [granted], [], now).drafts;
 
   const prepared = prepareCampaign(oneRecipient, app, [granted, ungranted], [emailDraft], now, true);
-  assert.deepEqual(prepared.drafts.map(draft => draft.channel), ['whatsapp']);
-  assert.equal(prepared.replacements[0]?.original.id, emailDraft.messages[0].id);
+  assert.equal(prepared.drafts.length, 0);
+  assert.deepEqual(prepared.moves.map(move => [move.message.id, move.channel]), [[emailDraft.messages[0].id, 'whatsapp']]);
   assert.equal(prepareCampaign(oneRecipient, app, [ungranted], [], now, true).drafts[0]?.channel, 'email');
   assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now, true).drafts[0]?.channel, 'whatsapp');
 

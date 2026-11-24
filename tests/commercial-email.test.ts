@@ -69,7 +69,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
         whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed}
       });
       assert.equal(campaign.dailyLimit,0);
+      campaign.channels = ['email'];
       db.prepareCampaignDrafts(campaign.id);
+      campaign.channels = ['email','whatsapp'];
       const firstAttempt = claimCommercialEmail('test-worker',early);
       assert.ok(firstAttempt, 'director claims promotions beyond the internal daily limit and outside the former send window');
       assert.equal(firstAttempt.recipient,'fallback@club.test');
@@ -109,6 +111,12 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       assert.equal(requested?.recipient,requestPhone.slice(1));
       assert.ok(!requested?.content.includes('WHATSAPP OK'));
       assert.equal(claimWhatsApp('test-wa',new Date()),null);
+      const sentBefore = campaign.stats.messagesSent;
+      const receipt = {...requested,workerId:'test-wa',outcome:'accepted',ack:1,providerId:'wa-fixture-accepted',chatId:'5491155556789@c.us'};
+      completeWhatsApp(receipt);
+      completeWhatsApp(receipt);
+      assert.equal(campaign.stats.messagesSent,sentBefore+1);
+
 
       db.startMonthlyDirector('whatsapp');
       db.saveContact({
@@ -116,7 +124,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
         permission:'autorizado', sourceReviewDate:reviewed, history:[],
         whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed},
       });
+      campaign.channels = ['whatsapp'];
       db.prepareCampaignDrafts(campaign.id);
+      campaign.channels = ['whatsapp','email'];
       const whatsappFirst = claimWhatsApp('test-wa',new Date());
       assert.equal(whatsappFirst?.recipient,'5491155559876');
       completeWhatsApp({...whatsappFirst,workerId:'test-wa',outcome:'rejected'});

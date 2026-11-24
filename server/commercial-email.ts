@@ -1,7 +1,7 @@
 import { whatsappAuthorized, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
 import {emailPromotionHold, usableContactEmail} from '../src/email-policy.js';
-import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach} from './sales-director.js';
+import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
 import { db } from './db.js';
@@ -44,7 +44,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const status = worker(id), report = db.getSalesGoalProgress(), goal = report.goal;
   if (!status.send || report.paused || !goal.enabled) return null;
   const all = db.getConversations().flatMap(c => c.messages);
-  const expired = all.filter(m => m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime());
+  const expired = all.filter(m => m.channel === 'email' && m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime());
   for (const m of expired) {
     m.status = 'resultado_desconocido';
     m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.';
@@ -52,9 +52,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   if (expired.length) db.save();
   const promotionHold = emailPromotionHold(all, now.getTime());
   const directorUnlimited = unlimitedDirectorOutreach(goal);
-  if (!directorUnlimited && all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
-  const whatsappFallbacks = new Set(all.filter(m => m.channel === 'whatsapp' && m.status === 'fallido' && m.replacementMessageId)
-    .map(m => m.replacementMessageId));
+  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now);
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
@@ -64,10 +62,8 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       const replying = Boolean(msg.replyToProviderId);
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
-        if (promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
-        if (campaign?.channels[0] === 'whatsapp' && campaign.autoSendWhatsApp &&
-            msg.reviewStatus !== 'approved' && whatsappAuthorized(contact, now) && !whatsappFallbacks.has(msg.id)) continue;
-        if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
+        if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
+        if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined) {
           const attemptedContacts = new Set(db.getConversations().filter(c => c.campaignId === campaign.id &&
@@ -80,10 +76,14 @@ export function claimCommercialEmail(id: string, now = new Date()) {
         const day = new Intl.DateTimeFormat('en-CA', { timeZone: campaign.timezone }).format(now);
         const time = new Intl.DateTimeFormat('en-GB', { timeZone: campaign.timezone, hour:'2-digit', minute:'2-digit', hour12:false }).format(now);
         if (day < campaign.startDate || day > campaign.endDate || (!unlimited && (time < campaign.sendWindowStart || time >= campaign.sendWindowEnd))) continue;
-        if (!unlimited && db.getConversations().filter(c => c.campaignId === campaign.id).flatMap(c => c.messages).filter(m => m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= campaign.dailyLimit) continue;
+        if (!unlimited) {
+          const sentToday = dailyOutreachKeys(db.getConversations(), now, campaign.id);
+          if (sentToday.size >= campaign.dailyLimit && !sentToday.has(outreachKey(conv, msg))) continue;
+        }
       }
       if (!replying && conv.requiresHumanIntervention && db.getTasks().some(t => t.relatedId === conv.id && t.status === 'pendiente')) continue;
       if (msg.approvedRecipient && msg.approvedRecipient.toLowerCase() !== contact.email.trim().toLowerCase()) continue;
+      if (!directorUnlimited && dailyContacts.size >= goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
       const lease = randomUUID(); msg.sendLease = hash(lease); msg.sendWorker = id; msg.sendDeadline = now.getTime() + 120000;
       msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = contact.email.trim().toLowerCase();
       msg.providerMessageId = `<cc-${randomUUID()}@${status.sender!.split('@')[1]}>`;
