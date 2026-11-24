@@ -138,20 +138,33 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         reason(outcome,reviewed.reason);
         if(reviewed.contact){
           const contact=reviewed.contact;
-          const existing=db.getContacts().find(c=>(contact.email&&c.email?.trim().toLowerCase()===contact.email)||(c.website&&(()=>{try{return host(c.website)===host(page.url);}catch{return false;}})()));
+          const sameWebsite = (record: typeof contact) => {
+            try { return host(record.website) === host(page.url); }
+            catch { return false; }
+          };
+          const existing = db.getContacts().find(c => (contact.email && c.email?.trim().toLowerCase() === contact.email) || sameWebsite(c));
           if(existing){
+            const canUpdate = existing.permission !== 'revocado' && !['baja_solicitada', 'descartado'].includes(existing.status);
             // Keep all prior contact evidence when filling a newly published address.
-            if(!existing.email && contact.email && existing.permission!=='revocado' && !['baja_solicitada','descartado'].includes(existing.status)) {
+            if (canUpdate && !existing.email && contact.email) {
               existing.history ||= [];
               existing.history.push({id:`research-${Date.now()}`,timestamp:new Date().toISOString(),type:'nota',description:`Email publicado verificado en ${contact.source}. Fuente anterior conservada: ${existing.source||'sin fuente'}.`,author:'Central Comercial'});
               existing.email=contact.email;existing.source=contact.source;existing.sourceReviewDate=contact.sourceReviewDate;existing.outreachBasis='public_business_contact';
             }
+            if (canUpdate && sameWebsite(existing) && !existing.phone?.trim() && !existing.whatsappConsent && contact.phone) {
+              existing.phone = contact.phone;
+              existing.history ||= [];
+              existing.history.push({
+                id: `research-whatsapp-${Date.now()}`, timestamp: new Date().toISOString(), type: 'nota',
+                description: `Enlace institucional de WhatsApp verificado en ${contact.source}.`, author: 'Central Comercial',
+              });
+            }
             // Never promote a revoked contact or change its source/permission implicitly.
-            if(existing.permission!=='revocado'&&!['baja_solicitada','descartado'].includes(existing.status)&&!existing.interestedAppIds.includes(app.id))existing.interestedAppIds.push(app.id);
+            if (canUpdate && !existing.interestedAppIds.includes(app.id)) existing.interestedAppIds.push(app.id);
             outcome.reused++;
           }else{db.saveContact(contact);outcome.created++;}
         }
-        if(!reviewed.contact?.email){
+        if (!reviewed.contact?.email || !reviewed.contact.phone) {
           const context=reviewed.evidence;
           if(!context.topicVerified && !candidate.context && new URL(page.url).pathname!=='/') {enqueue({url:new URL('/',page.url).href,context,returnTo:page.url},true);}
           if(context.topicVerified){
