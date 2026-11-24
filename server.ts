@@ -89,7 +89,7 @@ registerPcRecordsRoutes(app, localRuntime, pcRecords);
 app.get('/api/local-runtime/report',(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   if(!localMode || !workerAuthorized(req.headers.authorization))return res.status(401).json({error:'Computadora no autorizada.'});
-  const worker = db.getSalesGoalReport().worker;
+  const worker = db.getCommercialEmailStatus();
   const jarvisState = jarvis.status();
   const schedulerState = db.getSchedulerState();
   const allCampaigns = db.getCampaigns();
@@ -371,7 +371,10 @@ adminRouter.get('/sales-goals', (req, res) => { try { res.json(db.getSalesGoalRe
 adminRouter.put('/sales-goals', (req, res) => { try { res.json(db.saveMonthlyGoal(req.body)); } catch(error:any) { res.status(400).json({error:error.message}); } });
 
 adminRouter.post('/automation/director/start', (req,res)=>{try{db.startMonthlyDirector();void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
-adminRouter.get('/automation/run', (req,res)=>res.json(db.getAutonomousRunReport(whatsappStatus().ready)));
+adminRouter.get('/automation/run', (req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  res.json(db.getAutonomousRunReport(whatsappStatus().ready));
+});
 adminRouter.post('/automation/start', (req,res)=>{try{db.startAutonomousRun(req.body);void scheduler.tick();res.json(db.getAutonomousRunReport(whatsappStatus().ready));}catch(error:any){res.status(400).json({error:error.message});}});
 
 adminRouter.get('/automation/pipeline', (req, res) => {
@@ -437,6 +440,7 @@ adminRouter.post('/automation/pause', (req, res) => {
 
 adminRouter.post('/automation/resume', (req, res) => {
   const state = db.setAutomationsPaused(false);
+  void scheduler.tick();
   res.json({ success: true, scheduler: state });
 });
 

@@ -525,7 +525,8 @@ class DatabaseManager {
     level: 'info' | 'warning' | 'error',
     module: AuditLog['module'],
     message: string,
-    details?: Record<string, any>
+    details?: Record<string, any>,
+    persist = true
   ): AuditLog {
     const log: AuditLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -539,7 +540,7 @@ class DatabaseManager {
     if (this.data.logs.length > 500) {
       this.data.logs = this.data.logs.slice(0, 500);
     }
-    this.save();
+    if (persist) this.save();
     return log;
   }
 
@@ -805,7 +806,8 @@ class DatabaseManager {
     const previous = this.data.commercialEmailWorker;
     if (previous && Date.now() - previous.at < 90000 && previous.id !== id) throw new Error('Ya hay otro ejecutor comercial de correo activo.');
     if (typeof id !== 'string' || id.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sender || '')) throw new Error('Identidad del ejecutor no válida.');
-    this.data.commercialEmailWorker = { id, at: Date.now(), send, read, sender }; this.save();
+    this.data.commercialEmailWorker = { id, at: Date.now(), send, read, sender };
+    if (!previous || previous.id !== id || previous.send !== send || previous.read !== read || previous.sender !== sender) this.save();
   }
   public getCommercialEmailStatus() {
     const worker = this.data.commercialEmailWorker;
@@ -973,19 +975,19 @@ class DatabaseManager {
     return { campaign };
   }
 
-  public prepareCampaignDrafts(id: string) {
+  public prepareCampaignDrafts(id: string, {persist = true} = {}) {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
     const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations);
     for (const { email, whatsappId } of result.replacements) email.replacementMessageId = whatsappId;
-    this.data.conversations = [...result.drafts, ...this.data.conversations];
+    if (result.drafts.length) this.data.conversations = [...result.drafts, ...this.data.conversations];
     campaign.lastPreparation = { at: new Date().toISOString(), created: result.drafts.length, skipped: result.skipped, blockedReason: result.blockedReason };
     const conversations = this.data.conversations.filter(c => c.campaignId === id);
     campaign.stats.contactsCount = new Set(conversations.map(c => c.contactId)).size;
     campaign.stats.messagesPending = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && !m.replacementMessageId && m.reviewStatus !== 'rejected').length;
-    if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de promoción preparados para ${campaign.name}. Sin envíos.`, { campaignId: id });
-    this.save();
+    if (result.drafts.length) this.addLog('info', 'campañas', `${result.drafts.length} borradores de promoción preparados para ${campaign.name}. Sin envíos.`, { campaignId: id }, false);
+    if (persist) this.save();
     return campaign.lastPreparation;
   }
 

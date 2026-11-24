@@ -110,4 +110,23 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   assert.equal(scheduled.length, 106);
   assert.deepEqual(scheduled.filter(item => item.appId === 'app-funeraria').map(item => item.country), ['México']);
   assert.equal(db.getCampaignById(funeralOutsideMexico.id)?.status, 'pausada');
+
+  // Model the workload reported by the PC without contacting any providers.
+  for (const [i, item] of scheduled.entries()) {
+    db.getContacts().push({
+      id: `load-${i}`, orgName: `Institución ${i}`, email: `contact-${i}@example.org`,
+      country: item.country, language: item.language, interestedAppIds: [item.appId],
+      source: 'https://organization.test', sourceReviewDate: day,
+      permission: 'autorizado', status: 'prospecto', preferredChannel: 'email',
+    } as ReturnType<typeof db.getContacts>[number]);
+  }
+  db.getResearchState().blocked = true;
+  db.getResearchState().lastError = 'Fuente bloqueada en esta prueba.';
+  const {scheduler} = await import('../server/scheduler.js');
+  const saves = t.mock.method(db, 'save');
+  assert.equal(await scheduler.tick(), true);
+  assert.equal(scheduled.filter(item => item.lastPreparation?.at).length, 106);
+  assert.ok(saves.mock.callCount() <= 3, `${saves.mock.callCount()} escrituras en un ciclo`);
+  const persisted = JSON.parse(fs.readFileSync(path.join(dir, 'central_comercial_db.json'), 'utf8'));
+  assert.equal(persisted.campaigns.filter((item: typeof campaign) => item.lastPreparation?.at).length, 106);
 });

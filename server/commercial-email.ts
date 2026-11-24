@@ -44,8 +44,12 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const status = worker(id), report = db.getSalesGoalReport(), goal = report.goal;
   if (!status.send || report.paused || !goal.enabled) return null;
   const all = db.getConversations().flatMap(c => c.messages);
-  for (const m of all) if (m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime()) { m.status = 'resultado_desconocido'; m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.'; }
-  db.save();
+  const expired = all.filter(m => m.status === 'envio_intentado' && m.sendDeadline && m.sendDeadline < now.getTime());
+  for (const m of expired) {
+    m.status = 'resultado_desconocido';
+    m.serviceError = 'El ejecutor no confirmó el resultado. Revisión manual, sin reenvío automático.';
+  }
+  if (expired.length) db.save();
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   if (!directorUnlimited && all.filter(m => m.direction === 'outbound' && m.attemptedAt && accountingDay(new Date(m.attemptedAt)) === accountingDay(now)).length >= goal.dailyEmailLimit) return null;
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
