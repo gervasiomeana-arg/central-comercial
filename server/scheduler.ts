@@ -69,11 +69,6 @@ class CommercialScheduler {
           if(/14\s+d[ií]as/i.test(campaign.messageTemplate))campaign.messageTemplate=campaign.messageTemplate.replace(/14\s+d[ií]as/gi,'7 días');
         }
       }
-      if (!phase || phase === 'buscar') {
-        await intelligenceCycle();
-        if (!phase || batchWindowActive(phase)) await researchGoalProspects();
-      }
-
       // Check tasks due
       const now = new Date();
       const contacts = db.getContacts();
@@ -134,6 +129,11 @@ class CommercialScheduler {
 
       state.activeJobsCount = campaigns.filter(c => c.status === 'activa').length;
       db.save();
+
+      if (!phase || phase === 'buscar') {
+        await intelligenceCycle();
+        if (!phase || batchWindowActive(phase)) await researchGoalProspects();
+      }
       return true;
     } catch (err: any) {
       db.addLog('error', 'sistema', `Error en ciclo del scheduler: ${err.message}`, { error: String(err) });
