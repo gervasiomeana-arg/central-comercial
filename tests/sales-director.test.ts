@@ -63,7 +63,7 @@ test('research records only published contacts with relevant audience and countr
 
 test('el iniciador retoma la cola con una base que ya consumió las 24 consultas', async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'central-unlimited-research-'));
-  const settings = { CENTRAL_LOCAL_MODE: 'true', CENTRAL_DATA_DIR: dir };
+  const settings = { CENTRAL_LOCAL_MODE: 'true', CENTRAL_DATA_DIR: dir, CENTRAL_DIAGNOSTIC_MODE: 'false' };
   for (const [key, value] of Object.entries(settings)) {
     const previous = process.env[key];
     process.env[key] = value;
