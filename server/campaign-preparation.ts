@@ -64,14 +64,16 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   for (const contact of contacts) {
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
-    if (!(contact.permission === 'autorizado' || (contact.permission === 'desconocido' && campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact')) || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
+    const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappAuthorized(contact, now);
+    const emailAllowed = campaign.channels.includes('email') &&
+      (contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
+        campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact'));
+    if ((!emailAllowed && !whatsappAllowed) || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) { skip('Fuente sin revisar'); continue; }
     if (responded.has(contact.id)) { skip('Ya respondió: revisar conversación'); continue; }
     const email = contact.email?.trim().toLowerCase() || '';
-    const emailUsable = campaign.channels.includes('email') && usableContactEmail(email) &&
-      contact.undeliverableEmail !== email;
-    const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappAuthorized(contact, now);
+    const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;
     const threads = threadsByContact.get(contact.id) || [];
     let replacedEmail: Message | undefined;
     if (threads.length) {

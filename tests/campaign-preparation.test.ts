@@ -90,3 +90,11 @@ test('prepares beyond the usual daily limit for an uncapped director campaign', 
   const leads = ['one','two','three'].map(id => contact(id));
   assert.equal(prepareCampaign(director, app, leads, [], now).drafts.length, 3);
 });
+
+test('channel-specific WhatsApp authorization works independently of the general contact field', () => {
+  const lead = contact('one', {...optIn, permission:'desconocido', email:'info@club.test'});
+  assert.equal(prepareCampaign(whatsappCampaign, app, [lead], [], now).drafts[0]?.channel, 'whatsapp');
+  assert.equal(prepareCampaign(campaign, app, [lead], [], now).drafts.length, 0);
+  assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, permission:'revocado'}], [], now).drafts.length, 0);
+  assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, whatsappConsent:undefined}], [], now).drafts.length, 0);
+});

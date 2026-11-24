@@ -429,6 +429,7 @@ export default function App() {
               <ConversationsView
                 conversations={conversations}
                 focusedConversationId={focusedConversationId}
+                viewingPcRecords={viewingPcRecords}
                 contacts={contacts}
                 applications={applications}
                 campaigns={campaigns}
