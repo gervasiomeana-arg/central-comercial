@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { atomicJSON } from './recovery.mjs';
 export async function saveCheckpoint(config, runtimeDir) {
   const response = await fetch(new URL('/api/local-runtime/checkpoint', config.url), { redirect: 'error',
-    headers: { Authorization: `Bearer ${config.key}` }, signal: AbortSignal.timeout(15000) });
+    headers: { Authorization: `Bearer ${config.key}` }, signal: AbortSignal.timeout(30000) });
   if (!response.ok) throw new Error('La copia de registros no pudo obtenerse.');
   const raw = await response.text(); if (raw.length > 25000000) throw new Error('La copia supera el tamaño previsto. Se conserva la anterior.');
   const snapshot = JSON.parse(raw);

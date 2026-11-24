@@ -96,6 +96,8 @@ test('planificador distingue respuesta truncada, herramientas, vacío, JSON y es
  await new Promise<void>(r=>fake.listen(0,'127.0.0.1',r));
  try {
   const base=localJarvisURL(`http://127.0.0.1:${(fake.address() as any).port}`);
+  reply = {choices:[{finish_reason:'stop',message:{content:'Estrategia propuesta:\n```json\n'+JSON.stringify(strategy)+'\n```\nFin.'}}]};
+  assert.deepEqual(await generateStrategy(base,'local-model',context,''), strategy);
   for(const [choice,code] of [
    [{finish_reason:'length',message:{content:'{}'}},'MODEL_TRUNCATED'],
    [{finish_reason:'stop',message:{content:'{}',tool_calls:[{id:'tool'}]}},'MODEL_TOOLS'],

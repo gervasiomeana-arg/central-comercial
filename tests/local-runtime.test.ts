@@ -125,3 +125,26 @@ test('recupera el informe al reconectar después de medianoche y admite un reenv
   assert.deepEqual(ownerReportSchedule({}, new Date('2026-11-20T23:00:00Z')),
     { day: '2026-11-20', key: 'daily-2026-11-20', manual: false });
 });
+
+test('una demora conserva el último reporte verificado y una desconexión confirmada lo reemplaza', () => {
+  let now = 1000;
+  const runtime = new LocalRuntime(() => now);
+  const base = {workerId:'pc',startedAt:1,ramGB:8,model:'local',components:{email:'running',whatsapp:'running',intelligence:'running'},issues:[]};
+  const connected = {email:true,whatsapp:true,intelligence:true};
+  runtime.heartbeat({...base, connections:connected});
+  now += 20000;
+  runtime.heartbeat({...base, reportUnavailable:true});
+  assert.equal(runtime.status().online,true);
+  assert.equal(runtime.status().reportUnavailable,true);
+  assert.equal(runtime.status().reportAt,1000);
+  assert.deepEqual(runtime.status().connections,connected);
+  now += 70000;
+  runtime.heartbeat({...base,reportUnavailable:true});
+  assert.equal(runtime.status().connections,undefined);
+  runtime.heartbeat({...base,connections:{...connected,whatsapp:false}});
+  assert.equal(runtime.status().reportUnavailable,false);
+  assert.equal(runtime.status().connections?.whatsapp,false);
+  assert.equal(runtime.status().reportAt,now);
+  runtime.heartbeat({...base,startedAt:now,reportUnavailable:true});
+  assert.equal(runtime.status().connections,undefined);
+});

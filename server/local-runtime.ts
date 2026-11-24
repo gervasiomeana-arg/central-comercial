@@ -23,7 +23,16 @@ export class LocalRuntime {
     if(input.sourceFingerprint!==undefined && !/^[a-f0-9]{64}$/.test(input.sourceFingerprint))throw new Error('Versión inválida.');
     if(input.diagnosticMode!==undefined && typeof input.diagnosticMode!=='boolean')throw new Error('Modo inválido.');
     if (this.current && this.now() - this.current.at < 90000 && this.current.id !== input.workerId) throw new Error('Ya hay otra computadora de Central Comercial conectada.');
-    const activity = input.activity === undefined ? undefined : validateActivity(input.activity);
+    if (input.reportUnavailable !== undefined && typeof input.reportUnavailable !== 'boolean') throw new Error('Estado del reporte inválido.');
+    const reportUnavailable = input.reportUnavailable === true;
+    const now = this.now();
+    const current = this.current;
+    const previous = current && current.id === input.workerId && current.startedAt === input.startedAt &&
+      now - (current.reportAt ?? -Infinity) < 90000 ? current : undefined;
+    const activity = reportUnavailable ? previous?.activity : input.activity === undefined ? undefined : validateActivity(input.activity);
+    const connections = reportUnavailable ? previous?.connections : input.connections
+      ? {email:input.connections.email, whatsapp:input.connections.whatsapp, intelligence:input.connections.intelligence} : undefined;
+    const reportAt = reportUnavailable ? previous?.reportAt : activity || connections ? now : undefined;
     const report = input.ownerReport;
     const ownerReport = report && typeof report.day === 'string' && validDay(report.day) &&
       ['sin_intento', 'aceptado_proveedor', 'entrega_confirmada', 'rechazado', 'resultado_desconocido', 'registro_no_disponible'].includes(report.status)
@@ -31,10 +40,10 @@ export class LocalRuntime {
           at: typeof report.at === 'string' && Number.isFinite(Date.parse(report.at))
             ? new Date(report.at).toISOString() : undefined }
       : undefined;
-    this.current = { activity, ownerReport, id: input.workerId, at: this.now(), startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
+    this.current = { activity, ownerReport, id: input.workerId, at: now, startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
       components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)],
-      connections:input.connections ? {email:input.connections.email,whatsapp:input.connections.whatsapp,intelligence:input.connections.intelligence}:undefined,
-      diagnosticMode:input.diagnosticMode,sourceFingerprint:input.sourceFingerprint };
+      connections, reportAt, reportUnavailable,
+      diagnosticMode:input.diagnosticMode,sourceFingerprint: reportUnavailable ? previous?.sourceFingerprint : input.sourceFingerprint };
   }
   status(): LocalRuntimeState {
     if (!this.current || this.now() - this.current.at >= 90000) return { online: false, issues: [] };

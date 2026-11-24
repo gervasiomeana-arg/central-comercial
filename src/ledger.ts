@@ -1,7 +1,11 @@
 import type { AccountCharge, ClientSubscription, PaymentRecord } from './types.js';
 
+const accountingDayFormat = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
 export function accountingDay(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  return accountingDayFormat.format(now);
 }
 export function cents(amount: number) {
   const value = Math.round(amount * 100);

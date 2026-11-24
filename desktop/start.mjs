@@ -157,16 +157,28 @@ async function shareRequestedRecords(requestId) {
   });
   if (!remote.ok) log('central', `Consulta remota de registros pendiente (HTTP ${remote.status}).`);
 }
+let wasReportUnavailable = false;
 async function heartbeat() {
   if (reporting) return; reporting = true;
   try {
-    let report={};
-    try {
-      const response=await fetch(new URL('/api/local-runtime/report',config.url),{headers:{Authorization:`Bearer ${config.key}`},redirect:'error',signal:AbortSignal.timeout(4000)});
-      if(response.ok)report=await response.json();
-    }catch{}
-    const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections:(!stopping&&report.connections)||{email:false,whatsapp:false,intelligence:false},sourceFingerprint:report.release?.sourceFingerprint,activity:stopping?undefined:report.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
-    atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections:payload.connections,components,issues:[...issues],backupAt,release:report.release});
+    let report;
+    if (!stopping) {
+      try {
+        const response = await fetch(new URL('/api/local-runtime/report',config.url), {
+          headers:{Authorization:`Bearer ${config.key}`}, redirect:'error', signal:AbortSignal.timeout(10000),
+        });
+        if (response.ok) report = await response.json();
+      } catch {}
+    }
+    const reportUnavailable = !stopping && !report?.connections;
+    if (reportUnavailable !== wasReportUnavailable && !stopping) {
+      log('central', reportUnavailable ? 'El servidor local no confirmó el estado. Se conserva el último reporte válido.' : 'El servidor local volvió a confirmar el estado.');
+    }
+    wasReportUnavailable = reportUnavailable;
+    const connections = stopping ? {email:false,whatsapp:false,intelligence:false} : report?.connections;
+    const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections,reportUnavailable,
+      sourceFingerprint:report?.release?.sourceFingerprint,activity:stopping?undefined:report?.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
+    atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections,reportUnavailable,components,issues:[...issues],backupAt,release:report?.release});
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
       body: JSON.stringify(payload), signal: AbortSignal.timeout(12000) });

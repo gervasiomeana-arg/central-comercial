@@ -194,10 +194,9 @@ export function importCommercialReply(input: any) {
 }
 // Daily owner-only activity digest, sourced exclusively from persisted records.
 export function dailyCommercialDigest(day: string, sender: string) {
-  const tz = 'America/Argentina/Buenos_Aires';
   const localDay = (value: string) => {
     const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('en-CA', {timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    return Number.isNaN(d.getTime()) ? '' : accountingDay(d);
   };
   const apps = db.getApplications(), contacts = db.getContacts(), conversations = db.getConversations();
   const lines = ['CENTRAL COMERCIAL — INFORME DIARIO ' + day, '', 'Registro de actividad comprobable. Aceptación SMTP no equivale a entrega o lectura.', ''];
