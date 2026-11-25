@@ -88,7 +88,11 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const text=decode(clean.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ');
   const inherited=context&&context.appId===app.id&&normalize(context.country)===normalize(country)&&hostKey(context.url)===hostKey(url)?context:undefined;
   const structured=organizationData(html), rule=marketFor(country);
-  const phone=clean.match(/(?:wa\.me\/|api\.whatsapp\.com\/send\?[^"'<>]*?phone=)(\+?\d{8,15})/i)?.[1].replace(/\D/g,'')||'';
+  const whatsappLink = clean.match(/href\s*=\s*["']https?:\/\/wa\.me\/(\+?\d{10,15})(?=[?/"'#])/i)?.[1] ||
+    clean.match(/href\s*=\s*["']https?:\/\/(?:api|web)\.whatsapp\.com\/send\?[^"'<>]*?\bphone=(?:%2B|\+)?(\d{10,15})(?=[&#"'])/i)?.[1];
+  const displayedWhatsApp = text.match(/\bwhats\s*app\s*(?:[:·-]\s*)?(\+[1-9][\d ().-]{8,24}\d)/i)?.[1];
+  const candidatePhone = (whatsappLink || displayedWhatsApp || '').replace(/\D/g, '');
+  const phone = /^[1-9]\d{9,14}$/.test(candidatePhone) ? candidatePhone : '';
   const telephone=clean.match(/href\s*=\s*["']tel:\s*(\+[^"']+)["']/i)?.[1].replace(/\D/g,'')||'';
   const title=decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||new URL(url).hostname).slice(0,160);
   const countryText = rule?.iso === 'MX' ? text.replace(/\b(?:new|nuevo) m[eé]xico\b/gi, '') : text;
@@ -111,8 +115,8 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
-  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Dato publicado por la organización; no implica consentimiento del destinatario. WhatsApp solo se registra, sin enviar.${additional}`,history:[],preferredChannel:email?'email':'whatsapp',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
-  return {contact,evidence,reason:email?'Email público verificado':'Solo WhatsApp público; no habilita envío por email'};
+  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  return {contact,evidence,reason:phone ? (email ? 'Email y WhatsApp públicos verificados' : 'WhatsApp público verificado') : 'Email público verificado'};
 }
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {
   return reviewContactPage(html,url,app,country,now,context).contact;

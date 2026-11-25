@@ -87,6 +87,7 @@ export interface ContactHistoryItem {
 }
 
 export interface Contact {
+  publishedWhatsApp?: { number: string; source: string };
   whatsappConsent?:{granted:boolean;at:string;evidence:string};
   undeliverableEmail?: string;
   outreachBasis?: 'public_business_contact';

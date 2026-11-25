@@ -442,8 +442,8 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                         className="w-full border border-slate-300 rounded-lg p-2"
                       >
                         <option value="email">Email</option>
-                        <option value="whatsapp">WhatsApp autorizado</option>
-                        <option value="email,whatsapp">Email y WhatsApp (50/50)</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="email,whatsapp">WhatsApp y email alternativo</option>
                       </select>
                     </label>
                     <label className="font-bold text-slate-700 block mb-1">Modo de Envío</label>

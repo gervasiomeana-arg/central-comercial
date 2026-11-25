@@ -1,6 +1,6 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {emailPromotionHold,exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
-import {whatsappAuthorized} from '../src/whatsapp-policy.js';
+import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
+import {whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
@@ -869,9 +869,9 @@ class DatabaseManager {
         .flatMap(c => c.country.split(',').map(country => JSON.stringify([c.appId, normalize(country.trim()), normalize(c.language.trim())]))));
       if (!markets.size) return;
       if (!whatsappReady) blockers.push('El ejecutor de WhatsApp no está listo para la cola comercial.');
-      if (!this.data.contacts.some(contact => contact.status !== 'cliente' && whatsappAuthorized(contact) &&
+      if (!this.data.contacts.some(contact => contact.status !== 'cliente' && whatsappCampaignEligible(contact) &&
           contact.interestedAppIds?.some(appId => markets.has(JSON.stringify([appId, normalize(contact.country?.trim() || ''), normalize(contact.language?.trim() || '')]))))) {
-        blockers.push('Ningún contacto de estas campañas tiene WhatsApp autorizado en su ficha.');
+        blockers.push('Ningún contacto de estas campañas tiene un WhatsApp publicado o registrado que se pueda usar.');
       }
     };
     if (!run) {
@@ -898,7 +898,7 @@ class DatabaseManager {
     const contacted=new Set(threads.map(c=>c.contactId));
     const contacts=this.data.contacts.filter(c=>c.interestedAppIds?.includes(run.appId)&&c.country?.trim().toLowerCase()===run.country.toLowerCase()&&!['cliente','descartado','baja_solicitada'].includes(c.status)&&c.permission!=='revocado'&&
       ((campaign?.channels.includes('email') && usableContactEmail(c.email) && c.email.trim().toLowerCase() !== c.undeliverableEmail) ||
-        (campaign?.channels.includes('whatsapp') && whatsappAuthorized(c))) && c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
+        (campaign?.channels.includes('whatsapp') && whatsappCampaignEligible(c))) && c.source&&Number.isFinite(Date.parse(c.sourceReviewDate)));
     const prepared=messages.filter(m=>m.direction==='outbound'&&m.status==='preparado'&&!m.replacementMessageId&&m.reviewStatus!=='rejected').length;
     const accepted=messages.filter(m=>m.direction==='outbound'&&['aceptado_proveedor','entrega_confirmada'].includes(m.status)&&m.serviceConfirmationId).length;
     const received=messages.filter(m=>m.direction==='inbound'&&m.providerMessageId).length;
@@ -997,15 +997,11 @@ class DatabaseManager {
     return { campaign };
   }
 
-  public getEmailPromotionHold(now = new Date()) {
-    return emailPromotionHold(this.data.conversations.flatMap(c => c.messages), now.getTime());
-  }
-
-  public prepareCampaignDrafts(id: string, {persist = true, emailOnHold = false} = {}) {
+  public prepareCampaignDrafts(id: string, {persist = true} = {}) {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
-    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date(), emailOnHold);
+    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date());
     for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
     for (const { thread, message, channel } of result.moves) {
       thread.channel = message.channel = channel;

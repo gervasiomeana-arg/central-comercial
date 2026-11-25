@@ -3,7 +3,7 @@ import {usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation, Message } from '../src/types.js';
-import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
+import {whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js';
 
 const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -17,7 +17,7 @@ function definitelyRejectedEmail(message: Message) {
 }
 
 // Preparation only: this module has no transport, credentials or sending capability.
-export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date(), emailOnHold = false) {
+export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date()) {
   const skipped: Record<string, number> = {};
   const drafts: Conversation[] = [];
   const replacements: { original: Message; replacementId: string }[] = [];
@@ -52,14 +52,10 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const threadsByContact = new Map<string, Conversation[]>();
   const contactMap = new Map(contacts.map(c => [c.id, c]));
   const usedRecipients = new Set<string>();
-  const counts = { email: 0, whatsapp: 0 };
   for (const thread of previous) {
     const threads = threadsByContact.get(thread.contactId) || [];
     threads.push(thread);
     threadsByContact.set(thread.contactId, threads);
-    if ((thread.channel === 'email' || thread.channel === 'whatsapp') &&
-        thread.messages.some(m => m.direction === 'outbound' && !m.replyToProviderId &&
-          !m.replacementMessageId && m.reviewStatus !== 'rejected')) counts[thread.channel]++;
     const contact = contactMap.get(thread.contactId);
     const recipient = thread.channel === 'whatsapp' ? whatsappPhone(contact?.phone || '') : contact?.email?.trim().toLowerCase();
     if (recipient) usedRecipients.add(`${thread.channel}:${recipient}`);
@@ -70,15 +66,6 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   const responded = new Set(conversations.filter(c => c.appId === app.id &&
     c.messages.some(m => m.direction === 'inbound')).map(c => c.contactId));
   const countries = campaign.country.split(',').map(normalized);
-  const balanced = campaign.channels.includes('email') && campaign.channels.includes('whatsapp');
-  const firstChannel: PromotionChannel = campaign.channels[0] === 'whatsapp' ? 'whatsapp' : 'email';
-  const chooseChannel = (): PromotionChannel => {
-    if (emailOnHold && campaign.autoSendWhatsApp) return 'whatsapp';
-    if (counts.email === counts.whatsapp) return firstChannel;
-    return counts.email < counts.whatsapp ? 'email' : 'whatsapp';
-  };
-  const queues = { email: [] as Contact[], whatsapp: [] as Contact[], both: [] as Contact[] };
-  const movable: { contact: Contact; thread: Conversation; message: Message; channel: PromotionChannel; previousUsable: boolean }[] = [];
   const recipientKeyFor = (contact: Contact, channel: PromotionChannel) =>
     channel === 'whatsapp' ? `whatsapp:${whatsappPhone(contact.phone)}` : `email:${contact.email.trim().toLowerCase()}`;
   const prepare = (contact: Contact, channel: PromotionChannel, threads: Conversation[], original?: Message) => {
@@ -97,18 +84,14 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const draft: Conversation = { id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel, classification: 'sin_clasificar', requiresHumanIntervention: campaign.mode !== 'automatico', createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: messageId, conversationId: id, direction: 'outbound', channel, content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp }] };
     drafts.push(draft);
     preparedToday.add(contact.id);
-    if (original) {
-      replacements.push({ original, replacementId: messageId });
-      counts[original.channel as PromotionChannel]--;
-    }
-    counts[channel]++;
+    if (original) replacements.push({ original, replacementId: messageId });
     threadsByContact.set(contact.id, [...threads, draft]);
     usedRecipients.add(recipientKey);
   };
   for (const contact of contacts) {
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
-    const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappAuthorized(contact, now);
+    const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappCampaignEligible(contact, now);
     const emailAllowed = campaign.channels.includes('email') &&
       (contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
         campaign.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact'));
@@ -120,10 +103,9 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;
     const threads = threadsByContact.get(contact.id);
     if (!threads) {
-      if (emailUsable && whatsappAllowed) queues.both.push(contact);
-      else if (emailUsable) queues.email.push(contact);
-      else if (whatsappAllowed) queues.whatsapp.push(contact);
-      else skip('Sin correo utilizable ni WhatsApp autorizado');
+      if (whatsappAllowed && (campaign.autoSendWhatsApp !== false || !emailUsable)) prepare(contact, 'whatsapp', []);
+      else if (emailUsable) prepare(contact, 'email', []);
+      else skip('Sin WhatsApp disponible ni correo utilizable');
       continue;
     }
     const [thread] = threads;
@@ -146,12 +128,14 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
       if (campaign.mode === 'automatico' && !thread.requiresHumanIntervention && !message.reviewStatus &&
           ['preparado', 'pendiente'].includes(message.status) && !message.attemptedAt &&
           !message.sentAt && !message.serviceConfirmationId) {
-        if (message.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp) {
-          movable.push({ contact, thread, message, channel: 'whatsapp', previousUsable: emailUsable });
-          continue;
-        }
-        if (message.channel === 'whatsapp' && emailUsable && campaign.autoSendEmail) {
-          movable.push({ contact, thread, message, channel: 'email', previousUsable: whatsappAllowed });
+        const channel = message.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp
+          ? 'whatsapp' : message.channel === 'whatsapp' && !whatsappAllowed && emailUsable && campaign.autoSendEmail
+            ? 'email' : undefined;
+        if (channel) {
+          const key = recipientKeyFor(contact, channel);
+          if (usedRecipients.has(key)) { skip('Ya preparado en esta campaña'); continue; }
+          usedRecipients.add(key);
+          moves.push({ thread, message, channel });
           continue;
         }
       }
@@ -159,31 +143,5 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     skip('Ya preparado en esta campaña');
   }
 
-  const next = { email: 0, whatsapp: 0, both: 0 };
-  while (next.email < queues.email.length || next.whatsapp < queues.whatsapp.length || next.both < queues.both.length) {
-    const preferred = chooseChannel();
-    const other = preferred === 'email' ? 'whatsapp' : 'email';
-    if (next[preferred] < queues[preferred].length) {
-      prepare(queues[preferred][next[preferred]++], preferred, []);
-    } else if (next.both < queues.both.length) {
-      const contact = queues.both[next.both++];
-      prepare(contact, usedRecipients.has(recipientKeyFor(contact, preferred)) ? other : preferred, []);
-    } else {
-      prepare(queues[other][next[other]++], other, []);
-    }
-  }
-
-  // Only untouched automatic drafts may switch channels when the mix changes.
-  for (const { contact, thread, message, channel, previousUsable } of movable) {
-    const previousChannel = message.channel as PromotionChannel;
-    if (previousUsable && !(emailOnHold && channel === 'whatsapp') &&
-        (!balanced || (emailOnHold && channel === 'email') || counts[previousChannel] - counts[channel] < 2)) continue;
-    const key = recipientKeyFor(contact, channel);
-    if (usedRecipients.has(key)) continue;
-    usedRecipients.add(key);
-    counts[previousChannel]--;
-    counts[channel]++;
-    moves.push({ thread, message, channel });
-  }
   return result();
 }

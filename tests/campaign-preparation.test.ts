@@ -65,12 +65,12 @@ test('selects WhatsApp when email is unusable, only with recorded permission', (
   const allowed = contact('one', {...optIn, email: 'bad'});
   assert.equal(prepareCampaign(whatsappCampaign, app, [allowed], [], now).drafts[0]?.channel, 'whatsapp');
   assert.equal(prepareCampaign(whatsappCampaign, app, [{...allowed, whatsappConsent: undefined}], [], now).drafts.length, 0);
-  assert.equal(prepareCampaign(whatsappCampaign, app, [{...allowed, email:'info@club.test'}], [], now).drafts[0]?.channel, 'email');
+  assert.equal(prepareCampaign(whatsappCampaign, app, [{...allowed, email:'info@club.test'}], [], now).drafts[0]?.channel, 'whatsapp');
 });
 
 test('replaces definitely bounced email once and never switches on uncertain or refused delivery', () => {
   const lead = contact('one', optIn);
-  const original = prepareCampaign(whatsappCampaign, app, [lead], [], now).drafts[0];
+  const original = prepareCampaign(campaign, app, [lead], [], now).drafts[0];
   const [email] = original.messages;
   email.attemptedAt = now.toISOString();
   email.status = 'resultado_desconocido';
@@ -99,15 +99,15 @@ test('channel-specific WhatsApp authorization works independently of the general
   assert.equal(prepareCampaign(whatsappCampaign, app, [{...lead, whatsappConsent:undefined}], [], now).drafts.length, 0);
 });
 
-test('una campaña mixta reparte los contactos por mitades y respeta su canal disponible', () => {
+test('una campaña mixta prioriza el WhatsApp disponible y usa el correo de los demás', () => {
   const mixed = {...whatsappCampaign, dailyLimit: 4};
   const leads = [
-    ...['one','two','three','four'].map(id => contact(id)),
+    ...['one','two'].map(id => contact(id)),
     contact('five', {...optIn, phone: '+5491155551235'}),
     contact('six', {...optIn, phone: '+5491155551236'}),
   ];
   const selected = prepareCampaign(mixed, app, leads, [], now);
-  assert.deepEqual(selected.drafts.map(d => d.channel), ['email', 'whatsapp', 'email', 'whatsapp']);
+  assert.deepEqual(selected.drafts.map(d => d.channel), ['email', 'email', 'whatsapp', 'whatsapp']);
   assert.equal(new Set(selected.drafts.map(d => d.contactId)).size, 4);
   assert.equal(prepareCampaign(mixed, app, leads, selected.drafts, now).drafts.length, 0);
 });
@@ -125,19 +125,19 @@ test('reequilibra borradores automáticos existentes y conserva los correos apro
   assert.deepEqual(moves.map(move => [move.thread.contactId, move.channel]), [['three','whatsapp'], ['four','whatsapp']]);
 });
 
-test('usa WhatsApp durante la pausa de correo y conserva el lugar del borrador reemplazado', () => {
+test('prioriza WhatsApp y conserva el lugar del borrador reasignado', () => {
   const oneRecipient = { ...whatsappCampaign, dailyLimit: 1 };
   const granted = contact('one', optIn);
   const ungranted = contact('two');
-  const [emailDraft] = prepareCampaign(oneRecipient, app, [granted], [], now).drafts;
+  const [emailDraft] = prepareCampaign({ ...oneRecipient, channels: ['email'] }, app, [granted], [], now).drafts;
 
-  const prepared = prepareCampaign(oneRecipient, app, [granted, ungranted], [emailDraft], now, true);
+  const prepared = prepareCampaign(oneRecipient, app, [granted, ungranted], [emailDraft], now);
   assert.equal(prepared.drafts.length, 0);
   assert.deepEqual(prepared.moves.map(move => [move.message.id, move.channel]), [[emailDraft.messages[0].id, 'whatsapp']]);
-  assert.equal(prepareCampaign(oneRecipient, app, [ungranted], [], now, true).drafts[0]?.channel, 'email');
-  assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now, true).drafts[0]?.channel, 'whatsapp');
+  assert.equal(prepareCampaign(oneRecipient, app, [ungranted], [], now).drafts[0]?.channel, 'email');
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now).drafts[0]?.channel, 'whatsapp');
 
   emailDraft.messages[0].status = 'resultado_desconocido';
   emailDraft.messages[0].attemptedAt = now.toISOString();
-  assert.equal(prepareCampaign(oneRecipient, app, [granted], [emailDraft], now, true).drafts.length, 0);
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [emailDraft], now).drafts.length, 0);
 });

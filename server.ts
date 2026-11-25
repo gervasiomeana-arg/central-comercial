@@ -18,7 +18,7 @@ import { registerCheckpointRoute } from './server/checkpoint.js';
 import {registerCommercialWhatsAppRoutes} from './server/commercial-whatsapp.js';
 import {configureIntelligence,applyStrategy} from './server/intelligence-cycle.js';
 import {whatsappStatus} from './server/commercial-whatsapp.js';
-import {whatsappAuthorized,whatsappPhone} from './src/whatsapp-policy.js';
+import {whatsappCampaignEligible,whatsappPhone} from './src/whatsapp-policy.js';
 import {localRequestAllowed} from './server/local-boundary.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
@@ -822,7 +822,7 @@ adminRouter.post('/campaigns', (req, res) => {
 
 adminRouter.post('/campaigns/:id/prepare', (req, res) => {
   if (!db.getCampaignById(req.params.id)) return res.status(404).json({ error: 'Campaña no encontrada' });
-  try { res.json(db.prepareCampaignDrafts(req.params.id, {emailOnHold: whatsappStatus().ready && Boolean(db.getEmailPromotionHold())})); }
+  try { res.json(db.prepareCampaignDrafts(req.params.id)); }
   catch (error: any) { res.status(400).json({ error: error.message }); }
 });
 
@@ -964,7 +964,7 @@ adminRouter.post('/conversations/:id/messages', (req, res) => {
     const replyTo = thread?.messages.filter(m => m.direction === 'inbound' && m.providerMessageId).at(-1)?.providerMessageId;
     const queueEmail = direction !== 'inbound' && ['email','whatsapp'].includes(channel||'email') && replyTo && ['pendiente', 'preparado', undefined].includes(status);
     const contact=thread?db.getContactById(thread.contactId):undefined;
-    if(queueEmail&&channel==='whatsapp'&&(!contact||!whatsappAuthorized(contact)))return res.status(409).json({error:'El contacto no tiene autorización de WhatsApp vigente.'});
+    if(queueEmail&&channel==='whatsapp'&&(!contact||!whatsappCampaignEligible(contact)))return res.status(409).json({error:'El contacto no tiene un WhatsApp publicado o registrado que se pueda usar.'});
     const newMsg = db.addMessageToConversation(req.params.id, {
       conversationId: req.params.id,
       direction: direction || 'outbound',

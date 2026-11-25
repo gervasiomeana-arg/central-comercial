@@ -71,8 +71,8 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       assert.equal(campaign.dailyLimit,0);
       campaign.channels = ['email'];
       db.prepareCampaignDrafts(campaign.id);
-      campaign.channels = ['email','whatsapp'];
       const firstAttempt = claimCommercialEmail('test-worker',early);
+      campaign.channels = ['email','whatsapp'];
       assert.ok(firstAttempt, 'director claims promotions beyond the internal daily limit and outside the former send window');
       assert.equal(firstAttempt.recipient,'fallback@club.test');
       completeCommercialEmail({...firstAttempt,workerId:'test-worker',outcome:'rejected',response:'550 5.1.1 Unknown mailbox'});

@@ -1,6 +1,6 @@
 import type { Application, Contact, Message } from '../src/types.js';
 import {usableContactEmail} from '../src/email-policy.js';
-import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
+import {whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js';
 
 export class DraftReviewError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -25,7 +25,7 @@ export function reviewEmailDraft(message: Message, input: { action: string; expe
       const contact = context.contact;
       if (!contact || contact.permission === 'revocado' || ['descartado', 'baja_solicitada'].includes(contact.status) || (contact.status === 'cliente' && !replying)) throw new DraftReviewError('El contacto ya no está habilitado para esta promoción o respuesta.');
       if (message.channel === 'whatsapp') {
-        if (!whatsappAuthorized(contact, now)) throw new DraftReviewError('Falta registrar autorización de WhatsApp.');
+        if (!whatsappCampaignEligible(contact, now)) throw new DraftReviewError('El contacto no tiene un WhatsApp publicado o registrado que se pueda usar.');
       } else {
         const permitted = contact.permission === 'autorizado' || (contact.permission === 'desconocido' &&
           (replying || (context.allowPublicEmail === true && contact.outreachBasis === 'public_business_contact')));

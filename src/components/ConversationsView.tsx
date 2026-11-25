@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { emailPromotionHold } from '../email-policy.js';
-import { whatsappAuthorized } from '../whatsapp-policy.js';
+import { whatsappCampaignEligible } from '../whatsapp-policy.js';
 import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
 import React, { useState, useEffect } from 'react';
 import {
@@ -631,7 +631,7 @@ function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations,
   const inScope = (appId: string) => appFilter === 'all' || appId === appFilter;
   const enabled = campaigns.filter(c => inScope(c.appId) && c.autoSendWhatsApp && c.channels.includes('whatsapp') &&
     ['lista', 'activa'].includes(c.status)).length;
-  const authorized = contacts.filter(c => (appFilter === 'all' || c.interestedAppIds.includes(appFilter)) && whatsappAuthorized(c)).length;
+  const eligible = contacts.filter(c => c.status !== 'cliente' && (appFilter === 'all' || c.interestedAppIds.includes(appFilter)) && whatsappCampaignEligible(c)).length;
   const outgoing = conversations.filter(c => inScope(c.appId)).flatMap(c => c.messages).filter(m =>
     m.direction === 'outbound' && m.channel === 'whatsapp');
   const pending = outgoing.filter(m => (m.status === 'preparado' || m.status === 'pendiente') && m.reviewStatus !== 'rejected').length;
@@ -639,7 +639,7 @@ function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations,
 
   return <section aria-label="Estado comercial de WhatsApp" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
     <p className="font-semibold">WhatsApp {connected === true ? 'vinculado' : connected === false ? 'pendiente de vincular' : 'sin estado reciente de conexión'}</p>
-    <p className="mt-1">{authorized} contactos con autorización registrada · {enabled} campañas con envío habilitado · {pending} mensajes preparados o pendientes · {accepted} envíos confirmados por el proveedor</p>
-    {authorized === 0 && <p className="mt-1">Las promociones por correo de campañas con WhatsApp habilitado invitan al destinatario a autorizar el canal. Si ya recibiste una autorización, podés registrarla en la ficha del contacto.</p>}
+    <p className="mt-1">{eligible} contactos con WhatsApp disponible · {enabled} campañas con envío habilitado · {pending} mensajes preparados o pendientes · {accepted} envíos confirmados por el proveedor</p>
+    {eligible === 0 && <p className="mt-1">Los contactos encontrados con un WhatsApp publicado por el negocio quedan disponibles para las campañas.</p>}
   </section>;
 }

@@ -1,3 +1,4 @@
+import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
 import {campaignStrategyReady} from './sales-director.js';
@@ -151,8 +152,13 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
               existing.history.push({id:`research-${Date.now()}`,timestamp:new Date().toISOString(),type:'nota',description:`Email publicado verificado en ${contact.source}. Fuente anterior conservada: ${existing.source||'sin fuente'}.`,author:'Central Comercial'});
               existing.email=contact.email;existing.source=contact.source;existing.sourceReviewDate=contact.sourceReviewDate;existing.outreachBasis='public_business_contact';
             }
-            if (canUpdate && sameWebsite(existing) && !existing.phone?.trim() && !existing.whatsappConsent && contact.phone) {
-              existing.phone = contact.phone;
+            if (canUpdate && existing.whatsappConsent?.granted !== false && sameWebsite(existing) && contact.publishedWhatsApp &&
+                (!existing.phone?.trim() || whatsappPhone(existing.phone) === contact.phone) &&
+                existing.publishedWhatsApp?.number !== contact.phone) {
+              existing.phone ||= contact.phone;
+              existing.publishedWhatsApp = contact.publishedWhatsApp;
+              existing.source ||= contact.source;
+              existing.sourceReviewDate ||= contact.sourceReviewDate;
               existing.history ||= [];
               existing.history.push({
                 id: `research-whatsapp-${Date.now()}`, timestamp: new Date().toISOString(), type: 'nota',

@@ -4,7 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
 import {db} from './db.js';
 import {workerAuthorized,TEST_RECIPIENTS} from './channelTests.js';
-import {whatsappAuthorized,whatsappPhone} from '../src/whatsapp-policy.js';
+import {whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js';
 import {replyDecision,currentReplyText,dailyCommercialDigest} from './commercial-email.js';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const canonical=(s:string)=>whatsappPhone(s).replace(/^549/,'54');
@@ -34,7 +34,7 @@ export function claimWhatsApp(id:string,now=new Date()){
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
  for(const conv of conversations){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
-  if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappAuthorized(contact,now))continue;
+  if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappCampaignEligible(contact,now))continue;
   for(const msg of conv.messages){
    if(msg.direction!=='outbound'||msg.channel!=='whatsapp'||msg.status!=='preparado'||msg.replacementMessageId||msg.reviewStatus==='rejected'||msg.attemptedAt)continue;
    const reply=Boolean(msg.replyToProviderId);
