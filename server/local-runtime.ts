@@ -2,7 +2,7 @@ import { validDay } from '../src/ledger.js';
 import { validateActivity } from './runtime-activity.js';
 import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
-import type { LocalRuntimeState } from '../src/runtime-types.js';
+import { pcUpdateStates, type LocalRuntimeState, type PcUpdateStatus } from '../src/runtime-types.js';
 
 export class LocalRuntime {
   private current?: Omit<LocalRuntimeState, 'online'> & { id: string; at: number };
@@ -33,6 +33,18 @@ export class LocalRuntime {
     const connections = reportUnavailable ? previous?.connections : input.connections
       ? {email:input.connections.email, whatsapp:input.connections.whatsapp, intelligence:input.connections.intelligence} : undefined;
     const reportAt = reportUnavailable ? previous?.reportAt : activity || connections ? now : undefined;
+    let update: PcUpdateStatus | undefined;
+    if (input.update !== undefined) {
+      const candidate = input.update;
+      const validCommit = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
+      if (!candidate || !pcUpdateStates.includes(candidate.status) ||
+          typeof candidate.at !== 'string' || !Number.isFinite(Date.parse(candidate.at)) ||
+          (candidate.targetCommit !== undefined && !validCommit(candidate.targetCommit)) ||
+          (candidate.installedCommit !== undefined && !validCommit(candidate.installedCommit))) {
+        throw new Error('Estado de actualización inválido.');
+      }
+      update = { status: candidate.status, at: candidate.at, targetCommit: candidate.targetCommit, installedCommit: candidate.installedCommit };
+    }
     const report = input.ownerReport;
     const ownerReport = report && typeof report.day === 'string' && validDay(report.day) &&
       ['sin_intento', 'aceptado_proveedor', 'entrega_confirmada', 'rechazado', 'resultado_desconocido', 'registro_no_disponible'].includes(report.status)
@@ -40,13 +52,16 @@ export class LocalRuntime {
           at: typeof report.at === 'string' && Number.isFinite(Date.parse(report.at))
             ? new Date(report.at).toISOString() : undefined }
       : undefined;
-    this.current = { activity, ownerReport, id: input.workerId, at: now, startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
+    this.current = { activity, ownerReport, update, id: input.workerId, at: now, startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
       components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)],
       connections, reportAt, reportUnavailable,
       diagnosticMode:input.diagnosticMode,sourceFingerprint: reportUnavailable ? previous?.sourceFingerprint : input.sourceFingerprint };
   }
   status(): LocalRuntimeState {
-    if (!this.current || this.now() - this.current.at >= 90000) return { online: false, issues: [] };
+    if (!this.current) return { online: false, issues: [] };
+    if (this.now() - this.current.at >= 90000) {
+      return { online: false, issues: [], lastSeenAt: this.current.at };
+    }
     const { id, at, ...status } = this.current;
     return { online: true, ...status,receivedAt:at };
   }

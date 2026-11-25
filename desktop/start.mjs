@@ -9,7 +9,7 @@ import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } 
 import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies } from './local-app.mjs';
-import { refreshInstalledUpdater } from './auto-update.mjs';
+import { activeRelease, refreshInstalledUpdater } from './auto-update.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const runtimeDir = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -182,6 +182,21 @@ async function shareRequestedRecords(requestId) {
   });
   if (!remote.ok) log('central', `Consulta remota de registros pendiente (HTTP ${remote.status}).`);
 }
+function readUpdateStatus() {
+  try {
+    const { status, at, detail } = JSON.parse(fs.readFileSync(path.join(runtimeDir, 'auto-update-status.json'), 'utf8'));
+    if (!['current', 'preparing', 'ready_for_restart', 'activated', 'error', 'activation_failed'].includes(status) ||
+        typeof at !== 'string' || !Number.isFinite(Date.parse(at))) return undefined;
+    return {
+      status, at,
+      installedCommit: activeRelease() ?? undefined,
+      targetCommit: typeof detail === 'string' && /^[a-f0-9]{40}$/.test(detail) ? detail : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 let wasReportUnavailable = false;
 async function heartbeat() {
   if (reporting) return; reporting = true;
@@ -202,7 +217,7 @@ async function heartbeat() {
     wasReportUnavailable = reportUnavailable;
     const connections = stopping ? {email:false,whatsapp:false,intelligence:false} : report?.connections;
     const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections,reportUnavailable,
-      sourceFingerprint:report?.release?.sourceFingerprint,activity:stopping?undefined:report?.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
+      sourceFingerprint:report?.release?.sourceFingerprint,update:readUpdateStatus(),activity:stopping?undefined:report?.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
     atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections,reportUnavailable,components,issues:[...issues],backupAt,release:report?.release});
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },

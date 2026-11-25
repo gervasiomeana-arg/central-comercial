@@ -106,9 +106,26 @@ app.get('/api/local-runtime/report',(req,res)=>{
     if (!conversation.campaignId || !activeCampaignIds.has(conversation.campaignId)) return total;
     return total + conversation.messages.filter(message => message.direction === 'outbound' &&
       !message.replyToProviderId && ['preparado', 'pendiente'].includes(message.status) &&
-      message.reviewStatus !== 'rejected').length;
+      message.reviewStatus !== 'rejected' && !message.replacementMessageId).length;
   }, 0);
   const now = new Date();
+  const recentCutoff = now.getTime() - 7 * 86400000;
+  const outbound = conversations.flatMap(c => c.messages).filter(m => m.direction === 'outbound');
+  const byId = new Map(outbound.map(m => [m.id, m]));
+  const bounced = outbound.filter(m => m.channel === 'email' && m.status === 'fallido' &&
+    m.emailFailureAt && Date.parse(m.emailFailureAt) >= recentCutoff && Date.parse(m.emailFailureAt) <= now.getTime() && !m.replyToProviderId);
+  const retries = bounced.flatMap(m => {
+    const retry = m.replacementMessageId && byId.get(m.replacementMessageId);
+    return retry ? [retry] : [];
+  });
+  const accepted = retries.filter(m => ['aceptado_proveedor', 'entrega_confirmada'].includes(m.status) && m.serviceConfirmationId);
+  const delivery = {
+    emailBounces: bounced.length,
+    pendingRetries: retries.filter(m => ['preparado', 'pendiente', 'envio_intentado'].includes(m.status) && m.reviewStatus !== 'rejected').length,
+    acceptedEmailRetries: accepted.filter(m => m.channel === 'email').length,
+    acceptedWhatsAppRetries: accepted.filter(m => m.channel === 'whatsapp').length,
+    failedRetries: retries.filter(m => ['fallido', 'resultado_desconocido'].includes(m.status)).length,
+  };
   const apps = db.getApplications();
   const overview = ['all', ...apps.map(app=>app.id)].map(appId => {
     const metrics = db.getDashboardMetrics(appId);
@@ -127,6 +144,7 @@ app.get('/api/local-runtime/report',(req,res)=>{
       campaignsUsingOpenJarvis: planningCampaigns.filter(c => Boolean(c.intelligencePlanId)).length,
       campaignsAwaitingOpenJarvis: planningCampaigns.filter(c => !c.intelligencePlanId).length,
       statistics: dailyStatistics(apps, db.getContacts(), conversations, 90, now),
+      delivery,
       overview,
     },
   });

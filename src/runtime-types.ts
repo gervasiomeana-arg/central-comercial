@@ -9,6 +9,20 @@ export interface RuntimeActivity {
   campaignsAwaitingOpenJarvis?: number;
   statistics: DailyStatistics;
   overview?: RuntimeOverview[];
+  delivery?: RuntimeDelivery;
+}
+
+export const deliveryCountKeys = [
+  'emailBounces', 'pendingRetries', 'acceptedEmailRetries', 'acceptedWhatsAppRetries', 'failedRetries',
+] as const;
+export type RuntimeDelivery = Record<typeof deliveryCountKeys[number], number>;
+
+export const pcUpdateStates = ['current', 'preparing', 'ready_for_restart', 'activated', 'error', 'activation_failed'] as const;
+export interface PcUpdateStatus {
+  status: typeof pcUpdateStates[number];
+  at: string;
+  targetCommit?: string;
+  installedCommit?: string;
 }
 
 export interface OwnerReportStatus {
@@ -21,6 +35,7 @@ export type LocalComponentState = 'running' | 'missing' | 'stopped';
 export interface LocalRuntimeState {
   online: boolean;
   activity?: RuntimeActivity;
+  update?: PcUpdateStatus;
   overviewRequiresAuth?: boolean;
   ownerReport?: OwnerReportStatus;
   startedAt?: number;
@@ -28,6 +43,7 @@ export interface LocalRuntimeState {
   model?: string;
   backupAt?: number;
   receivedAt?: number;
+  lastSeenAt?: number;
   reportAt?: number;
   reportUnavailable?: boolean;
   diagnosticMode?: boolean;

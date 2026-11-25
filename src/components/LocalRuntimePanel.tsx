@@ -25,6 +25,15 @@ const ownerReportLabels = {
   registro_no_disponible: 'Registro no disponible',
 };
 
+const updateLabels = {
+  current: 'Al día con GitHub',
+  preparing: 'Descargando y preparando la actualización',
+  ready_for_restart: 'Actualización preparada para el próximo inicio de Central',
+  activated: 'Actualización aplicada',
+  error: 'La preparación de la actualización falló',
+  activation_failed: 'La actualización no pudo aplicarse',
+};
+
 export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   const [runtime, setRuntime] = useState<LocalRuntimeState | null>(null);
   const [connections, setConnections] = useState({ email: false, whatsapp: false, intelligence: false });
@@ -50,7 +59,9 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   return <section className="rounded-2xl bg-slate-900 text-white p-6 sm:p-8 space-y-6" aria-labelledby="runtime-title">
     <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-4"><Monitor size={25} className="mt-1 text-emerald-300 shrink-0" /><div><p className="text-xs uppercase tracking-widest text-slate-400 mb-2">Una sola Central Comercial</p><h2 id="runtime-title" className="text-xl font-semibold">Tu computadora, conectada al negocio.</h2><p className="text-sm text-slate-300 mt-2">Un iniciador coordina correo, WhatsApp y motor de inteligencia. La operación autónoma y los registros se conservan en tu PC dedicada.</p></div></div><button onClick={() => void refresh()} disabled={busy} aria-label="Actualizar estado de mi computadora" className="p-3 rounded-xl bg-white/10 min-h-12 min-w-12 disabled:opacity-40"><RefreshCw size={18} /></button></div>
     <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] && !reportUnavailable ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{reportUnavailable ? (connections[item.id] ? 'Vinculado en el último reporte' : 'Esperando confirmación del servidor') : connections[item.id] ? (item.id === 'whatsapp' ? 'Sesión vinculada según el ejecutor' : 'Conexión confirmada por el ejecutor') : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
-    <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>
+    <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : runtime?.lastSeenAt
+      ? `Sin señal reciente de la PC · Última señal: ${new Date(runtime.lastSeenAt).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}.`
+      : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>
     {reportUnavailable && <p className="text-amber-200" role="status">El iniciador sigue conectado. El servidor local tarda en actualizar el estado.</p>}
     {runtime?.diagnosticMode && <p className="text-amber-200" role="status">Verificación sin envíos: los ejecutores pueden conectarse, pero las colas no entregan mensajes.</p>}
     {remote && <p className="text-sm text-slate-300">Los envíos de WhatsApp se realizan desde tu PC. El estado publicado se actualiza con la señal del ejecutor.</p>}
@@ -65,9 +76,20 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
       <div><dt>Campañas con estrategia de OpenJarvis aplicada</dt><dd className="text-lg">{runtime.activity.campaignsUsingOpenJarvis}</dd>{runtime.activity.campaignsAwaitingOpenJarvis !== undefined && <dd>{runtime.activity.campaignsAwaitingOpenJarvis} pendientes de estrategia local</dd>}</div>
       <div><dt>Promociones preparadas</dt><dd className="text-lg">{runtime.activity.pendingPromotions}</dd></div>
       <div className="sm:col-span-3"><dt>Automatizaciones {runtime.activity.paused ? 'pausadas' : 'habilitadas'}</dt>
-        {runtime.activity.lastCycleAt && <dd>Último ciclo: {new Date(runtime.activity.lastCycleAt).toLocaleString('es-AR')}.</dd>}
+        {runtime.activity.lastCycleAt && <dd>Último ciclo: {new Date(runtime.activity.lastCycleAt).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}.</dd>}
       </div>
     </dl>}
+    {runtime?.activity?.delivery && <div className="text-sm text-slate-200">
+      <p className="font-medium">Rebotes y reintentos en los últimos 7 días</p>
+      <p>{runtime.activity.delivery.emailBounces} correos rebotados · {runtime.activity.delivery.pendingRetries} reintentos en curso · {runtime.activity.delivery.acceptedEmailRetries} aceptados por email · {runtime.activity.delivery.acceptedWhatsAppRetries} aceptados por WhatsApp · {runtime.activity.delivery.failedRetries} fallidos o sin confirmación</p>
+    </div>}
+    {runtime?.update && <div className="text-sm text-slate-200">
+      <p className="font-medium">Actualización desde GitHub</p>
+      <p>{updateLabels[runtime.update.status]}
+        {runtime.update.installedCommit && ` · Instalado ${runtime.update.installedCommit.slice(0, 7)}`}
+        {runtime.update.targetCommit && runtime.update.targetCommit !== runtime.update.installedCommit && ` · Disponible ${runtime.update.targetCommit.slice(0, 7)}`}
+      </p>
+    </div>}
     {(runtime?.reportAt || (!reportUnavailable && runtime?.receivedAt)) && <p className="text-xs text-slate-400">Último reporte confirmado · {new Date((runtime.reportAt ?? runtime.receivedAt)!).toLocaleString('es-AR', {timeZone:'America/Argentina/Buenos_Aires'})}.</p>}
     {runtime?.sourceFingerprint && <p className="text-xs text-slate-400">Versión de la PC: {runtime.sourceFingerprint.slice(0,12)}.</p>}
     {runtime?.issues.length ? <ul className="space-y-2 text-sm text-amber-200">{runtime.issues.map(issue => <li key={issue}>{issueLabels[issue] || 'Revisá la ventana de Central Comercial.'}</li>)}</ul> : null}

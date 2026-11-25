@@ -20,7 +20,7 @@ test('estado unificado vence, rechaza otro equipo y no expone el identificador p
   assert.throws(() => runtime.heartbeat({ ...heartbeat, workerId: 'local-b' }), /otra computadora/);
   assert.throws(() => runtime.heartbeat({ ...heartbeat, issues: ['secret-password'] }), /inválido/);
   now += 90000;
-  assert.deepEqual(runtime.status(), { online: false, issues: [] });
+  assert.deepEqual(runtime.status(), { online: false, issues: [], lastSeenAt: 1000 });
 });
 
 test('configuración se reutiliza por ruta, sin copiar archivos, y el motor no hereda claves', () => {
@@ -70,7 +70,16 @@ test('la publicación recibe totales de actividad y descarta campos privados del
       completedPlans: 1, campaignsUsingOpenJarvis: 1, statistics: { ...statistics, messages: ['contenido privado'] },
       overview: [{ ...overview[0], contactNames: ['contenido privado'] }] },
   };
-  runtime.heartbeat(heartbeat);
+  const delivery = { emailBounces: 3, pendingRetries: 1, acceptedEmailRetries: 0, acceptedWhatsAppRetries: 1, failedRetries: 0 };
+  const update = { status: 'ready_for_restart', at: new Date(now).toISOString(), targetCommit: 'a'.repeat(40) };
+  runtime.heartbeat({
+    ...heartbeat,
+    update: { ...update, detail: 'contenido privado' },
+    activity: { ...heartbeat.activity, delivery: { ...delivery, recipient: 'contenido privado' } },
+  });
+  assert.deepEqual(runtime.status().activity?.delivery, delivery);
+  assert.equal(runtime.status().update?.targetCommit, update.targetCommit);
+  assert.throws(() => runtime.heartbeat({ ...heartbeat, update: { ...update, targetCommit: 'invalid' } }), /actualización inválido/);
   assert.deepEqual(runtime.status().activity?.statistics, statistics);
   assert.deepEqual(runtime.status().activity?.overview, overview);
   assert.throws(() => runtime.heartbeat({ ...heartbeat, activity: { ...heartbeat.activity,

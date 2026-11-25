@@ -1,5 +1,5 @@
 import { validDay } from '../src/ledger.js';
-import { overviewCountKeys, type RuntimeActivity, type RuntimeOverview } from '../src/runtime-types.js';
+import { deliveryCountKeys, overviewCountKeys, type RuntimeActivity, type RuntimeDelivery, type RuntimeOverview } from '../src/runtime-types.js';
 
 const isCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -38,11 +38,16 @@ export function validateActivity(value: RuntimeActivity): RuntimeActivity {
       return { ...counts, appId:item.appId, dailyMarketActivity:item.dailyMarketActivity };
     });
   }
+  const delivery = value.delivery;
+  if (delivery !== undefined && (!delivery || !deliveryCountKeys.every(key => isCount(delivery[key])))) {
+    throw new Error('Resumen de entrega inválido.');
+  }
   return {
     paused: value.paused, lastCycleAt: value.lastCycleAt, pendingPromotions: value.pendingPromotions,
     completedPlans: value.completedPlans, campaignsUsingOpenJarvis: value.campaignsUsingOpenJarvis,
     statistics: { dates: [...dates], series: cleanSeries },
     ...(overview ? { overview } : {}),
+    ...(delivery ? { delivery: Object.fromEntries(deliveryCountKeys.map(key => [key, delivery[key]])) as RuntimeDelivery } : {}),
     ...(value.campaignsAwaitingOpenJarvis !== undefined ? { campaignsAwaitingOpenJarvis: value.campaignsAwaitingOpenJarvis } : {}),
   };
 }
