@@ -1,5 +1,5 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {usableContactEmail} from '../src/email-policy.js';
+import {invalidEmailDestination, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation, Message } from '../src/types.js';
@@ -58,7 +58,9 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     threadsByContact.set(thread.contactId, threads);
     const contact = contactMap.get(thread.contactId);
     const recipient = thread.channel === 'whatsapp' ? whatsappPhone(contact?.phone || '') : contact?.email?.trim().toLowerCase();
-    if (recipient) usedRecipients.add(`${thread.channel}:${recipient}`);
+    if (recipient && !thread.messages.some(m => m.direction === 'outbound' && m.channel === thread.channel && m.approvedRecipient)) {
+      usedRecipients.add(`${thread.channel}:${recipient}`);
+    }
     for (const message of thread.messages) {
       if (message.approvedRecipient) usedRecipients.add(`${message.channel}:${message.approvedRecipient}`);
     }
@@ -118,6 +120,12 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
           message.approvedRecipient === email && contact.undeliverableEmail === email);
       if (message.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp && rejectedEmail) {
         prepare(contact, 'whatsapp', threads, message);
+        continue;
+      }
+      if (message.channel === 'email' && rejectedEmail && emailUsable && campaign.autoSendEmail &&
+          message.approvedRecipient && message.approvedRecipient !== email &&
+          invalidEmailDestination(message.serviceError || '')) {
+        prepare(contact, 'email', threads, message);
         continue;
       }
       if (message.channel === 'whatsapp' && emailUsable && campaign.autoSendEmail &&

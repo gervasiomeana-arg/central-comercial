@@ -162,6 +162,10 @@ test('recupera avisos de Gmail sin parte DSN y conserva el diagnóstico real', a
   assert.deepEqual(collectBounces(mail, '', threads, 'unknown@other.test'), []);
   assert.deepEqual(collectBounces(mail, '', [{id,from:'other@institucion.test'}], 'mailer-daemon@googlemail.com'), []);
   assert.deepEqual(collectBounces({...mail,text:mail.text.replace('550 5.7.1','450 4.7.1')}, '', threads, 'mailer-daemon@googlemail.com'), []);
+  const domainError = `Your message wasn't delivered to ${recipient}.\r\nDiagnostic-Code: smtp; DNS Error: NXDOMAIN`;
+  assert.equal(collectBounces({...mail,text:domainError}, '', threads, 'mailer-daemon@googlemail.com')[0]?.status,'5.1.2');
+  assert.deepEqual(collectBounces({...mail,text:domainError + '\r\nGmail will retry for 44 more hours.'}, '', threads, 'mailer-daemon@googlemail.com'), []);
+
 });
 
 test('pone en pausa nuevas promociones tras fallos confirmados a cinco destinatarios distintos', async () => {

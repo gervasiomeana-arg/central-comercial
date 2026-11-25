@@ -55,6 +55,7 @@ async function send(){
 }
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
+  await reviewArchivedBounces(threads);
   const validity=String(imap.mailbox.uidValidity);if(state.validity!==validity){state.validity=validity;state.uid=Math.max(0,Number(imap.mailbox.uidNext)-51);save();}
   if (state.bounceReviewValidity !== validity && state.bounceReview?.validity !== validity) {
     try {
@@ -88,6 +89,35 @@ async function read(){
       if (!imap.usable) throw error;
       console.error('Lote histórico pendiente:', error.message);
     }
+  }
+}
+async function reviewArchivedBounces(threads) {
+  if (Date.now() < (state.archivedBounceReviewAt || 0) + 6 * 3600000) return;
+  try {
+    const folders = (await imap.list()).filter(mailbox => ['\\All', '\\Trash', '\\Junk'].includes(mailbox.specialUse));
+    for (const folder of folders) {
+      // Each folder has its own UID sequence. The live INBOX cursor stays independent.
+      const lock = await imap.getMailboxLock(folder.path, { readOnly: true });
+      try {
+        const uids = await imap.search({
+          since: new Date(Date.now() - 7 * 86400000),
+          or: [{ from: 'mailer-daemon' }, { from: 'postmaster' }]
+        }, { uid: true });
+        if (Array.isArray(uids)) {
+          for (let offset = Math.max(0, uids.length - 250); offset < uids.length; offset += 12) {
+            await readMessages(uids.slice(offset, offset + 12), threads, true);
+          }
+        }
+      } finally {
+        lock.release();
+        await imap.mailboxOpen('INBOX');
+      }
+    }
+    state.archivedBounceReviewAt = Date.now();
+    save();
+  } catch (error) {
+    if (!imap.usable || imap.mailbox?.path !== 'INBOX') throw error;
+    console.error('Revisión de devoluciones fuera de Recibidos pendiente:', error.message);
   }
 }
 async function readMessages(range, threads, onlyBounces = false) {

@@ -1,6 +1,6 @@
 import { whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {emailPromotionHold, usableContactEmail} from '../src/email-policy.js';
+import {emailPromotionHold, invalidEmailDestination, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -53,7 +53,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const promotionHold = emailPromotionHold(all, now.getTime());
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now);
-  const whatsappAlternates = new Set(all.filter(m => m.channel === 'whatsapp' && m.status === 'fallido')
+  const failedAlternates = new Set(all.filter(m => m.status === 'fallido' && m.replacementMessageId)
     .map(m => m.replacementMessageId));
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
@@ -66,7 +66,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       else {
         if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
         if (campaign?.mode === 'automatico' && campaign.autoSendWhatsApp && campaign.channels.includes('whatsapp') &&
-            !msg.reviewStatus && !whatsappAlternates.has(msg.id) && whatsappCampaignEligible(contact, now)) continue;
+            !msg.reviewStatus && !failedAlternates.has(msg.id) && whatsappCampaignEligible(contact, now)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined) {
@@ -125,9 +125,7 @@ export function completeCommercialEmail(input: any) {
   db.addLog(accepted ? 'info' : 'warning', 'conversaciones', `Correo ${msg.status}`, { conversationId:conv.id, messageId:msg.id }); db.save(); return { success:true };
 }
 function suppressInvalidEmail(recipient: string, diagnostic: string, status?: string) {
-  const invalidMailbox = ['5.1.1', '5.1.3', '5.1.10'].includes(status || '') ||
-    /\b5\.1\.(?:1|3|10)\b|\b(?:no such user|user unknown|unknown recipient|recipient unknown|mailbox does not exist|recipient (?:address )?(?:does not exist|not found))\b/i.test(diagnostic);
-  if (!invalidMailbox) return;
+  if (!invalidEmailDestination(diagnostic, status)) return;
   for (const contact of db.getContacts().filter(c => c.email?.trim().toLowerCase() === recipient)) {
     contact.undeliverableEmail = recipient;
   }

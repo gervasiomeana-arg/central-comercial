@@ -32,3 +32,8 @@ export function emailPromotionHold(messages: Message[], now = Date.now()) {
   const fifth = [...failureTimes.values()].sort((a,b) => b-a)[4];
   return fifth === undefined ? undefined : fifth + windowMs;
 }
+
+export function invalidEmailDestination(diagnostic: string, status?: string) {
+  return ['5.1.1', '5.1.2', '5.1.3', '5.1.10'].includes(status || '') ||
+    /\b5\.1\.(?:1|2|3|10)\b|\bNXDOMAIN\b|\bdomain name not found\b|\bnull MX\b|\b(?:no such (?:user|person|mailbox)|user unknown|unknown recipient|recipient unknown|(?:user|mailbox|email account) (?:doesn.t|does not) exist|recipient (?:address )?(?:does not exist|not found))\b/i.test(diagnostic);
+}

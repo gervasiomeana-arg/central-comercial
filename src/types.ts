@@ -90,6 +90,7 @@ export interface Contact {
   publishedWhatsApp?: { number: string; source: string };
   whatsappConsent?:{granted:boolean;at:string;evidence:string};
   undeliverableEmail?: string;
+  emailRecoveryCheckedAt?: string;
   outreachBasis?: 'public_business_contact';
   id: string;
   orgName: string;

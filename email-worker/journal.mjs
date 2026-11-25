@@ -32,21 +32,23 @@ export function collectBounces(mail, originalHeaders, threads, sender) {
   for (const part of deliveryParts) {
     for (const block of part.content.toString('utf8').split(/\r?\n[ \t]*\r?\n/)) {
       const address = block.match(/^Final-Recipient:[ \t]*rfc822;[ \t]*([^\s<>]+)[ \t]*\r?$/im)?.[1]?.toLowerCase();
-      const status = block.match(/^Status:[ \t]*(5\.\d{1,3}\.\d{1,3})[ \t]*\r?$/im)?.[1];
-      if (!address || !status || !/^Action:[ \t]*failed[ \t]*\r?$/im.test(block)) continue;
+      const status = block.match(/^Status:[ \t]*([45]\.\d{1,3}\.\d{1,3})[ \t]*\r?$/im)?.[1];
+      if (!address || status?.startsWith('4.') || !/^Action:[ \t]*failed[ \t]*\r?$/im.test(block)) continue;
       const references = threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id);
       const diagnostic = block.match(/^Diagnostic-Code:[ \t]*smtp;[ \t]*([^\r\n]+)/im)?.[1];
-      if (references.length) bounces.push({ recipient: address, status, references, diagnostic });
+      if (references.length) bounces.push({ recipient: address, status: status || '5.0.0', references, diagnostic });
     }
   }
   if (!bounces.length && /^mailer-daemon@(?:googlemail|gmail)\.com$/i.test(sender || '') &&
-      originalParts.length && typeof mail.text === 'string') {
+      originalParts.length && typeof mail.text === 'string' &&
+      !/\b(?:Gmail will retry|delivery is delayed|delivery incomplete)\b/i.test(mail.text)) {
     const address = mail.text.match(/^(?:Your message (?:wasn't delivered to |to )|There was a problem delivering your message to )([^\s<>]+@[^\s<>]+?)(?=[.,]?(?:\s|$))/im)?.[1]?.toLowerCase();
     const response = mail.text.match(/^The response(?: from the remote server)? was:[ \t]*\r?\n\s*(5\d{2})(?:[ -]+(5\.\d{1,3}\.\d{1,3}))?[^\r\n]*/im);
     const references = address ? threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id) : [];
-    if (address && response && references.length) {
-      const diagnostic = response[0].split(/\r?\n/).slice(1).join(' ').trim().slice(0,350);
-      bounces.push({ recipient:address, status:response[2] || '5.0.0', references, diagnostic });
+    const dnsFailure = mail.text.match(/^(?:Diagnostic-Code:\s*smtp;\s*)?[^\r\n]*\b(?:NXDOMAIN|domain name not found)\b[^\r\n]*/im)?.[0];
+    if (address && (response || dnsFailure) && references.length) {
+      const diagnostic = (response ? response[0].split(/\r?\n/).slice(1).join(' ').trim() : dnsFailure).slice(0,350);
+      bounces.push({ recipient:address, status:response?.[2] || (dnsFailure ? '5.1.2' : '5.0.0'), references, diagnostic });
     }
   }
   return bounces;

@@ -141,3 +141,21 @@ test('prioriza WhatsApp y conserva el lugar del borrador reasignado', () => {
   emailDraft.messages[0].attemptedAt = now.toISOString();
   assert.equal(prepareCampaign(oneRecipient, app, [granted], [emailDraft], now).drafts.length, 0);
 });
+
+test('reintenta un rebote definitivo una sola vez a la dirección corregida y conserva el intento original', () => {
+  const originalContact = contact('one');
+  const emailCampaign = { ...campaign, autoSendEmail: true };
+  const [original] = prepareCampaign(emailCampaign, app, [originalContact], [], now).drafts;
+  const [message] = original.messages;
+  Object.assign(message, {
+    status: 'fallido',
+    approvedRecipient: originalContact.email,
+    serviceError: 'Rebote permanente confirmado: 5.0.0 · DNS Error: NXDOMAIN',
+  });
+  assert.equal(prepareCampaign(emailCampaign, app, [originalContact], [original], now).drafts.length, 0);
+  const corrected = { ...originalContact, email: 'info@nuevo.test' };
+  const result = prepareCampaign(emailCampaign, app, [corrected], [original], now);
+  assert.equal(result.drafts[0]?.channel, 'email');
+  assert.equal(result.replacements[0]?.original.id, message.id);
+  assert.equal(prepareCampaign(emailCampaign, app, [corrected], [original, ...result.drafts], now).drafts.length, 0);
+});

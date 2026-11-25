@@ -1,3 +1,5 @@
+import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
+import { invalidEmailDestination } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
@@ -6,7 +8,7 @@ import { db } from './db.js';
 import { accountingDay } from '../src/ledger.js';
 import { fetchPublicText, relevantSearchLinks, contactLinks, reviewContactPage, publicUrl } from './public-web.js';
 import { normalize, researchQueriesFor } from './sales-director.js';
-import type { ResearchCandidate, ResearchOutcome } from '../src/types.js';
+import type { Contact, ResearchCandidate, ResearchOutcome } from '../src/types.js';
 
 let running=false;
 class ResearchQuota extends Error {}
@@ -14,12 +16,94 @@ const host=(url:string)=>new URL(url).hostname.toLowerCase().replace(/^www\./,''
 const candidateKey=(candidate:ResearchCandidate)=>{const u=new URL(candidate.url);return `${u.hostname.toLowerCase().replace(/^www\./,'')}${u.pathname.replace(/\/$/,'')||'/'}${u.search}`;};
 const reason=(outcome:ResearchOutcome,label:string)=>{outcome.reasons[label]=(outcome.reasons[label]||0)+1;};
 
+async function domainReceivesEmail(email: string) {
+  const domain = email.split('@')[1];
+  try {
+    const records = await resolveMx(domain);
+    if (records.length) return records.some(record => record.exchange && record.exchange !== '.');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENODATA') return false;
+  }
+  // SMTP allows delivery to address records when a domain has no MX records.
+  const results = await Promise.allSettled([resolve4(domain), resolve6(domain)]);
+  return results.some(result => result.status === 'fulfilled' && result.value.length > 0);
+}
+
+async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
+  const now = new Date();
+  const cutoff = now.getTime() - 7 * 86400000;
+  const threads = db.getConversations();
+  const invalid = new Set(threads.flatMap(thread => thread.messages
+    .filter(m => m.channel === 'email' && m.status === 'fallido' && m.approvedRecipient &&
+      invalidEmailDestination(m.serviceError || ''))
+    .map(m => m.approvedRecipient!.toLowerCase())));
+  for (const thread of threads) {
+    const contact = db.getContactById(thread.contactId);
+    const campaign = thread.campaignId && db.getCampaignById(thread.campaignId);
+    const app = db.getApplicationById(thread.appId);
+    if (!contact || !campaign || !app || !campaign.autoSendEmail || !campaign.channels.includes('email') ||
+        !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) ||
+        !campaignStrategyReady(campaign, app) || !db.campaignInActiveRun(campaign.id) || contact.outreachBasis !== 'public_business_contact' ||
+        contact.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(contact.status) ||
+        (contact.emailRecoveryCheckedAt && Date.parse(contact.emailRecoveryCheckedAt) > now.getTime() - 86400000)) continue;
+    const email = contact.email?.trim().toLowerCase();
+    const [message] = thread.messages;
+    const failedAt = Date.parse(message?.emailFailureAt || '');
+    if (thread.messages.length !== 1 || message.channel !== 'email' || message.direction !== 'outbound' ||
+        message.status !== 'fallido' || message.approvedRecipient !== email || !invalid.has(email) ||
+        message.replacementMessageId || !Number.isFinite(failedAt) || failedAt < cutoff || failedAt > now.getTime() ||
+        threads.some(other => other.contactId === contact.id && other.appId === thread.appId &&
+          (other.messages.some(m => m.direction === 'inbound') ||
+            (other.id !== thread.id && other.campaignId === thread.campaignId)))) continue;
+
+    let site: URL;
+    let source: URL;
+    try {
+      site = publicUrl(contact.website);
+      source = publicUrl(contact.source);
+      if (host(site.href) !== host(source.href)) continue;
+    } catch { continue; }
+    db.saveContact({ ...contact, emailRecoveryCheckedAt: now.toISOString() });
+    const queue = [...new Set([source.href, new URL('/', site).href])];
+    let context: ResearchCandidate['context'];
+    for (let index = 0; index < Math.min(queue.length, 4); index++) {
+      const url = queue[index];
+      try {
+        const page = await fetcher(url);
+        if (host(page.url) !== host(site.href)) continue;
+        const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, invalid);
+        context = result.evidence;
+        for (const link of contactLinks(page.text, page.url)) if (!queue.includes(link)) queue.push(link);
+        if (result.contact && await saveRecoveredAddress(contact.id, email, result.contact)) return;
+      } catch { /* An unavailable page can be reviewed on the next day. */ }
+    }
+    return;
+  }
+}
+
+async function saveRecoveredAddress(id: string, original: string, found: Contact) {
+  const nextEmail = found.email;
+  if (!nextEmail || !await domainReceivesEmail(nextEmail)) return false;
+  const latest = db.getContactById(id);
+  if (!latest || db.getSchedulerState().automationsPaused || latest.email.trim().toLowerCase() !== original ||
+      latest.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(latest.status)) return false;
+  db.saveContact({
+    ...latest, email: nextEmail, undeliverableEmail: original, source: found.source, sourceReviewDate: found.sourceReviewDate,
+    history: [...(latest.history || []), { id: `recovered-${Date.now()}`, type: 'nota', timestamp: new Date().toISOString(),
+      description: `Dirección alternativa publicada por la organización en ${found.source} después de un rebote definitivo.`,
+      author: 'Central Comercial' }],
+  });
+  return true;
+}
+
 export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetchPublicText) {
   if(running)return;
   running=true;
   try {
     const report=db.getSalesGoalProgress(), goal=report.goal, state=db.getResearchState(), day=accountingDay();
-    if(!goal.enabled||!goal.discoverContacts||report.paused)return;
+    if (!goal.enabled || report.paused) return;
+    if (goal.sendEmail && report.remaining && fetcher === fetchPublicText) await recoverBouncedContact(fetcher);
+    if (!goal.discoverContacts || db.getSchedulerState().automationsPaused) return;
     if(state.month!==goal.month)Object.assign(state,{month:goal.month,day,requests:0,visited:[],status:'pending',detail:undefined,lastError:undefined});
     if(state.day!==day)Object.assign(state,{day,requests:0,status:'pending',detail:undefined});
     // A spent quota is a scheduling condition, never a network failure.
@@ -132,7 +216,8 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
       const candidate=queue[index];
       try{
         const page=await fetchPage(candidate.url);outcome.checked++;
-        const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context);
+        const rejectedAddresses = new Set(db.getContacts().map(c => c.undeliverableEmail).filter((email): email is string => Boolean(email)));
+        const reviewed=reviewContactPage(page.text,page.url,app,country,new Date(),candidate.context,rejectedAddresses);
         db.addLog('info','contactos',`Página pública revisada para ${app.name}: ${reviewed.reason}`,{campaignId:campaign.id,url:page.url}, false);
         if(db.getSchedulerState().automationsPaused){ db.save(); return; }
         queue.splice(index,1);seenCanonical.add(candidateKey(candidate));campaign.researchSeenUrls=[...seenCanonical].slice(-5000);

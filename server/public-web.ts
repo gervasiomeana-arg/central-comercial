@@ -83,9 +83,13 @@ function organizationData(html:string) {
   }
   return found;
 }
-export function reviewContactPage(html: string, url: string, app: Application, country: string, now=new Date(), context?:ResearchEvidence) {
+export function reviewContactPage(html: string, url: string, app: Application, country: string, now=new Date(), context?:ResearchEvidence, excludedEmails: ReadonlySet<string> = new Set()) {
   const clean=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
   const text=decode(clean.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ');
+  const hostname = hostKey(url);
+  if (/(?:^|\.)(?:wikipedia\.org|wikimedia\.org|ecured\.cu)$/.test(hostname)) {
+    return {contact:null,evidence:{url,appId:app.id,country,title:hostname,countryVerified:false,topicVerified:false},reason:'Directorio externo; no es la fuente institucional'};
+  }
   const inherited=context&&context.appId===app.id&&normalize(context.country)===normalize(country)&&hostKey(context.url)===hostKey(url)?context:undefined;
   const structured=organizationData(html), rule=marketFor(country);
   const whatsappLink = clean.match(/href\s*=\s*["']https?:\/\/wa\.me\/(\+?\d{10,15})(?=[?/"'#])/i)?.[1] ||
@@ -111,7 +115,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
   for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
   emails.push(...structured.emails);
-  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(usableContactEmail);
+  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(email => usableContactEmail(email) && !excludedEmails.has(email));
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
