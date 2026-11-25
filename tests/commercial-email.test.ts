@@ -80,65 +80,23 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       db.prepareCampaignDrafts(campaign.id);
 
       const {TEST_RECIPIENTS} = await import(pathToFileURL(path.join(directory,'server','channelTests.ts')).href);
-      const {claimWhatsApp,completeWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
+      const {claimWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
       whatsappHeartbeat('test-wa',true,TEST_RECIPIENTS.whatsapp);
-      const whatsappJob = claimWhatsApp('test-wa',early);
-      assert.ok(whatsappJob);
-      assert.equal(whatsappJob.recipient,'5491155551234');
-      const oldEmail = db.getConversationById(firstAttempt.conversationId).messages[0];
-      assert.equal(oldEmail.status,'fallido');
-      assert.equal(oldEmail.replacementMessageId,whatsappJob.messageId);
-      assert.equal(claimWhatsApp('test-wa',early),null,'only one WhatsApp promotion is queued');
-
-      const requestPhone = '+5491155556789';
-      db.saveContact({...originalContact,id:'whatsapp-request',email:'request@club.test',phone:'',
-        permission:'desconocido',preferredChannel:'email',status:'prospecto',sourceReviewDate:reviewed,
-        history:[],whatsappConsent:undefined});
-      db.prepareCampaignDrafts(campaign.id);
-      const invitation = claimCommercialEmail('test-worker',early);
-      assert.ok(invitation?.content.includes('WHATSAPP OK'));
-      completeCommercialEmail({...invitation,workerId:'test-worker',outcome:'accepted',response:'250 OK'});
-      const acceptance = {messageId:'<consent@test>',from:'request@club.test',
-        references:[invitation.providerMessageId],text:`WHATSAPP OK ${requestPhone}`};
-      assert.throws(()=>importCommercialReply({...acceptance,from:'someone-else@club.test'}));
-      assert.equal(db.getContactById('whatsapp-request').whatsappConsent,undefined);
-      assert.equal(importCommercialReply(acceptance).decision,'whatsapp_opt_in');
-      assert.equal(importCommercialReply(acceptance).duplicate,true);
-      const lead = db.getContactById('whatsapp-request');
-      assert.equal(lead.whatsappConsent.granted,true);
-      assert.equal(lead.permission,'desconocido');
-      const requested = claimWhatsApp('test-wa',new Date());
-      assert.equal(requested?.recipient,requestPhone.slice(1));
-      assert.ok(!requested?.content.includes('WHATSAPP OK'));
-      assert.equal(claimWhatsApp('test-wa',new Date()),null);
-      const sentBefore = campaign.stats.messagesSent;
-      const receipt = {...requested,workerId:'test-wa',outcome:'accepted',ack:1,providerId:'wa-fixture-accepted',chatId:'5491155556789@c.us'};
-      completeWhatsApp(receipt);
-      completeWhatsApp(receipt);
-      assert.equal(campaign.stats.messagesSent,sentBefore+1);
-
+      assert.equal(claimWhatsApp('test-wa',early),null);
+      assert.equal(db.getConversationById(firstAttempt.conversationId).messages[0].replacementMessageId,undefined);
 
       db.startMonthlyDirector('whatsapp');
+      assert.deepEqual(campaign.channels,['email']);
       db.saveContact({
-        ...originalContact, id:'whatsapp-first', email:'alternate@club.test', phone:'+5491155559876',
+        ...originalContact, id:'campaign-email', email:'alternate@club.test', phone:'+5491155559876',
         permission:'autorizado', sourceReviewDate:reviewed, history:[],
         whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed},
       });
-      campaign.channels = ['whatsapp'];
       db.prepareCampaignDrafts(campaign.id);
-      campaign.channels = ['whatsapp','email'];
-      const whatsappFirst = claimWhatsApp('test-wa',new Date());
-      assert.equal(whatsappFirst?.recipient,'5491155559876');
-      completeWhatsApp({...whatsappFirst,workerId:'test-wa',outcome:'rejected'});
-      db.prepareCampaignDrafts(campaign.id);
-      db.prepareCampaignDrafts(campaign.id);
-      const alternate = claimCommercialEmail('test-worker',new Date());
-      assert.equal(alternate?.recipient,'alternate@club.test');
-      assert.equal(db.getConversationById(whatsappFirst!.conversationId).messages[0].replacementMessageId,alternate?.messageId);
-      assert.equal(claimCommercialEmail('test-worker',new Date()),null);
-      completeCommercialEmail({...alternate,workerId:'test-worker',outcome:'rejected',response:'550 5.1.1 Unknown mailbox'});
-      db.prepareCampaignDrafts(campaign.id);
-      assert.equal(claimWhatsApp('test-wa',new Date()),null,'a failed fallback never switches back to the original channel');
+      const emailJob = claimCommercialEmail('test-worker',early);
+      assert.equal(emailJob?.recipient,'alternate@club.test');
+      assert.ok(!emailJob?.content.includes('WHATSAPP OK'));
+      assert.equal(claimWhatsApp('test-wa',early),null);
     } finally {
       if (oldLocalMode === undefined) delete process.env.CENTRAL_LOCAL_MODE;
       else process.env.CENTRAL_LOCAL_MODE = oldLocalMode;

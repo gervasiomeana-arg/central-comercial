@@ -1,6 +1,6 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
-import {whatsappCampaignEligible} from '../src/whatsapp-policy.js';
+import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
@@ -184,6 +184,16 @@ const INITIAL_SCHEDULER: SchedulerState = {
   windowsExecutionGuide: 'Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Ejecutar scripts\\run-scheduler-windows.bat o usar PM2 (pm2 start server.ts --name central-comercial).'
 };
 
+function applyCampaignChannelPause(campaign: Campaign): boolean {
+  if (!campaignWhatsAppPaused || !campaign.channels.includes('whatsapp')) return false;
+  const otherChannels = campaign.channels.filter(channel => channel !== 'whatsapp');
+  if (!otherChannels.includes('email')) otherChannels.unshift('email');
+  if (campaign.autoSendWhatsApp) campaign.autoSendEmail = true;
+  campaign.channels = otherChannels;
+  campaign.autoSendWhatsApp = false;
+  return true;
+}
+
 class DatabaseManager {
   private data: DatabaseSchema;
   private lastBackupTime: string | null = null;
@@ -205,6 +215,18 @@ class DatabaseManager {
   // DATA MIGRATION: Crucial step to fix unverified/invented information in existing persistent database!
   private migrateData(schema: DatabaseSchema): boolean {
     let changed = false;
+
+    if (campaignWhatsAppPaused) {
+      for (const goal of schema.monthlySalesGoals) {
+        if (goal.directorChannels?.includes('whatsapp')) {
+          goal.directorChannels = ['email'];
+          changed = true;
+        }
+      }
+      for (const campaign of schema.campaigns) {
+        if (!['finalizada', 'pausada'].includes(campaign.status) && applyCampaignChannelPause(campaign)) changed = true;
+      }
+    }
 
     if (localOperationsEnabled()) {
       const currentMonth = accountingDay().slice(0, 7);
@@ -766,7 +788,7 @@ class DatabaseManager {
     if (current.targetClients < 1) throw new Error('Definí primero el objetivo mensual de clientes.');
     if (!this.data.applications.some(a => a.status === 'lista' && a.campaignsAllowed)) throw new Error('No hay aplicaciones habilitadas para vender.');
     const goal: MonthlySalesGoal = { ...current, enabled: true, directorEnabled: true, ...(localOperationsEnabled() ? { countries: [...americanMarkets], sendEmail: true } : {}), ...(cloudMonitorMode() ? { sendEmail: false, answerEmail: false, discoverContacts: true, dailyResearchLimit: 40 } : {}),
-      directorChannels: (preferredChannel ?? current.directorChannels?.[0]) === 'whatsapp'
+      directorChannels: campaignWhatsAppPaused ? ['email'] : (preferredChannel ?? current.directorChannels?.[0]) === 'whatsapp'
         ? ['whatsapp', 'email'] : ['email', 'whatsapp'], updatedAt: new Date().toISOString() };
     const i = this.data.monthlySalesGoals.findIndex(g => g.month === goal.month);
     if (i < 0) this.data.monthlySalesGoals.push(goal); else this.data.monthlySalesGoals[i] = goal;
@@ -782,7 +804,7 @@ class DatabaseManager {
     this.data.campaigns.push(...created);
     let changed = created.length > 0;
     if (report.goal.directorEnabled) {
-      const channels = [...new Set([...(report.goal.directorChannels || ['email'] as const), 'whatsapp' as const])];
+      const channels: Campaign['channels'] = campaignWhatsAppPaused ? ['email'] : [...new Set([...(report.goal.directorChannels || ['email'] as const), 'whatsapp' as const])];
       for (const c of this.data.campaigns.filter(c => !c.chatManaged && this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
         if(app && repairDiscoveryPlan(c,app)){changed=true;this.addLog('info','contactos','Búsqueda reparada: consultas de prospectos y cola anterior archivada; el cupo global consumido se conserva.',{campaignId:c.id});}
@@ -837,7 +859,7 @@ class DatabaseManager {
   }
   public getAutonomousRun() { return this.data.autonomousRun; }
   public startAutonomousRun(input: StartAutonomousInput) {
-    const channels=input.channels||['email'];if(!channels.length||channels.some(c=>!['email','whatsapp'].includes(c)))throw new Error('Elegí email o WhatsApp.');
+    const channels: ('email' | 'whatsapp')[] = campaignWhatsAppPaused ? ['email'] : input.channels || ['email'];if(!channels.length||channels.some(c=>!['email','whatsapp'].includes(c)))throw new Error('Elegí email o WhatsApp.');
     const app = this.getApplicationById(input.appId);
     if (!app || app.status !== 'lista' || !app.campaignsAllowed) throw new Error('Elegí una aplicación lista para vender.');
     const country = typeof input.country === 'string' ? input.country.trim() : '';
@@ -940,6 +962,7 @@ class DatabaseManager {
   }
 
   public saveCampaign(campaign: Campaign,whatsappConnected=false): { campaign: Campaign; error?: string } {
+    applyCampaignChannelPause(campaign);
     const app = this.getApplicationById(campaign.appId);
     if (!app) {
       return { campaign, error: 'La aplicación asociada a la campaña no existe.' };
@@ -1001,10 +1024,12 @@ class DatabaseManager {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
+    if (campaign.status !== 'pausada' && campaign.status !== 'finalizada') applyCampaignChannelPause(campaign);
     const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date());
     for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
     for (const { thread, message, channel } of result.moves) {
       thread.channel = message.channel = channel;
+      if (campaignWhatsAppPaused && channel === 'email') message.status = 'preparado';
       message.draftRevision = (message.draftRevision ?? 0) + 1;
       delete message.approvedRecipient;
       delete message.whatsappInvitation;

@@ -1,4 +1,4 @@
-import { whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
+import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
 import {emailPromotionHold, invalidEmailDestination, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
@@ -65,7 +65,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
         if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
-        if (campaign?.mode === 'automatico' && campaign.autoSendWhatsApp && campaign.channels.includes('whatsapp') &&
+        if (!campaignWhatsAppPaused && campaign?.mode === 'automatico' && campaign.autoSendWhatsApp && campaign.channels.includes('whatsapp') &&
             !msg.reviewStatus && !failedAlternates.has(msg.id) && whatsappCampaignEligible(contact, now)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
@@ -92,7 +92,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = contact.email.trim().toLowerCase();
       msg.providerMessageId = `<cc-${randomUUID()}@${status.sender!.split('@')[1]}>`;
       if (campaign && !replying) campaign.status = 'activa';
-      if (!replying && campaign?.autoSendWhatsApp && campaign.channels.includes('whatsapp') && !whatsappCampaignEligible(contact, now)) {
+      if (!campaignWhatsAppPaused && !replying && campaign?.autoSendWhatsApp && campaign.channels.includes('whatsapp') && !whatsappCampaignEligible(contact, now)) {
         msg.whatsappInvitation = whatsappInvitations[marketLanguage(contact.country)];
       }
       msg.emailSubject ||= replying ? `Re: ${app.name} · Presentación` : `${app.name} · Presentación para ${contact.orgName}`;
@@ -179,7 +179,7 @@ function registerWhatsAppRequest(contact: Contact, conversation: Conversation, s
   contact.whatsappConsent = {granted:true, at, evidence:`Autorización explícita por correo vinculado a la promoción. Mensaje ${replyId}`};
 
   const campaign = conversation.campaignId ? db.getCampaignById(conversation.campaignId) : undefined;
-  if (!campaign?.autoSendWhatsApp || !campaign.channels.includes('whatsapp') || campaign.mode !== 'automatico' ||
+  if (campaignWhatsAppPaused || !campaign?.autoSendWhatsApp || !campaign.channels.includes('whatsapp') || campaign.mode !== 'automatico' ||
       contact.status === 'cliente' || !db.campaignInActiveRun(campaign.id)) return true;
   const related = db.getConversations();
   const contactsWithPhone = new Set(records.filter(c => whatsappPhone(c.phone) === canonical).map(c => c.id));

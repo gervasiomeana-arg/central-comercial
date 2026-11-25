@@ -4,7 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import type {Express} from 'express';
 import {db} from './db.js';
 import {workerAuthorized,TEST_RECIPIENTS} from './channelTests.js';
-import {whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js';
+import {campaignWhatsAppPaused,whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js';
 import {replyDecision,currentReplyText,dailyCommercialDigest} from './commercial-email.js';
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex');
 const canonical=(s:string)=>whatsappPhone(s).replace(/^549/,'54');
@@ -38,6 +38,7 @@ export function claimWhatsApp(id:string,now=new Date()){
   for(const msg of conv.messages){
    if(msg.direction!=='outbound'||msg.channel!=='whatsapp'||msg.status!=='preparado'||msg.replacementMessageId||msg.reviewStatus==='rejected'||msg.attemptedAt)continue;
    const reply=Boolean(msg.replyToProviderId);
+   if (campaignWhatsAppPaused && (conv.campaignId || !reply)) continue;
    if(reply){if(!report.goal.answerEmail||msg.reviewStatus!=='approved')continue;}
    else{
     if (contact.status === 'cliente' || !campaignCountryAllowed(app, contact.country)) continue;

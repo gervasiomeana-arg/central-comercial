@@ -1,3 +1,4 @@
+import { campaignWhatsAppPaused } from '../whatsapp-policy.js';
 import React, {useState} from 'react';
 import {ChevronDown,Play,Pause,Settings2,X} from 'lucide-react';
 import {api} from '../api.js';
@@ -16,7 +17,7 @@ export function ActivationControl({applications,onChanged,paused:dashboardPaused
 }) {
   const ready=applications.filter(a=>a.status==='lista'&&a.campaignsAllowed);
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const [input,setInput]=useState<StartAutonomousInput>({channels:['email','whatsapp'],useLocalIntelligence:true,appId:ready.find(a=>/voley/i.test(a.name))?.id||ready[0]?.id||'',country:'Argentina',maxContacts:3,targetClients:5,sendWindowStart:'09:00',sendWindowEnd:'21:00'});
+  const [input,setInput]=useState<StartAutonomousInput>({channels:campaignWhatsAppPaused ? ['email'] : ['email','whatsapp'],useLocalIntelligence:true,appId:ready.find(a=>/voley/i.test(a.name))?.id||ready[0]?.id||'',country:'Argentina',maxContacts:3,targetClients:5,sendWindowStart:'09:00',sendWindowEnd:'21:00'});
   const paused = report?.paused ?? dashboardPaused;
   const directorActive = Boolean(report?.director && !paused);
   const start=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const result=await api.startAutonomousRun(input);onReportChanged(result);setOpen(false);await onChanged();}catch(e:any){setError(e.message);}finally{setBusy(false);}};
@@ -34,8 +35,8 @@ export function ActivationControl({applications,onChanged,paused:dashboardPaused
       <label>Objetivo mensual de clientes<input required type="number" min="1" max="10000" value={input.targetClients} onChange={e=>setInput({...input,targetClients:Number(e.target.value)})}/></label>
       <label>Enviar desde<input type="time" required value={input.sendWindowStart} onChange={e=>setInput({...input,sendWindowStart:e.target.value})}/></label><label>Enviar hasta<input type="time" required value={input.sendWindowEnd} onChange={e=>setInput({...input,sendWindowEnd:e.target.value})}/></label>
       <label><input type="checkbox" checked={input.useLocalIntelligence!==false} onChange={e=>setInput({...input,useLocalIntelligence:e.target.checked})}/> OpenJarvis dirige las búsquedas con una estrategia validada</label>
-      <label>Canal<select value={input.channels?.join(',')||'email,whatsapp'} onChange={e=>setInput({...input,channels:e.target.value.split(',') as ('email'|'whatsapp')[]})}><option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="email,whatsapp">WhatsApp y email alternativo</option></select></label>
-      <small>Central prioriza el WhatsApp publicado por el negocio y usa el email si falta el número o el envío es rechazado. Horario de Argentina. Los pagos requieren tu revisión.</small>
+      <label>Canal<select value={input.channels?.join(',')||'email,whatsapp'} onChange={e=>setInput({...input,channels:e.target.value.split(',') as ('email'|'whatsapp')[]})}><option value="email">Email</option>{!campaignWhatsAppPaused && <><option value="whatsapp">WhatsApp</option><option value="email,whatsapp">WhatsApp y email alternativo</option></>}</select></label>
+      <small>{campaignWhatsAppPaused ? 'Las campañas salen por email.' : 'Central prioriza el WhatsApp publicado por el negocio y usa el email como alternativa.'} Horario de Argentina. Los pagos requieren tu revisión.</small>
       <button className="cc-button cc-button-primary" disabled={busy}><Play size={16}/>{busy?'Iniciando…':'Iniciar campaña autónoma'}</button>
     </form></section></div>}
   </div>;

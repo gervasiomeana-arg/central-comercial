@@ -18,7 +18,7 @@ import { registerCheckpointRoute } from './server/checkpoint.js';
 import {registerCommercialWhatsAppRoutes} from './server/commercial-whatsapp.js';
 import {configureIntelligence,applyStrategy} from './server/intelligence-cycle.js';
 import {whatsappStatus} from './server/commercial-whatsapp.js';
-import {whatsappCampaignEligible,whatsappPhone} from './src/whatsapp-policy.js';
+import {campaignWhatsAppPaused,whatsappCampaignEligible,whatsappPhone} from './src/whatsapp-policy.js';
 import {localRequestAllowed} from './server/local-boundary.js';
 import { reviewEmailDraft, DraftReviewError } from './server/draft-review.js';
 import express from 'express';
@@ -395,7 +395,7 @@ adminRouter.post('/automation/director/start', (req,res)=>{
   try {
     const channel = req.body?.preferredChannel;
     if (channel !== undefined && channel !== 'whatsapp' && channel !== 'email') throw new Error('Canal de prioridad inválido.');
-    if (channel === 'whatsapp' && !whatsappStatus().ready) throw new Error('WhatsApp todavía no está vinculado al ejecutor.');
+    if (!campaignWhatsAppPaused && channel === 'whatsapp' && !whatsappStatus().ready) throw new Error('WhatsApp todavía no está vinculado al ejecutor.');
     db.startMonthlyDirector(channel);
     void scheduler.tick();
     res.json(db.getAutonomousRunReport(whatsappStatus().ready));

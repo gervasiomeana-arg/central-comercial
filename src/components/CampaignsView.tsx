@@ -1,3 +1,4 @@
+import { campaignWhatsAppPaused } from '../whatsapp-policy.js';
 import React, { useState } from 'react';
 import {
   Send,
@@ -57,9 +58,9 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
       country: 'Brasil',
       language: 'pt-BR',
       segment: 'Clubes y federaciones',
-      channels: ['email', 'whatsapp'],
+      channels: campaignWhatsAppPaused ? ['email'] : ['email', 'whatsapp'],
       autoSendEmail: true,
-      autoSendWhatsApp: true,
+      autoSendWhatsApp: !campaignWhatsAppPaused,
       messageTemplate: 'Olá {nombre},\n\nGostaria de apresentar nossa plataforma para a equipe do {organizacion}.\n\nConheça os serviços em nosso site oficial.\n\nPodemos agendar uma demonstração?',
       followUpTemplates: [
         'Olá {nombre}, tudo bem? Queria verificar se você pôde analisar a mensagem anterior.'
@@ -442,8 +443,10 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
                         className="w-full border border-slate-300 rounded-lg p-2"
                       >
                         <option value="email">Email</option>
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="email,whatsapp">WhatsApp y email alternativo</option>
+                        {!campaignWhatsAppPaused && <>
+                          <option value="whatsapp">WhatsApp</option>
+                          <option value="email,whatsapp">WhatsApp y email alternativo</option>
+                        </>}
                       </select>
                     </label>
                     <label className="font-bold text-slate-700 block mb-1">Modo de Envío</label>
