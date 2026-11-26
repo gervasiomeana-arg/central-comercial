@@ -35,7 +35,14 @@ export function validateActivity(value: RuntimeActivity): RuntimeActivity {
           !overviewCountKeys.every(key => isCount(item[key]))) throw new Error('Resumen de la PC inválido.');
       scopes.add(item.appId);
       const counts = Object.fromEntries(overviewCountKeys.map(key => [key,item[key]])) as Pick<RuntimeOverview,typeof overviewCountKeys[number]>;
-      return { ...counts, appId:item.appId, dailyMarketActivity:item.dailyMarketActivity };
+      const contactCoverage = item.contactsAccepted === undefined && item.contactsAttempted === undefined
+        ? {} : { contactsAccepted: item.contactsAccepted, contactsAttempted: item.contactsAttempted };
+      if ('contactsAccepted' in contactCoverage &&
+          (!isCount(item.contactsAccepted) || !isCount(item.contactsAttempted) ||
+          item.contactsAccepted > item.contactsAttempted || item.contactsAttempted > counts.contactsTotal)) {
+        throw new Error('Cobertura de contactos inválida.');
+      }
+      return { ...counts, ...contactCoverage, appId:item.appId, dailyMarketActivity:item.dailyMarketActivity };
     });
   }
   const delivery = value.delivery;

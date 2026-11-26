@@ -131,7 +131,7 @@ app.get('/api/local-runtime/report',(req,res)=>{
     const metrics = db.getDashboardMetrics(appId);
     const activeCampaigns = allCampaigns.filter(c => c.status === 'activa' && (appId === 'all' || c.appId === appId)).length;
     const counts = Object.fromEntries(overviewCountKeys.map(key=>[key,key==='activeCampaigns'?activeCampaigns:metrics[key]])) as Pick<RuntimeOverview,typeof overviewCountKeys[number]>;
-    return { ...counts, appId, dailyMarketActivity:dailyMarketActivity(db.getRaw(),appId,now) };
+    return { ...counts, appId, contactsAccepted:metrics.contactsAccepted, contactsAttempted:metrics.contactsAttempted, dailyMarketActivity:dailyMarketActivity(db.getRaw(),appId,now) };
   });
   res.json({
     connections: { email: worker.online && worker.send && worker.read, whatsapp: whatsappStatus().ready, intelligence: jarvisState.ready },

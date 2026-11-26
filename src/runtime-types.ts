@@ -65,5 +65,7 @@ export const overviewCountKeys = [
 
 export type RuntimeOverview = Record<typeof overviewCountKeys[number],number> & {
   appId: string;
+  contactsAccepted?: number;
+  contactsAttempted?: number;
   dailyMarketActivity: string;
 };

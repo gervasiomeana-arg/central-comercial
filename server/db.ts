@@ -1411,6 +1411,9 @@ class DatabaseManager {
       pendingTotal: paymentsByCurrency[cur].pendingTotal
     }));
 
+    const contactedIds = new Set<string>();
+    const attemptedIds = new Set<string>();
+    const includedContactIds = new Set(contacts.map(contact => contact.id));
     let messagesPending = 0;
     let messagesSent = 0;
     let messagesFailed = 0;
@@ -1423,8 +1426,15 @@ class DatabaseManager {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
+          if (m.attemptedAt && includedContactIds.has(conv.contactId)) attemptedIds.add(conv.contactId);
           if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') messagesPending++;
-          else if (['enviado','aceptado_proveedor','entrega_confirmada'].includes(m.status) && m.serviceConfirmationId) messagesSent++;
+          else if (['enviado','aceptado_proveedor','entrega_confirmada'].includes(m.status) && m.serviceConfirmationId) {
+            messagesSent++;
+            if (includedContactIds.has(conv.contactId)) {
+              contactedIds.add(conv.contactId);
+              attemptedIds.add(conv.contactId);
+            }
+          }
           else if (m.status === 'fallido') {
             messagesFailed++;
             if (m.channel === 'email' && /^Rebote permanente confirmado:/.test(m.serviceError || '')) messagesBounced++;
@@ -1442,6 +1452,8 @@ class DatabaseManager {
       period,
       appFilter,
       contactsTotal: contacts.length,
+      contactsAccepted: contactedIds.size,
+      contactsAttempted: attemptedIds.size,
       contactsVerified: contacts.filter(c => c.permission === 'autorizado' || (c.source && c.source.length > 3)).length,
       messagesPending,
       messagesSent,

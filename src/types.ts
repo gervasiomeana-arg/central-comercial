@@ -411,6 +411,8 @@ export interface DashboardMetrics {
   period: string;
   appFilter: string;
   contactsTotal: number;
+  contactsAccepted?: number;
+  contactsAttempted?: number;
   contactsVerified: number;
   messagesPending: number;
   messagesSent: number;

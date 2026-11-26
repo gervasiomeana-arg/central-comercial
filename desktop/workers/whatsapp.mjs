@@ -27,7 +27,7 @@ const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');re
 let whatsappReady=false,running=false,stopping=false,verified=false,signaling=false;
 let linkedAccount='', linkedWid='', connectedToCentral=false;
 const authTimeoutMs=90000;
-let phase, startupTimeout;
+let phase, startupTimeout, sessionAuthenticated=false;
 function reportPhase(next) {
  if(phase===next)return;
  phase=next;
@@ -50,6 +50,11 @@ async function api(action,body={},area='channel-tests'){
 const {Client,LocalAuth}=wwebjs;
 const visibleBrowser=process.platform==='win32'&&process.env.CENTRAL_WHATSAPP_VISIBLE==='true';
 const observedPages=new WeakSet();
+class PersistentSession extends LocalAuth {
+ // A provider logout invalidates the session. Leave the browser profile on disk
+ // so a transient redirect cannot erase it or remove the rest of the local state.
+ async logout(){}
+}
 class SessionClient extends Client {
  async inject(){
   const page=this.pupPage;
@@ -57,11 +62,19 @@ class SessionClient extends Client {
    useWhatsAppSessionPolling(page);
    observedPages.add(page);
   }
-  return super.inject();
+  await super.inject();
+  if(whatsappReady||sessionAuthenticated||stopping||!page)return;
+  await page.evaluate(async ()=>{
+   const socket=window.require?.('WAWebSocketModel')?.Socket;
+   if(socket?.state==='CONNECTED'&&socket.hasSynced===true&&
+      typeof window.onAppStateHasSyncedEvent==='function'&&!window.WWebJS){
+    await window.onAppStateHasSyncedEvent();
+   }
+  });
  }
 }
 const client=new SessionClient({
- authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),
+ authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
  authTimeoutMs,
  userAgent:false,
  webVersionCache:{type:'none'},
@@ -88,9 +101,8 @@ async function ownerReportTick(account){
   ownerReportSchedule(ownerReports, now, process.env.CENTRAL_WHATSAPP_REPORT_DAY);
  if (!task) return;
  const {day,key,manual} = task;
- const owner = client.info?.wid;
- if (linkedAccount !== account || owner?._serialized !== linkedWid ||
-     !/^\d+@(?:c\.us|lid)$/.test(owner?._serialized || '')) {
+ if (linkedAccount !== account || currentWid() !== linkedWid ||
+     !/^\d+@(?:c\.us|lid)$/.test(linkedWid)) {
   console.log('WhatsApp no confirmó el identificador del chat personal. El informe queda pendiente.');
   return;
  }
@@ -99,13 +111,14 @@ async function ownerReportTick(account){
  ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString()};saveOwnerReports();
  try{
   const content = key.startsWith('instant-') ? report.content.replace('INFORME DIARIO','INFORME AL MOMENTO') : report.content;
-  const result=await sendToChatWithAck(client,owner._serialized,content,async()=>{},60000);
+  const result=await sendToChatWithAck(client,linkedWid,content,async()=>{},60000);
   ownerReports[key]={status:result.ack>=2?'entrega_confirmada':result.outcome==='accepted'?'aceptado_proveedor':result.outcome==='rejected'?'rechazado':'resultado_desconocido',manual,at:new Date().toISOString(),providerId:result.providerId||''};
  }catch(error){ownerReports[key]={status:'resultado_desconocido',manual,at:new Date().toISOString(),error:String(error.code||error.message).slice(0,100)};}
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',qr=>{
+ if(sessionAuthenticated||whatsappReady||stopping)return;
  clearTimeout(startupTimeout);
  reportPhase('qr');
  console.log('Vinculá el navegador de Central desde WhatsApp > Dispositivos vinculados.');
@@ -113,7 +126,8 @@ client.on('qr',qr=>{
  qrcode.generate(qr,{small:true});
 });
 client.on('authenticated',()=>{
- if(whatsappReady||stopping)return;
+ if(whatsappReady||sessionAuthenticated||stopping)return;
+ sessionAuthenticated=true;
  reportPhase('loading');
  waitForSession();
 });
@@ -129,6 +143,12 @@ client.on('auth_failure',()=>{
  void recover(78);
 });
 client.on('disconnected',reason=>{console.log('WhatsApp desconectado. Se conserva la sesión para recuperarla.');void recover(String(reason).toUpperCase()==='LOGOUT'?78:75);});
+
+function currentWid(){
+ const identity=client.info?.wid;
+ return identity?._serialized || identity?.$1 ||
+  (identity?.user && identity?.server ? identity.user+'@'+identity.server : '');
+}
 
 async function resolveAccount(wid){
  const direct=String(wid||'').match(/^(\d+)@c\.us$/);
@@ -148,8 +168,7 @@ async function heartbeat(){
  if(signaling||stopping)return;
  signaling=true;
  try{
-  const identity=client.info?.wid;
-  const wid=identity?._serialized || (identity?.user && identity?.server ? identity.user+'@'+identity.server : '');
+  const wid=currentWid();
   if(whatsappReady&&(wid!==linkedWid||!linkedAccount)){
    linkedAccount=await resolveAccount(wid);
    linkedWid=wid;

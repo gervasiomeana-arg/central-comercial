@@ -107,6 +107,7 @@ async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
     !publishedCampaignRecipients(c).length && c.permission !== 'revocado' &&
     !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&
     (!c.emailPublicationCheckedAt || Date.parse(c.emailPublicationCheckedAt) < now - 86400000));
+  contacts.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   await Promise.allSettled(contacts.slice(0, 4).map(contact => verifyQueuedContact(contact, now, fetcher)));
 }
 
@@ -120,9 +121,11 @@ async function verifyQueuedContact(contact: Contact, now: number, fetcher: typeo
     if (host(site.href) !== host(source.href)) return;
     const pages = [...new Set([source.href, new URL('/',site).href])];
     let context: ResearchCandidate['context'];
-    for (let i = 0; i < Math.min(pages.length, 3); i++) {
-      const page = await fetcher(pages[i]);
-      if (db.getSchedulerState().automationsPaused || host(page.url) !== host(site.href)) return;
+    for (let i = 0; i < Math.min(pages.length, 5); i++) {
+      if (db.getSchedulerState().automationsPaused) return;
+      const page = await fetcher(pages[i]).catch(() => undefined);
+      if (db.getSchedulerState().automationsPaused) return;
+      if (!page || host(page.url) !== host(site.href)) continue;
       const result = reviewContactPage(page.text, page.url, app, contact.country, new Date(now), context);
       context = result.evidence;
       for (const link of contactLinks(page.text,page.url)) if (!pages.includes(link)) pages.push(link);
