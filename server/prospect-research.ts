@@ -103,11 +103,14 @@ async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
   const pending = new Set(db.getConversations().filter(c => c.campaignId &&
     db.campaignInActiveRun(c.campaignId) && c.messages.some(m =>
       m.channel === 'email' && m.direction === 'outbound' && m.status === 'preparado' && !m.replyToProviderId)).map(c => c.contactId));
-  const contact = db.getContacts().find(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
+  const contacts = db.getContacts().filter(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
     !publishedCampaignRecipients(c).length && c.permission !== 'revocado' &&
     !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&
     (!c.emailPublicationCheckedAt || Date.parse(c.emailPublicationCheckedAt) < now - 86400000));
-  if (!contact) return;
+  await Promise.allSettled(contacts.slice(0, 4).map(contact => verifyQueuedContact(contact, now, fetcher)));
+}
+
+async function verifyQueuedContact(contact: Contact, now: number, fetcher: typeof fetchPublicText) {
   const app = contact.interestedAppIds.map(id => db.getApplicationById(id)).find(Boolean);
   if (!app) return;
   contact.emailPublicationCheckedAt = new Date(now).toISOString();

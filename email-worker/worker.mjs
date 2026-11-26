@@ -161,7 +161,26 @@ async function readMessages(range, threads, onlyBounces = false) {
   }
   for (let i=0; i<bounces.length; i+=50) await api('bounces', {items:bounces.slice(i,i+50)});
 }
-let processing=false;async function tick(){if(processing)return;processing=true;try{if(!await connect())return;await heartbeat();await flush();try{await read();}catch(error){if(!imap?.usable)throw error;console.error("Lectura del buzón pendiente:",error.message);return;}await send();process.send?.({type:'healthy'});}catch(error){console.error(new Date().toISOString(),error.message);if(!imap?.usable)reconnect=true;}finally{processing=false;}}
+let processing=false;
+async function tick(){
+ if(processing)return;
+ processing=true;
+ try{
+  if(!await connect())return;
+  await heartbeat();
+  await flush();
+  try{await read();}catch(error){if(!imap?.usable)throw error;console.error('Lectura del buzón pendiente:',error.message);return;}
+  // Import replies and bounces first, then let the server authorize each send.
+  for(let count=0;count<3&&!authBlocked;count++){
+   if(count)await new Promise(resolve=>setTimeout(resolve,1500));
+   if(!await send())break;
+  }
+  process.send?.({type:'healthy'});
+ }catch(error){
+  console.error(new Date().toISOString(),error.message);
+  if(!imap?.usable)reconnect=true;
+ }finally{processing=false;}
+}
 const stop=()=>{imap?.close();smtp.close();process.exit(0);};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 if(process.send)process.on('disconnect',stop);
 const batch = env.CENTRAL_EMAIL_BATCH;

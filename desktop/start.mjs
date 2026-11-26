@@ -128,9 +128,16 @@ else { issues.add('email_missing'); log('email', 'No se encontró el ejecutor co
 const waDir = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp');
 const waFile = waDir && path.join(waDir, 'worker.mjs');
 const browserFile = waDir && path.join(waDir, 'browser-path.txt');
-const browser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : process.env.CHROME_PATH;
+const savedBrowser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : '';
+const browserLocations = [savedBrowser, process.env.CHROME_PATH];
+for (const directory of [process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
+  if (!directory) continue;
+  browserLocations.push(path.join(directory, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+  browserLocations.push(path.join(directory, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+}
+const browser = browserLocations.find(candidate => candidate && fs.existsSync(candidate) && fs.statSync(candidate).isFile());
 if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser && fs.existsSync(browser)) { upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
+  if (browser) { upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
 } else { issues.add('whatsapp_missing'); log('whatsapp', 'No se encontró el ejecutor de WhatsApp previamente vinculado.'); }
 

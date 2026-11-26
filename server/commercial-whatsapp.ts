@@ -47,7 +47,6 @@ export function claimWhatsApp(id:string,now=new Date()){
  if (!scheduledApp || attemptedThreads.length >= whatsappDailyLimit ||
      attemptedThreads.some(thread => db.getApplicationById(thread.appId)?.slug !== scheduledApp)) return null;
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
- const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(history, now);
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
  const pilotIds = new Set(db.getCampaigns().filter(c => c.funeralShiftPilot).map(c => c.id));
  conversations.sort((a, b) => Number(pilotIds.has(b.campaignId || '')) - Number(pilotIds.has(a.campaignId || '')));
@@ -82,7 +81,6 @@ export function claimWhatsApp(id:string,now=new Date()){
    }
    if(!reply&&db.getTasks().some(t=>t.relatedId===conv.id&&t.status==='pendiente'))continue;
    const recipient=whatsappPhone(contact.phone);if(msg.approvedRecipient&&msg.approvedRecipient!==recipient)continue;
-   if (!directorUnlimited && dailyContacts.size >= report.goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
    const lease=randomUUID();Object.assign(msg,{sendLease:hash(lease),sendWorker:id,sendDeadline:now.getTime()+120000,status:'envio_intentado',attemptedAt:now.toISOString(),approvedRecipient:recipient});db.save();
    return {conversationId:conv.id,messageId:msg.id,lease,recipient,content:msg.content};
   }

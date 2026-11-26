@@ -54,7 +54,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   const invalid = new Set(all.filter(m => m.channel === 'email' && m.status === 'fallido' &&
     m.approvedRecipient && invalidEmailDestination(m.serviceError || '')).map(m => m.approvedRecipient!.toLowerCase()));
   const directorUnlimited = unlimitedDirectorOutreach(goal);
-  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now);
+  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now, undefined, 'email');
   const failedAlternates = new Set(all.filter(m => m.status === 'fallido' && m.replacementMessageId)
     .map(m => m.replacementMessageId));
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {

@@ -1,5 +1,5 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {invalidEmailDestination, usableContactEmail} from '../src/email-policy.js';
+import {invalidEmailDestination, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation, Message } from '../src/types.js';
@@ -8,6 +8,14 @@ import {whatsappCampaignEligible,whatsappPhone} from '../src/whatsapp-policy.js'
 const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 type PromotionChannel = 'email' | 'whatsapp';
+type PromotionQueue = PromotionChannel | 'email-review';
+
+export function promotionQueue(channel: PromotionChannel, contact: Contact): PromotionQueue {
+  return channel === 'email' && contact.outreachBasis === 'public_business_contact' &&
+    !publishedCampaignRecipients(contact).length ? 'email-review' : channel;
+}
+
+export type PromotionCapacity = Record<PromotionQueue, number>;
 
 function definitelyRejectedEmail(message: Message) {
   const error = message.serviceError || '';
@@ -18,7 +26,7 @@ function definitelyRejectedEmail(message: Message) {
 }
 
 // Preparation only: this module has no transport, credentials or sending capability.
-export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date()) {
+export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date(), capacity?: PromotionCapacity) {
   const skipped: Record<string, number> = {};
   const drafts: Conversation[] = [];
   const replacements: { original: Message; replacementId: string }[] = [];
@@ -80,6 +88,9 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     if (!original && !unlimited && preparedToday.size >= campaign.dailyLimit && !preparedToday.has(contact.id)) {
       skip('Límite diario alcanzado'); return;
     }
+    const queue = promotionQueue(channel, contact);
+    if (capacity && capacity[queue] <= 0) { skip('Cola de promociones ocupada'); return; }
+    if (capacity) capacity[queue]--;
     const values: Record<string, string> = { nombre: contact.contactPerson || contact.orgName, organizacion: contact.orgName, cargo: contact.role || '', pais: contact.country, aplicacion: app.name, web: app.website || '' };
     const id = `conv-${randomUUID()}`;
     const timestamp = now.toISOString();
@@ -149,6 +160,12 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
         if (channel) {
           const key = recipientKeyFor(contact, channel);
           if (usedRecipients.has(key)) { skip('Ya preparado en esta campaña'); continue; }
+          const queue = promotionQueue(channel, contact);
+          if (capacity && capacity[queue] <= 0) { skip('Cola de promociones ocupada'); continue; }
+          if (capacity) {
+            capacity[promotionQueue(channel === 'email' ? 'whatsapp' : 'email', contact)]++;
+            capacity[queue]--;
+          }
           usedRecipients.add(key);
           moves.push({ thread, message, channel });
           continue;

@@ -24,7 +24,8 @@ const journalFile=path.join(stateDir,'outbox.json');
 const journal=fs.existsSync(journalFile)?JSON.parse(fs.readFileSync(journalFile,'utf8')):{};
 const save=()=>{fs.writeFileSync(journalFile+'.tmp',JSON.stringify(journal),{mode:0o600});fs.renameSync(journalFile+'.tmp',journalFile);};
 const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('549')?'54'+digits.slice(3):digits;};
-let whatsappReady=false,running=false,stopping=false,verified=false;
+let whatsappReady=false,running=false,stopping=false,verified=false,signaling=false;
+let linkedAccount='', linkedWid='', connectedToCentral=false;
 async function api(action,body={},area='channel-tests'){
  const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(20000),redirect:'error'})
    .catch(error => { throw new Error(`No se pudo consultar ${area}/${action}: ${error.message}`); });
@@ -51,7 +52,7 @@ async function ownerReportTick(account){
  if (!task) return;
  const {day,key,manual} = task;
  const owner = client.info?.wid;
- if (canonicalPhone(owner?.user) !== canonicalPhone(account) ||
+ if (linkedAccount !== account || owner?._serialized !== linkedWid ||
      !/^\d+@(?:c\.us|lid)$/.test(owner?._serialized || '')) {
   console.log('WhatsApp no confirmó el identificador del chat personal. El informe queda pendiente.');
   return;
@@ -69,26 +70,61 @@ async function ownerReportTick(account){
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',qr=>{console.log('\nEn el telefono: WhatsApp > Dispositivos vinculados > Vincular un dispositivo.');console.log('Escanee este QR. No lo comparta por chat.');qrcode.generate(qr,{small:true});});
 client.on('ready',()=>{
- const account=client.info?.wid?.user;
- if(!account){void recover(78);return;}
- whatsappReady=true;void tick();
+ whatsappReady=true;
+ void heartbeat();
 });
-client.on('auth_failure',()=>{whatsappReady=false;console.log('WhatsApp requiere volver a vincular el dispositivo.');void recover(78);});
-client.on('disconnected',reason=>{whatsappReady=false;console.log('WhatsApp desconectado. Se conserva la sesión para recuperarla.');void recover(String(reason).toUpperCase()==='LOGOUT'?78:75);});
-async function tick(){
- if(running||stopping)return;running=true;
+client.on('auth_failure',()=>{console.log('WhatsApp requiere volver a vincular el dispositivo.');void recover(78);});
+client.on('disconnected',reason=>{console.log('WhatsApp desconectado. Se conserva la sesión para recuperarla.');void recover(String(reason).toUpperCase()==='LOGOUT'?78:75);});
+
+async function resolveAccount(wid){
+ const direct=String(wid||'').match(/^(\d+)@c\.us$/);
+ if(direct)return direct[1];
+ if(!/^\d+@lid$/.test(wid||'')||typeof client.getContactLidAndPhone!=='function')return '';
+ let timer;
  try{
-  const account = client.info?.wid?.user || '';
-  const ready = whatsappReady && Boolean(account);
-  // The authenticated commercial endpoint verifies the linked account against the owner.
-  await api('heartbeat',{ready,account},'commercial-whatsapp');
-  await api('heartbeat',{email:false,whatsapp:ready}).catch(error => console.log(`Verificación de canales pendiente: ${error.message}`));
-  if (ready && !verified) {
+  const records=await Promise.race([
+   client.getContactLidAndPhone([wid]),
+   new Promise(resolve=>{timer=setTimeout(()=>resolve([]),8000);}),
+  ]);
+  return String(records?.[0]?.pn||'').match(/^(\d+)(?:@(?:c\.us|s\.whatsapp\.net))?$/)?.[1]||'';
+ }finally{clearTimeout(timer);}
+}
+
+async function heartbeat(){
+ if(signaling||stopping)return;
+ signaling=true;
+ try{
+  const wid=client.info?.wid?._serialized || '';
+  if(whatsappReady&&(wid!==linkedWid||!linkedAccount)){
+   linkedAccount=await resolveAccount(wid);
+   linkedWid=wid;
+  }
+  if(stopping)return;
+  const ready=whatsappReady&&Boolean(linkedAccount);
+  await api('heartbeat',{ready,account:linkedAccount},'commercial-whatsapp');
+  if(stopping)return;
+  connectedToCentral=ready;
+  if(whatsappReady&&!ready)console.log('WhatsApp Web está vinculado; esperando que confirme el número de la cuenta.');
+  if(ready&&!verified){
    verified=true;
    process.send?.({type:'healthy'});
    console.log('WhatsApp personal vinculado a Central Comercial.');
   }
-  if (!ready || !whatsappReady) return;
+  await api('heartbeat',{email:false,whatsapp:ready}).catch(error => console.log(`Verificación de canales pendiente: ${error.message}`));
+ }catch(error){
+  connectedToCentral=false;
+  console.log(error.httpStatus===401?'Central rechazó la clave de enlace compartida con el correo.':
+   error.httpStatus===409?'Central no confirmó la cuenta vinculada o detectó otro ejecutor de WhatsApp.':
+   `Conexión de WhatsApp pendiente: ${error.message}`);
+ }finally{signaling=false;}
+ if(connectedToCentral)void tick();
+}
+
+async function tick(){
+ if(running||stopping||!connectedToCentral)return;
+ running=true;
+ const account=linkedAccount;
+ try{
   await commercial.tick().catch(error => console.log(`Cola comercial WhatsApp pendiente: ${error.message}`));
   await ownerReportTick(account).catch(error => console.log(`Informe personal pendiente: ${error.message}`));
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
@@ -102,11 +138,11 @@ async function tick(){
  finally{running=false;}
 }
 console.log('Preparando WhatsApp dentro del inicio único de Central Comercial.');
-const timer=setInterval(()=>void tick(),20000);
+const timer=setInterval(()=>void heartbeat(),20000);
 if(process.send)process.on('disconnect',()=>void recover(75));
-await tick();
-async function recover(code){if(stopping)return;stopping=true;whatsappReady=false;clearInterval(timer);if(code===78)process.send?.({type:'attention',code:'whatsapp_auth'});await api('heartbeat',{email:false,whatsapp:false}).catch(()=>{});await Promise.race([client.destroy().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);process.exit(code);}
+void heartbeat();
+async function recover(code){if(stopping)return;stopping=true;whatsappReady=false;clearInterval(timer);if(code===78)process.send?.({type:'attention',code:'whatsapp_auth'});await Promise.allSettled([api('heartbeat',{ready:false,account:''},'commercial-whatsapp'),api('heartbeat',{email:false,whatsapp:false})]);await Promise.race([client.destroy().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);process.exit(code);}
 await client.initialize().catch(()=>recover(75));
-async function stop(){stopping=true;clearInterval(timer);whatsappReady=false;await api('heartbeat',{email:false,whatsapp:false}).catch(()=>{});await client.destroy().catch(()=>{});process.exit(0);}
+async function stop(){stopping=true;clearInterval(timer);whatsappReady=false;await Promise.allSettled([api('heartbeat',{ready:false,account:''},'commercial-whatsapp'),api('heartbeat',{email:false,whatsapp:false})]);await client.destroy().catch(()=>{});process.exit(0);}
 process.on('SIGINT',()=>void stop());process.on('SIGTERM',()=>void stop());
 

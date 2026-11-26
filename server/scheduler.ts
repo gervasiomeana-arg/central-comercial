@@ -1,6 +1,7 @@
 import { normalize } from './sales-director.js';
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
+import { promotionQueue, type PromotionCapacity } from './campaign-preparation.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
 import {cloudBatchesEnabled,diagnosticMode} from './execution-role.js';
 import { batchWindow, type CommercialBatch } from './batch-window.js';
@@ -114,13 +115,34 @@ class CommercialScheduler {
       const goal = db.getSalesGoalProgress();
       const marketsWithContacts = new Set(contacts.flatMap(contact => (contact.interestedAppIds || [])
         .map(appId => JSON.stringify([appId,normalize(contact.country).trim()]))));
+      // Keep a buffer per app and channel so unverified emails don't occupy ready-to-send slots.
+      const active = new Map(campaigns.filter(c => db.campaignInActiveRun(c.id) &&
+        !['pausada', 'finalizada'].includes(c.status)).map(c => [c.id, c]));
+      const contactById = new Map(contacts.map(c => [c.id, c]));
+      const capacities = new Map(db.getApplications().map(app => [
+        app.id, { email: 12, 'email-review': 8, whatsapp: 10 } satisfies PromotionCapacity,
+      ]));
+      for (const thread of db.getConversations()) {
+        const campaign = thread.campaignId && active.get(thread.campaignId);
+        const capacity = capacities.get(thread.appId);
+        const contact = contactById.get(thread.contactId);
+        if (!campaign || !capacity || !contact || campaign.mode !== 'automatico') continue;
+        for (const message of thread.messages) {
+          if (message.direction !== 'outbound' || message.replyToProviderId || message.replacementMessageId ||
+              message.reviewStatus === 'rejected' || !['preparado','pendiente'].includes(message.status)) continue;
+          if ((message.channel === 'email' && campaign.autoSendEmail) ||
+              (message.channel === 'whatsapp' && campaign.autoSendWhatsApp)) {
+            capacity[promotionQueue(message.channel, contact)]--;
+          }
+        }
+      }
       for (const campaign of phase === 'revisar' ? [] : campaigns) {
         if(!db.campaignInActiveRun(campaign.id))continue;
         if(goal.goal.directorEnabled && campaign.goalMonth && !marketsWithContacts.has(JSON.stringify([campaign.appId,normalize(campaign.country).trim()])))continue;
         if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
         if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
           // All preparations in this synchronous loop are persisted together below.
-          try { db.prepareCampaignDrafts(campaign.id, {persist: false}); }
+          try { db.prepareCampaignDrafts(campaign.id, {persist: false, capacity: campaign.mode === 'automatico' ? capacities.get(campaign.appId) : undefined}); }
           catch (error) { db.addLog('error', 'campañas', `No se pudo preparar la campaña ${campaign.name}`, { error: String(error) }, false); }
         }
       }

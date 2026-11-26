@@ -16,7 +16,8 @@ export function orderCommercialConversations(conversations: Conversation[], now:
       !message.replyToProviderId && message.attemptedAt && accountingDay(new Date(message.attemptedAt)) === day).length;
     attempts.set(conversation.appId, (attempts.get(conversation.appId) || 0) + count);
   }
-  return [...conversations].sort((a,b)=>(attempts.get(a.appId)||0)-(attempts.get(b.appId)||0));
+  return [...conversations].sort((a,b)=>(attempts.get(a.appId)||0)-(attempts.get(b.appId)||0) ||
+    a.createdAt.localeCompare(b.createdAt));
 }
 
 export function unlimitedDirectorOutreach(goal: MonthlySalesGoal) {
@@ -228,13 +229,13 @@ export function operationalSummary(
   };
 }
 
-// Both promotion channels share a daily contact quota. Replies still count as individual messages.
-export function dailyOutreachKeys(conversations: Conversation[], now: Date, campaignId?: string) {
+// Per-campaign quotas count both channels. A channel filter can limit a provider-specific quota.
+export function dailyOutreachKeys(conversations: Conversation[], now: Date, campaignId?: string, channel?: 'email' | 'whatsapp') {
   const day = accountingDay(now);
   return new Set(conversations.flatMap(thread => {
     if (campaignId && thread.campaignId !== campaignId) return [];
     return thread.messages.filter(message => message.direction === 'outbound' && message.attemptedAt &&
-      accountingDay(new Date(message.attemptedAt)) === day && (!campaignId || !message.replyToProviderId))
+      (!channel || message.channel === channel) && accountingDay(new Date(message.attemptedAt)) === day && (!campaignId || !message.replyToProviderId))
       .map(message => outreachKey(thread, message));
   }));
 }

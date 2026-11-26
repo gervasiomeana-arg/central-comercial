@@ -8,7 +8,7 @@ import { DATA_DIR } from './data-directory.js';
 import { cloudMonitorMode, localOperationsEnabled } from './execution-role.js';
 import { americanMarkets, campaignCountryAllowed } from './campaign-markets.js';
 import fs from 'fs';
-import { prepareCampaign } from './campaign-preparation.js';
+import { prepareCampaign, type PromotionCapacity } from './campaign-preparation.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type {
@@ -1023,7 +1023,7 @@ class DatabaseManager {
     return { campaign };
   }
 
-  public prepareCampaignDrafts(id: string, {persist = true} = {}) {
+  public prepareCampaignDrafts(id: string, {persist = true, capacity}: {persist?: boolean; capacity?: PromotionCapacity} = {}) {
     const campaign = this.getCampaignById(id);
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
@@ -1031,7 +1031,7 @@ class DatabaseManager {
     const otherPilotIds = new Set(this.data.campaigns.filter(c => c.funeralShiftPilot && c.appId === campaign.appId && c.id !== id).map(c => c.id));
     const allocated = new Set(this.data.conversations.filter(c => c.campaignId && otherPilotIds.has(c.campaignId)).map(c => c.contactId));
     const contacts = allocated.size ? this.data.contacts.filter(c => !allocated.has(c.id)) : this.data.contacts;
-    const result = prepareCampaign(campaign, app, contacts, this.data.conversations, new Date());
+    const result = prepareCampaign(campaign, app, contacts, this.data.conversations, new Date(), capacity);
     for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
     for (const { thread, message, channel } of result.moves) {
       thread.channel = message.channel = channel;
