@@ -1,6 +1,7 @@
 import { normalize } from './sales-director.js';
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
+import { whatsappDispatchApp } from './commercial-whatsapp.js';
 import { promotionQueue, type PromotionCapacity } from './campaign-preparation.js';
 import {intelligenceCycle} from './intelligence-cycle.js';
 import {cloudBatchesEnabled,diagnosticMode} from './execution-role.js';
@@ -136,13 +137,21 @@ class CommercialScheduler {
           }
         }
       }
+      const whatsappApp = phase === 'revisar' ? undefined : whatsappDispatchApp(now);
       for (const campaign of phase === 'revisar' ? [] : campaigns) {
         if(!db.campaignInActiveRun(campaign.id))continue;
         if(goal.goal.directorEnabled && campaign.goalMonth && !marketsWithContacts.has(JSON.stringify([campaign.appId,normalize(campaign.country).trim()])))continue;
         if (campaign.goalMonth && (campaign.goalMonth !== goal.goal.month || !goal.goal.enabled || !goal.remaining || !goal.goal.countries.includes(campaign.country))) continue;
         if (campaign.autoPrepare === true && ['lista', 'activa', 'bloqueada_por_configuracion'].includes(campaign.status)) {
           // All preparations in this synchronous loop are persisted together below.
-          try { db.prepareCampaignDrafts(campaign.id, {persist: false, capacity: campaign.mode === 'automatico' ? capacities.get(campaign.appId) : undefined}); }
+          try {
+            const automatic = campaign.mode === 'automatico';
+            db.prepareCampaignDrafts(campaign.id, {
+              persist: false,
+              capacity: automatic ? capacities.get(campaign.appId) : undefined,
+              preferWhatsApp: !automatic || Boolean(whatsappApp && db.getApplicationById(campaign.appId)?.slug === whatsappApp),
+            });
+          }
           catch (error) { db.addLog('error', 'campañas', `No se pudo preparar la campaña ${campaign.name}`, { error: String(error) }, false); }
         }
       }

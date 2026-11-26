@@ -26,7 +26,7 @@ function definitelyRejectedEmail(message: Message) {
 }
 
 // Preparation only: this module has no transport, credentials or sending capability.
-export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date(), capacity?: PromotionCapacity) {
+export function prepareCampaign(campaign: Campaign, app: Application | undefined, contacts: Contact[], conversations: Conversation[], now = new Date(), capacity?: PromotionCapacity, preferWhatsApp = true) {
   const skipped: Record<string, number> = {};
   const drafts: Conversation[] = [];
   const replacements: { original: Message; replacementId: string }[] = [];
@@ -123,7 +123,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;
     const threads = threadsByContact.get(contact.id);
     if (!threads) {
-      if (whatsappAllowed && (campaign.autoSendWhatsApp !== false || !emailUsable)) prepare(contact, 'whatsapp', []);
+      if (whatsappAllowed && ((preferWhatsApp && campaign.autoSendWhatsApp !== false) || !emailUsable)) prepare(contact, 'whatsapp', []);
       else if (emailUsable) prepare(contact, 'email', []);
       else skip('Sin WhatsApp disponible ni correo utilizable');
       continue;
@@ -154,7 +154,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
       if (campaign.mode === 'automatico' && !thread.requiresHumanIntervention && !message.reviewStatus &&
           ['preparado', 'pendiente'].includes(message.status) && !message.attemptedAt &&
           !message.sentAt && !message.serviceConfirmationId) {
-        const channel = message.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp
+        const channel = message.channel === 'email' && preferWhatsApp && whatsappAllowed && campaign.autoSendWhatsApp
           ? 'whatsapp' : message.channel === 'whatsapp' && !whatsappAllowed && emailUsable && campaign.autoSendEmail
             ? 'email' : undefined;
         if (channel) {

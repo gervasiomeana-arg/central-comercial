@@ -25,6 +25,19 @@ export function whatsappAppForDay(now: Date) {
  return offset >= 0 ? whatsappRotation[offset % whatsappRotation.length] : undefined;
 }
 
+export function whatsappDispatchApp(now: Date) {
+ if (!whatsappStatus().ready) return undefined;
+ const scheduledApp = whatsappAppForDay(now);
+ if (!scheduledApp) return undefined;
+ const dayForRotation = accountingDay(now);
+ const attemptedThreads = db.getConversations().flatMap(thread => thread.messages.filter(message =>
+  message.channel === 'whatsapp' && message.direction === 'outbound' && message.attemptedAt &&
+  Number.isFinite(Date.parse(message.attemptedAt)) && accountingDay(new Date(message.attemptedAt)) === dayForRotation).map(() => thread));
+ if (attemptedThreads.length >= whatsappDailyLimit ||
+     attemptedThreads.some(thread => db.getApplicationById(thread.appId)?.slug !== scheduledApp)) return undefined;
+ return scheduledApp;
+}
+
 export function claimWhatsApp(id:string,now=new Date()){
  worker(id);const report=db.getSalesGoalProgress();if(report.paused||!report.goal.enabled)return null;
  const threads = db.getConversations().filter(c => c.channel === 'whatsapp');
@@ -39,13 +52,8 @@ export function claimWhatsApp(id:string,now=new Date()){
    m.status === 'preparado' && !m.replacementMessageId && m.reviewStatus !== 'rejected' && !m.attemptedAt));
  if (!candidates.length) return null;
  const history = db.getConversations();
- const dayForRotation = accountingDay(now);
- const scheduledApp = whatsappAppForDay(now);
- const attemptedThreads = history.flatMap(thread => thread.messages.filter(message =>
-  message.channel === 'whatsapp' && message.direction === 'outbound' && message.attemptedAt &&
-  Number.isFinite(Date.parse(message.attemptedAt)) && accountingDay(new Date(message.attemptedAt)) === dayForRotation).map(() => thread));
- if (!scheduledApp || attemptedThreads.length >= whatsappDailyLimit ||
-     attemptedThreads.some(thread => db.getApplicationById(thread.appId)?.slug !== scheduledApp)) return null;
+ const scheduledApp = whatsappDispatchApp(now);
+ if (!scheduledApp) return null;
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
  const pilotIds = new Set(db.getCampaigns().filter(c => c.funeralShiftPilot).map(c => c.id));

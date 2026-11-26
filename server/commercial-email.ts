@@ -55,8 +55,6 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     m.approvedRecipient && invalidEmailDestination(m.serviceError || '')).map(m => m.approvedRecipient!.toLowerCase()));
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now, undefined, 'email');
-  const failedAlternates = new Set(all.filter(m => m.status === 'fallido' && m.replacementMessageId)
-    .map(m => m.replacementMessageId));
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
@@ -75,8 +73,6 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
         if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
-        if (!campaignWhatsAppPaused && campaign?.mode === 'automatico' && campaign.autoSendWhatsApp && campaign.channels.includes('whatsapp') &&
-            !msg.reviewStatus && !failedAlternates.has(msg.id) && whatsappCampaignEligible(contact, now)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined) {

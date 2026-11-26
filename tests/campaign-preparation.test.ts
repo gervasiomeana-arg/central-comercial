@@ -136,6 +136,8 @@ test('prioriza WhatsApp y conserva el lugar del borrador reasignado', () => {
   assert.deepEqual(prepared.moves.map(move => [move.message.id, move.channel]), [[emailDraft.messages[0].id, 'whatsapp']]);
   assert.equal(prepareCampaign(oneRecipient, app, [ungranted], [], now).drafts[0]?.channel, 'email');
   assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now).drafts[0]?.channel, 'whatsapp');
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [], now, undefined, false).drafts[0]?.channel, 'email');
+  assert.equal(prepareCampaign(oneRecipient, app, [granted], [emailDraft], now, undefined, false).moves.length, 0);
 
   emailDraft.messages[0].status = 'resultado_desconocido';
   emailDraft.messages[0].attemptedAt = now.toISOString();
