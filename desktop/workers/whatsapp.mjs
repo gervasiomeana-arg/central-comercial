@@ -47,7 +47,8 @@ async function api(action,body={},area='channel-tests'){
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
-const visibleBrowser=process.platform==='win32'&&process.env.CENTRAL_WHATSAPP_VISIBLE==='true';
+const linkByPhone=process.env.CENTRAL_WHATSAPP_LINK_BY_PHONE==='true';
+const visibleBrowser=process.platform==='win32'&&(linkByPhone||process.env.CENTRAL_WHATSAPP_VISIBLE==='true');
 const observedPages=new WeakSet();
 class PersistentSession extends LocalAuth {
  // A provider logout invalidates the session. Leave the browser profile on disk
@@ -122,10 +123,11 @@ client.on('qr',()=>{
  console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada.');
  clearTimeout(startupTimeout);
  // Let the browser finish restoring an earlier login before deciding it is unpaired.
+ if(linkByPhone)console.log('[whatsapp] En la ventana de WhatsApp Web elegí Vincular con número de teléfono y seguí las indicaciones de WhatsApp.');
  startupTimeout=setTimeout(()=>{
   if(sessionAuthenticated||whatsappReady||stopping)return;
   void recover(process.platform==='win32'&&!visibleBrowser ? 75 : 78);
- },15000);
+ },linkByPhone ? 5*60000 : 15000);
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
@@ -228,6 +230,7 @@ const timer=setInterval(()=>void heartbeat(),20000);
 async function recover(code){
  if(stopping)return;
  stopping=true;
+ if(linkByPhone&&!whatsappReady&&code===75)code=78;
  whatsappReady=false;
  clearInterval(timer);
  clearTimeout(startupTimeout);

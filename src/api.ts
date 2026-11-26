@@ -92,6 +92,7 @@ export const api = {
   getSalesGoal: (month?: string) => fetchJson<any>('/api/sales-goals' + (month ? '?month=' + encodeURIComponent(month) : '')),
   saveSalesGoal: (goal: import('./types.js').MonthlySalesGoal) => fetchJson<any>('/api/sales-goals', {method:'PUT', body:JSON.stringify(goal)}),
   getDailyBatches: () => fetchJson<{day:string;receipts:{phase:'buscar'|'enviar'|'revisar';startedAt?:string;completedAt?:string;report?:string}[]}>('/api/batches/today'),
+  requestWhatsAppPhoneLink: () => fetchJson<{alreadyConnected:boolean}>('/api/whatsapp/link-by-phone', {method:'POST',body:'{}'}),
   getOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report'),
   requestOwnerReport: () => fetchJson<{ready:boolean;status:string}>('/api/owner-report', {method:'POST',body:'{}'}),
   getRealChannelTests: () => fetchJson<any>('/api/channel-tests'),

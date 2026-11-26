@@ -57,6 +57,17 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   const [connections, setConnections] = useState({ email: false, whatsapp: false, intelligence: false });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkMessage, setLinkMessage] = useState('');
+  const requestPhoneLink = async () => {
+    setLinking(true);
+    try {
+      const result = await api.requestWhatsAppPhoneLink();
+      setLinkMessage(result.alreadyConnected ? 'Central ya confirmó la conexión de WhatsApp.' :
+        'En la ventana de WhatsApp Web que abra Central, elegí «Vincular con número de teléfono» y seguí las indicaciones en tu celular.');
+    } catch (e: any) { setLinkMessage(e.message); }
+    finally { setLinking(false); }
+  };
   const refresh = async () => {
     setBusy(true);
     try {
@@ -77,6 +88,13 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   return <section className="rounded-2xl bg-slate-900 text-white p-6 sm:p-8 space-y-6" aria-labelledby="runtime-title">
     <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-4"><Monitor size={25} className="mt-1 text-emerald-300 shrink-0" /><div><p className="text-xs uppercase tracking-widest text-slate-400 mb-2">Una sola Central Comercial</p><h2 id="runtime-title" className="text-xl font-semibold">Tu computadora, conectada al negocio.</h2><p className="text-sm text-slate-300 mt-2">Un iniciador coordina correo, WhatsApp y motor de inteligencia. La operación autónoma y los registros se conservan en tu PC dedicada.</p></div></div><button onClick={() => void refresh()} disabled={busy} aria-label="Actualizar estado de mi computadora" className="p-3 rounded-xl bg-white/10 min-h-12 min-w-12 disabled:opacity-40"><RefreshCw size={18} /></button></div>
     <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] && !reportUnavailable ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{reportUnavailable ? (connections[item.id] ? 'Vinculado en el último reporte' : 'Esperando confirmación del servidor') : connections[item.id] ? (item.id === 'whatsapp' ? 'Sesión vinculada según el ejecutor' : 'Conexión confirmada por el ejecutor') : item.id === 'whatsapp' && runtime?.whatsappStage ? whatsappStageLabels[runtime.whatsappStage] : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
+    {!remote && runtime?.online && !runtime.diagnosticMode && !connections.whatsapp &&
+      runtime.components?.whatsapp === 'stopped' && <div className="space-y-2">
+        <button className="rounded-xl bg-white/10 px-4 py-2 text-sm" onClick={() => void requestPhoneLink()} disabled={linking}>
+          Vincular WhatsApp con número de teléfono
+        </button>
+      </div>}
+    {linkMessage && !connections.whatsapp && <p role="status" className="text-sm text-slate-200">{linkMessage}</p>}
     <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : runtime?.lastSeenAt
       ? `Sin señal reciente de la PC · Última señal: ${new Date(runtime.lastSeenAt).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}.`
       : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>

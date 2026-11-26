@@ -31,12 +31,12 @@ const startedAt = Date.now(), ramGB = Math.round(os.totalmem() / 1024 ** 3);
 let model = selectedModel(ramGB, process.env.OPENJARVIS_MODEL);
 const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missing' };
 const issues = new Set(), children = new Set();
-let stopping = false, timer, backupTimer, reporting = false, backingUp = false, backupAt;
+let stopping = false, timer, backupTimer, whatsappLinkTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
 let backendStarted = false, whatsappStage, whatsappVisible = false;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
-  if(stopping)return null;
+  if(stopping || (name === 'whatsapp' && components.whatsapp === 'running'))return null;
   const at = Date.now();
   const effectiveArgs=command===process.execPath?args:[path.join(root,'desktop','managed-native.mjs'),command,...args];
   const background = name === 'intelligence' || name === 'ollama';
@@ -149,7 +149,28 @@ for (const directory of [process.env.LOCALAPPDATA, process.env.ProgramFiles, pro
 }
 const browser = browserLocations.find(candidate => candidate && fs.existsSync(candidate) && fs.statSync(candidate).isFile());
 if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser) { upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));upgradeWorker(path.join(root, 'desktop', 'workers', 'whatsapp.mjs'), waFile); launch('whatsapp', process.execPath, [waFile], { cwd: waDir, env: { ...process.env, CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, CHROME_PATH: browser, PUPPETEER_SKIP_DOWNLOAD: 'true' } }); }
+  if (browser) {
+    upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));
+    upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
+    const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
+    const startWhatsApp = linkByPhone => launch('whatsapp',process.execPath,[waFile], {
+      cwd:waDir,
+      env:{...process.env,CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE:config.file,CHROME_PATH:browser,
+        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone)},
+    });
+    const tryPhoneLink = () => {
+      if (stopping || diagnosticMode || components.whatsapp === 'running' || !fs.existsSync(linkRequest)) return;
+      try {
+        const requestedAt = fs.statSync(linkRequest).mtimeMs;
+        fs.unlinkSync(linkRequest);
+        if (Date.now()-requestedAt > 5*60000) return;
+      } catch { return; }
+      startWhatsApp(true);
+    };
+    tryPhoneLink();
+    if (components.whatsapp !== 'running') startWhatsApp(false);
+    whatsappLinkTimer = setInterval(tryPhoneLink, 2500);
+  }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
 } else { issues.add('whatsapp_missing'); log('whatsapp', 'No se encontró el ejecutor de WhatsApp previamente vinculado.'); }
 
@@ -255,6 +276,7 @@ async function heartbeat() {
 await heartbeat(); timer = setInterval(() => void heartbeat(), 20000);
 if (process.platform === 'win32') spawn('rundll32.exe', ['url.dll,FileProtocolHandler', config.url.href], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
 async function stop() {
+  clearInterval(whatsappLinkTimer);
   if (stopping) return; stopping = true; clearInterval(timer);clearInterval(backupTimer);
   fs.writeFileSync(path.join(runtimeDir, 'manual-stop'), String(Date.now()));
   for (const retry of retryTimers) clearTimeout(retry);

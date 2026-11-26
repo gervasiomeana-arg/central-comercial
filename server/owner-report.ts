@@ -6,6 +6,22 @@ import { diagnosticMode } from './execution-role.js';
 import { whatsappStatus } from './commercial-whatsapp.js';
 
 export function registerOwnerReportRoutes(router: Router) {
+  router.post('/whatsapp/link-by-phone', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (process.env.CENTRAL_LOCAL_MODE !== 'true' || !process.env.LOCALAPPDATA || diagnosticMode()) {
+      return res.status(403).json({ error: 'La vinculación se inicia desde Central Comercial en la PC dedicada.' });
+    }
+    if (whatsappStatus().ready) return res.json({ alreadyConnected: true });
+    const root = path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp', 'private-state');
+    try {
+      fs.closeSync(fs.openSync(path.join(root, 'link-by-phone-request'), 'wx', 0o600));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        return res.status(503).json({ error: 'El ejecutor local de WhatsApp no pudo recibir la solicitud.' });
+      }
+    }
+    return res.status(202).json({ alreadyConnected: false });
+  });
   router.all('/owner-report', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (process.env.CENTRAL_LOCAL_MODE !== 'true' || !process.env.LOCALAPPDATA) {
