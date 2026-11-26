@@ -87,11 +87,11 @@ class SessionClient extends Client {
 const client=new SessionClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
  authTimeoutMs,
- userAgent:false,
- webVersionCache:{type:'none'},
+ // Restore the normal launch options used with the already linked profile.
+ ...(linkByPhone ? {userAgent:false,webVersionCache:{type:'none'}} : {}),
  puppeteer:{
   headless:!visibleBrowser,
-  ...(process.platform==='win32'?{pipe:true}:{}),
+  ...(visibleBrowser ? {pipe:true} : {}),
   ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),
  },
 });

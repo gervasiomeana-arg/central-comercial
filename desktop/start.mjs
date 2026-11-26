@@ -139,15 +139,9 @@ const waDir = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'C
 const waFile = waDir && path.join(waDir, 'worker.mjs');
 const browserFile = waDir && path.join(waDir, 'browser-path.txt');
 const savedBrowser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : '';
-const browserLocations = [savedBrowser, process.env.CHROME_PATH];
-for (const directory of [process.env.LOCALAPPDATA, process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
-  if (!directory) continue;
-  browserLocations.push(path.join(directory, 'Google', 'Chrome', 'Application', 'chrome.exe'));
-  browserLocations.push(path.join(directory, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
-}
-const browser = browserLocations.find(candidate => candidate && fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+const browser = savedBrowser || process.env.CHROME_PATH;
 if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser) {
+  if (browser && fs.existsSync(browser) && fs.statSync(browser).isFile()) {
     upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));
     upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
     const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
