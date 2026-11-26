@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
 import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure,useWhatsAppSessionPolling} from './commercial.mjs';
@@ -37,8 +36,8 @@ function waitForSession() {
  clearTimeout(startupTimeout);
  startupTimeout=setTimeout(()=>{
   reportPhase('session_timeout');
-  console.log('[whatsapp] WhatsApp no terminó de iniciar. Se reintenta con el mismo perfil vinculado.');
-  void recover(75);
+  console.log('[whatsapp] WhatsApp no terminó de iniciar con el perfil guardado.');
+  void recover(visibleBrowser ? 78 : 75);
  },2*authTimeoutMs+60000);
 }
 async function api(action,body={},area='channel-tests'){
@@ -117,13 +116,16 @@ async function ownerReportTick(account){
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
-client.on('qr',qr=>{
- if(sessionAuthenticated||whatsappReady||stopping)return;
- clearTimeout(startupTimeout);
+client.on('qr',()=>{
+ if(sessionAuthenticated||whatsappReady||stopping||phase==='qr')return;
  reportPhase('qr');
- console.log('Vinculá el navegador de Central desde WhatsApp > Dispositivos vinculados.');
- console.log('Escanee este QR. No lo comparta por chat.');
- qrcode.generate(qr,{small:true});
+ console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada.');
+ clearTimeout(startupTimeout);
+ // Let the browser finish restoring an earlier login before deciding it is unpaired.
+ startupTimeout=setTimeout(()=>{
+  if(sessionAuthenticated||whatsappReady||stopping)return;
+  void recover(process.platform==='win32'&&!visibleBrowser ? 75 : 78);
+ },15000);
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
@@ -139,10 +141,15 @@ client.on('ready',()=>{
 });
 client.on('auth_failure',()=>{
  reportPhase('auth_failed');
- console.log('WhatsApp requiere volver a vincular el dispositivo.');
+ console.log('[whatsapp] WhatsApp rechazó la restauración de la sesión del ejecutor. El perfil queda guardado.');
  void recover(78);
 });
-client.on('disconnected',reason=>{console.log('WhatsApp desconectado. Se conserva la sesión para recuperarla.');void recover(String(reason).toUpperCase()==='LOGOUT'?78:75);});
+client.on('disconnected',reason=>{
+ const loggedOut=String(reason).toUpperCase()==='LOGOUT';
+ reportPhase(loggedOut?'auth_failed':'restarting');
+ console.log('[whatsapp] WhatsApp se desconectó. El perfil queda guardado.');
+ void recover(loggedOut?78:75);
+});
 
 function currentWid(){
  const identity=client.info?.wid;
@@ -224,7 +231,7 @@ async function recover(code){
  whatsappReady=false;
  clearInterval(timer);
  clearTimeout(startupTimeout);
- if(code===78)reportPhase('auth_failed');
+
  await Promise.allSettled([
   api('heartbeat',{ready:false,account:''},'commercial-whatsapp'),
   api('heartbeat',{email:false,whatsapp:false})
@@ -245,5 +252,5 @@ catch(error){
   // This console is local. Never add provider exceptions to the web heartbeat.
   console.error('[whatsapp] No se pudo iniciar el navegador de WhatsApp ('+failure+').', error?.message || (typeof error === 'string' ? error : error?.name) || 'Sin detalle del navegador.');
  }
- await recover(75);
+ await recover(visibleBrowser && phase==='session_timeout' ? 78 : 75);
 }

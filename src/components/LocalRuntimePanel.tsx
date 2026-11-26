@@ -5,7 +5,7 @@ import type { LocalRuntimeState, WhatsAppStage } from '../runtime-types.js';
 
 const issueLabels: Record<string, string> = {
   email_auth: 'Gmail requiere revisar su autorización antes de reconectar.',
-  whatsapp_auth: 'WhatsApp requiere volver a vincular el dispositivo o revisar la cuenta.',
+  whatsapp_auth: 'Central no pudo restaurar su sesión guardada de WhatsApp.',
   backup_failed: 'No se pudo actualizar la copia local de los registros.',
   email_missing: 'Falta localizar el ejecutor de correo ya configurado.',
   whatsapp_missing: 'Falta localizar el ejecutor de WhatsApp vinculado.',
@@ -18,12 +18,12 @@ const issueLabels: Record<string, string> = {
 };
 const whatsappStageLabels: Record<WhatsAppStage, string> = {
   starting: 'Iniciando el navegador de WhatsApp de Central.',
-  qr: 'El navegador de Central espera su propio QR. Escanealo desde Dispositivos vinculados en la ventana del iniciador.',
+  qr: 'Central todavía no pudo recuperar su sesión guardada de WhatsApp.',
   loading: 'Sesión autenticada. WhatsApp está cargando.',
   verifying: 'Sesión abierta. Central está comprobando el número vinculado.',
   connected: 'Sesión verificada. Esperando la confirmación del servidor local.',
   server_rejected: 'El ejecutor abrió WhatsApp, pero el servidor de Central no confirmó el enlace. Revisá el mensaje en el iniciador.',
-  auth_failed: 'WhatsApp cerró la sesión del ejecutor. Reiniciá el iniciador y escaneá su QR si aparece.',
+  auth_failed: 'WhatsApp rechazó la sesión guardada del ejecutor.',
   restarting: 'El ejecutor está recuperando la sesión guardada.',
   profile_busy: 'Otro proceso mantiene abierto el perfil de WhatsApp de Central.',
   browser_access: 'Windows no pudo abrir el ejecutable del navegador configurado.',
@@ -31,7 +31,7 @@ const whatsappStageLabels: Record<WhatsAppStage, string> = {
   web_unavailable: 'El navegador de Central no pudo cargar WhatsApp Web.',
   browser_launch: 'El navegador de Central se cerró durante el arranque.',
   web_startup: 'WhatsApp Web no terminó de iniciar. La consola local tiene el detalle.',
-  session_timeout: 'La sesión de WhatsApp Web tardó demasiado en responder. Central volverá a intentarlo.',
+  session_timeout: 'La sesión guardada de WhatsApp tardó demasiado en responder.',
 };
 
 const ownerReportLabels = {

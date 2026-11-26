@@ -52,7 +52,7 @@ function launch(name, command, args, options = {}) {
   child.on('message', message => {
     if (name === 'whatsapp' && message?.type === 'whatsapp_status') {
       whatsappStage = message.status;
-      if (process.platform === 'win32' && whatsappStage === 'session_timeout') whatsappVisible = true;
+      if (process.platform === 'win32' && ['session_timeout','qr'].includes(whatsappStage)) whatsappVisible = true;
     }
     if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
@@ -67,7 +67,12 @@ function launch(name, command, args, options = {}) {
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
     if (name === 'backend' && !backendStarted) return;
-    if (code === 78) { log(name, 'Se necesita revisar la autorización. No se reintenta hasta corregirla.'); return; }
+    if (code === 78) {
+      log(name, name === 'whatsapp'
+        ? 'Se detuvo la recuperación de WhatsApp. El perfil guardado se conserva.'
+        : 'Se necesita revisar la autorización. No se reintenta hasta corregirla.');
+      return;
+    }
     const count = Date.now() - at > 600000 ? 1 : (restartCounts.get(name) || 0) + 1; restartCounts.set(name, count);
     const wait = retryDelay(count); log(name, `Recuperación automática en ${Math.round(wait / 1000)} segundos. Se conserva el registro de trabajos.`);
     const timer = setTimeout(() => { retryTimers.delete(timer); if (!stopping) launch(name, command, args, options); }, wait); retryTimers.add(timer);
