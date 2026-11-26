@@ -49,6 +49,8 @@ export function claimWhatsApp(id:string,now=new Date()){
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(history, now);
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
+ const pilotIds = new Set(db.getCampaigns().filter(c => c.funeralShiftPilot).map(c => c.id));
+ conversations.sort((a, b) => Number(pilotIds.has(b.campaignId || '')) - Number(pilotIds.has(a.campaignId || '')));
  for(const conv of conversations){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
   if(!contact||!app||app.slug!==scheduledApp||app.status!=='lista'||!app.campaignsAllowed||!whatsappCampaignEligible(contact,now))continue;

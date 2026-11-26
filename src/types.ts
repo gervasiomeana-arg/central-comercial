@@ -87,6 +87,7 @@ export interface ContactHistoryItem {
 }
 
 export interface Contact {
+  funeralShiftEvidence?: string;
   publishedWhatsApp?: { number: string; source: string };
   whatsappConsent?:{granted:boolean;at:string;evidence:string};
   undeliverableEmail?: string;
@@ -131,6 +132,7 @@ export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 export interface ResearchEvidence {
   url: string; title: string; appId: string; country: string;
   topicVerified: boolean; countryVerified: boolean;
+  funeralShiftEvidence?: string;
 }
 export interface ResearchCandidate { url: string; context?: ResearchEvidence; returnTo?: string; attempts?: number; retryAt?: number; }
 export interface ResearchOutcome { at: string; query: string; created: number; reused: number; checked: number; reasons: Record<string,number>; }
@@ -141,6 +143,7 @@ export interface ResearchState {
   status?: 'pending'|'running'|'ready'|'quota'|'waiting'|'error'; detail?: string;
 }
 export interface Campaign {
+  funeralShiftPilot?: boolean;
   chatManaged?: boolean;
   researchDiscoveryVersion?: number;
   researchSearchFallbackQuery?: string;

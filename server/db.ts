@@ -1,7 +1,7 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {nonInterestOnlyContacts,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
-import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
+import { createFuneralShiftPilot,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
@@ -801,11 +801,13 @@ class DatabaseManager {
     const report = this.getSalesGoalProgress();
     if (!report.goal.enabled || report.goal.targetClients <= 0 || report.remaining === 0 || this.data.scheduler.automationsPaused) return;
     const created = goalCampaigns(report.goal, this.data.applications, this.data.campaigns);
+    const pilot = !campaignWhatsAppPaused && createFuneralShiftPilot(report.goal, this.data.applications, this.data.campaigns);
+    if (pilot) this.data.campaigns.unshift(pilot);
     this.data.campaigns.push(...created);
-    let changed = created.length > 0;
+    let changed = Boolean(pilot || created.length);
     if (report.goal.directorEnabled) {
       const channels: Campaign['channels'] = campaignWhatsAppPaused ? ['email'] : [...new Set([...(report.goal.directorChannels || ['email'] as const), 'whatsapp' as const])];
-      for (const c of this.data.campaigns.filter(c => !c.chatManaged && this.campaignInActiveRun(c.id))) {
+      for (const c of this.data.campaigns.filter(c => !c.chatManaged && !c.funeralShiftPilot && this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
         if(app && repairDiscoveryPlan(c,app)){changed=true;this.addLog('info','contactos','Búsqueda reparada: consultas de prospectos y cola anterior archivada; el cupo global consumido se conserva.',{campaignId:c.id});}
         if (!c.intelligencePlanId && app && !campaignStrategyReady({...c,intelligenceEnabled:true},app)) {
@@ -829,6 +831,7 @@ class DatabaseManager {
         }
       }
     }
+    if (pilot) this.addLog('info', 'campañas', 'Campaña de refuerzo de Funeraria Control para México creada.', { campaignId: pilot.id }, false);
     if (created.length) this.addLog('info', 'campañas', `${created.length} campañas creadas por Central para el objetivo ${report.goal.month}.`);
     if (changed) this.save();
   }
@@ -1025,7 +1028,10 @@ class DatabaseManager {
     if (!campaign) throw new Error('Campaña no encontrada');
     const app = this.getApplicationById(campaign.appId);
     if (campaign.status !== 'pausada' && campaign.status !== 'finalizada') applyCampaignChannelPause(campaign);
-    const result = prepareCampaign(campaign, app, this.data.contacts, this.data.conversations, new Date());
+    const otherPilotIds = new Set(this.data.campaigns.filter(c => c.funeralShiftPilot && c.appId === campaign.appId && c.id !== id).map(c => c.id));
+    const allocated = new Set(this.data.conversations.filter(c => c.campaignId && otherPilotIds.has(c.campaignId)).map(c => c.contactId));
+    const contacts = allocated.size ? this.data.contacts.filter(c => !allocated.has(c.id)) : this.data.contacts;
+    const result = prepareCampaign(campaign, app, contacts, this.data.conversations, new Date());
     for (const { original, replacementId } of result.replacements) original.replacementMessageId = replacementId;
     for (const { thread, message, channel } of result.moves) {
       thread.channel = message.channel = channel;

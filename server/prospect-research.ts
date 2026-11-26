@@ -132,6 +132,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     }
     const eligible=campaigns.filter(c=>{
       if(!campaignStrategyReady(c,db.getApplicationById(c.appId)))return false;
+      if (c.funeralShiftPilot && c.maxContacts && c.stats.contactsCount >= c.maxContacts) return false;
       if(c.researchDay!==day){c.researchDay=day;c.researchCount=0;c.researchQueriesToday=0;}
       if((c.researchNextAttemptAt||0)>Date.now())return false;
       if(c.researchQueue?.some(item=>(item.retryAt||0)<=Date.now()))return true;
@@ -249,6 +250,9 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
                 id: `research-whatsapp-${Date.now()}`, timestamp: new Date().toISOString(), type: 'nota',
                 description: `Enlace institucional de WhatsApp verificado en ${contact.source}.`, author: 'Central Comercial',
               });
+            }
+            if (canUpdate && sameWebsite(existing) && contact.funeralShiftEvidence) {
+              existing.funeralShiftEvidence = contact.funeralShiftEvidence;
             }
             // Never promote a revoked contact or change its source/permission implicitly.
             if (canUpdate && !existing.interestedAppIds.includes(app.id)) existing.interestedAppIds.push(app.id);

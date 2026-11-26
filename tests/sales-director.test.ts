@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { americanMarkets, mexicoRegions } from '../server/campaign-markets.js';
 import { accountingDay } from '../src/ledger.js';
-import { defaultGoal, goalProgress, goalCampaigns, validateGoal } from '../server/sales-director.js';
+import { createFuneralShiftPilot, defaultGoal, goalProgress, goalCampaigns, validateGoal } from '../server/sales-director.js';
 import { commercialCatalog } from '../server/commercial-catalog.js';
 import { extractContact, searchLinks, publicAddress, publicUrl, contactLinks } from '../server/public-web.js';
 import type { Client, Contact, PaymentRecord } from '../src/types.js';
@@ -121,8 +121,8 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   assert.notEqual(db.getResearchState().status, 'quota');
   db.processSalesDirector();
   const scheduled = db.getCampaigns().filter(item => db.campaignInActiveRun(item.id));
-  assert.equal(scheduled.length, 106);
-  assert.deepEqual(scheduled.filter(item => item.appId === 'app-funeraria').map(item => item.country), ['México']);
+  assert.equal(scheduled.length, 107);
+  assert.deepEqual(scheduled.filter(item => item.appId === 'app-funeraria').map(item => item.country), ['México', 'México']);
   assert.equal(db.getCampaignById(funeralOutsideMexico.id)?.status, 'pausada');
 
   // Model the workload reported by the PC without contacting any providers.
@@ -139,8 +139,27 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
   const {scheduler} = await import('../server/scheduler.js');
   const saves = t.mock.method(db, 'save');
   assert.equal(await scheduler.tick(), true);
-  assert.equal(scheduled.filter(item => item.lastPreparation?.at).length, 106);
+  assert.equal(scheduled.filter(item => item.lastPreparation?.at).length, scheduled.length);
   assert.ok(saves.mock.callCount() <= 3, `${saves.mock.callCount()} escrituras en un ciclo`);
   const persisted = JSON.parse(fs.readFileSync(path.join(dir, 'central_comercial_db.json'), 'utf8'));
-  assert.equal(persisted.campaigns.filter((item: typeof campaign) => item.lastPreparation?.at).length, 106);
+  assert.equal(persisted.campaigns.filter((item: typeof campaign) => item.lastPreparation?.at).length, scheduled.length);
+});
+
+
+test('el refuerzo de Funeraria requiere el director activo en México y limita el piloto a diez contactos', () => {
+  const goal = { ...defaultGoal('2026-11'), directorEnabled: true, countries: ['México', 'Argentina'] };
+  const pilot = createFuneralShiftPilot(goal, apps, [], now);
+  assert.ok(pilot);
+  assert.equal(pilot.country, 'México');
+  assert.equal(pilot.maxContacts, 10);
+  assert.deepEqual(pilot.channels, ['whatsapp']);
+  assert.match(pilot.messageTemplate, /información entre turnos/);
+  const funeral = apps.find(app => app.slug === 'funeraria')!;
+  const url = 'https://funeraria-local.test/contacto';
+  const direct = '<title>Funeraria Local</title>Funeraria en México. Atención 24 horas. <a href="https://wa.me/525555555555">WhatsApp</a>';
+  assert.equal(extractContact(direct,url,funeral,'México',now)?.funeralShiftEvidence,url);
+  assert.equal(extractContact(direct.replace('Atención 24 horas.', ''),url,funeral,'México',now)?.funeralShiftEvidence,undefined);
+  assert.equal(extractContact(direct.replace('Funeraria Local', 'Directorio de funerarias'),url,funeral,'México',now)?.funeralShiftEvidence,undefined);
+  assert.equal(createFuneralShiftPilot(goal, apps, [pilot], now), undefined);
+  assert.equal(createFuneralShiftPilot({ ...goal, countries: ['Argentina'] }, apps, [], now), undefined);
 });

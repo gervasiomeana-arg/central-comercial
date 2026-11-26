@@ -107,7 +107,10 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const countryClue = mexicanRegion || (rule?.aliases || [country]).some(alias => word(countryText,alias)) ||
     Boolean(rule?.prefix && (phone.startsWith(rule.prefix) || telephone.startsWith(rule.prefix)));
   const countryVerified = Boolean(structuredCountry || (!structured.countries.length && (inherited?.countryVerified || countryClue)));
-  const evidence:ResearchEvidence = { url, appId: app.id, country, title, countryVerified,
+  const funeralShiftEvidence = app.slug === 'funeraria' && !/directorio|ranking|\blista de\b|\bmejores funerarias\b/i.test(title) &&
+    /\b(?:24\s*(?:horas|hrs?\.?|h)\b|nuestras sucursales\b|varias sucursales\b)/i.test(text)
+    ? url : inherited?.funeralShiftEvidence;
+  const evidence:ResearchEvidence = { url, appId: app.id, country, title, countryVerified, funeralShiftEvidence,
     topicVerified: Boolean(inherited?.topicVerified || prospectingTerms(app,country).some(term => word(text,term))) };
   if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
   if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
@@ -119,7 +122,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
-  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,funeralShiftEvidence,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
   return {contact,evidence,reason:phone ? (email ? 'Email y WhatsApp públicos verificados' : 'WhatsApp público verificado') : 'Email público verificado'};
 }
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {

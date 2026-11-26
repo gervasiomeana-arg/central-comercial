@@ -93,6 +93,12 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
   };
   for (const contact of contacts) {
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
+    if (campaign.funeralShiftPilot && (!contact.funeralShiftEvidence || conversations.some(other =>
+      other.campaignId !== campaign.id && other.contactId === contact.id && other.appId === app.id &&
+      other.messages.some(message => message.direction === 'outbound' && message.reviewStatus !== 'rejected')))) {
+      skip('Sin evidencia de turnos o contacto ya incluido en otra campaña');
+      continue;
+    }
     if (campaign.segment?.trim() && normalized(contact.orgType || '') !== normalized(campaign.segment)) { skip('Otro segmento'); continue; }
     const whatsappAllowed = campaign.channels.includes('whatsapp') && whatsappCampaignEligible(contact, now);
     const emailAllowed = campaign.channels.includes('email') &&

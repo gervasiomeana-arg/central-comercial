@@ -153,6 +153,42 @@ export function goalCampaigns(goal: MonthlySalesGoal, apps: Application[], exist
   return result;
 }
 
+export function createFuneralShiftPilot(goal: MonthlySalesGoal, apps: Application[], existing: Campaign[], now = new Date()) {
+  if (!goal.directorEnabled || existing.some(c => c.funeralShiftPilot)) return undefined;
+  const app = apps.find(a => a.slug === 'funeraria');
+  const country = goal.countries.find(name => normalize(name) === 'mexico');
+  if (!app || !country) return undefined;
+  const [base] = goalCampaigns({ ...goal, countries: [country] }, [app], [], now);
+  if (!base) return undefined;
+  return {
+    ...base,
+    id: base.id + '-refuerzo-turnos',
+    name: 'Funeraria Control · Refuerzo de cambio de turno',
+    objective: 'Conocer cómo las funerarias mexicanas coordinan los servicios entre turnos.',
+    funeralShiftPilot: true,
+    channels: ['whatsapp'],
+    autoSendWhatsApp: true,
+    autoSendEmail: false,
+    allowPublicEmail: false,
+    dailyLimit: 10,
+    maxContacts: 10,
+    researchDiscoveryVersion: 3,
+    researchSegment: 'Funerarias mexicanas con varias sucursales o atención 24 horas',
+    researchQueries: ['funeraria servicio 24 horas contacto México', 'funeraria nuestras sucursales contacto México'],
+    messageTemplate: `Hola, equipo de {organizacion}.
+
+Soy Gervasio, de Funeraria Control. La app reúne el expediente de cada servicio, sus horarios, el vehículo asignado y las tareas pendientes.
+
+Si un servicio empieza de noche, el equipo de la mañana puede abrir el expediente y ver qué se confirmó y qué falta resolver.
+
+¿Cómo comparten hoy esa información entre turnos? Si les interesa, les puedo enviar un ejemplo breve.
+
+Saludos,
+Gervasio · Funeraria Control
+Si prefieren no recibir más mensajes, respondan BAJA.`,
+  } satisfies Campaign;
+}
+
 // Operational counts use recorded evidence. Prepared drafts and claims of payment
 // never become sent mail or paid customers in this view.
 export function operationalSummary(
