@@ -33,7 +33,7 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
-let backendStarted = false;
+let backendStarted = false, whatsappStage;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
   if(stopping)return null;
@@ -49,6 +49,7 @@ function launch(name, command, args, options = {}) {
   child.stdout?.on('data', data => process.stdout.write(data));
   child.stderr?.on('data', data => process.stderr.write(data));
   child.on('message', message => {
+    if (name === 'whatsapp' && message?.type === 'whatsapp_status') whatsappStage = message.status;
     if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
   });
@@ -56,6 +57,7 @@ function launch(name, command, args, options = {}) {
   const onExit = (code, signal) => {
     if (ended) return; ended = true; children.delete(child);
     if (name in components) components[name] = 'stopped';
+    if (name === 'whatsapp' && code !== 78 && !stopping) whatsappStage = 'restarting';
     if (stopping) return;
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
@@ -224,7 +226,7 @@ async function heartbeat() {
     wasReportUnavailable = reportUnavailable;
     const connections = stopping ? {email:false,whatsapp:false,intelligence:false} : report?.connections;
     const payload={workerId,startedAt,ramGB,model,components,issues:[...issues],backupAt,diagnosticMode,connections,reportUnavailable,
-      sourceFingerprint:report?.release?.sourceFingerprint,update:readUpdateStatus(),activity:stopping?undefined:report?.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
+      sourceFingerprint:report?.release?.sourceFingerprint,whatsappStage,update:readUpdateStatus(),activity:stopping?undefined:report?.activity,ownerReport:waDir?readOwnerReport(path.join(waDir,'private-state','owner-reports.json')):undefined};
     atomicJSON(path.join(runtimeDir,'estado.json'),{updatedAt:new Date().toISOString(),diagnosticMode,connections,reportUnavailable,components,issues:[...issues],backupAt,release:report?.release});
     const response = await fetch(new URL('/api/local-runtime/heartbeat', config.url), { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },

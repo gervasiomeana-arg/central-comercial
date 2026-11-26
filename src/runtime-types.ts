@@ -31,6 +31,9 @@ export interface OwnerReportStatus {
   at?: string;
 }
 
+export const whatsappStages = ['starting', 'qr', 'loading', 'verifying', 'connected', 'server_rejected', 'auth_failed', 'restarting'] as const;
+export type WhatsAppStage = typeof whatsappStages[number];
+
 export type LocalComponentState = 'running' | 'missing' | 'stopped';
 export interface LocalRuntimeState {
   online: boolean;
@@ -49,6 +52,7 @@ export interface LocalRuntimeState {
   diagnosticMode?: boolean;
   connections?: {email:boolean;whatsapp:boolean;intelligence:boolean};
   sourceFingerprint?: string;
+  whatsappStage?: WhatsAppStage;
   components?: { email: LocalComponentState; whatsapp: LocalComponentState; intelligence: LocalComponentState };
   issues: string[];
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Monitor, CheckCircle2, Circle, RefreshCw } from 'lucide-react';
 import { api } from '../api.js';
-import type { LocalRuntimeState } from '../runtime-types.js';
+import type { LocalRuntimeState, WhatsAppStage } from '../runtime-types.js';
 
 const issueLabels: Record<string, string> = {
   email_auth: 'Gmail requiere revisar su autorización antes de reconectar.',
@@ -16,6 +16,17 @@ const issueLabels: Record<string, string> = {
   component_stopped: 'Un componente se detuvo. Revisá la ventana de Central Comercial.',
   jarvis_port_busy: 'El puerto reservado para el motor local está ocupado; no se conectó a ese proceso.'
 };
+const whatsappStageLabels: Record<WhatsAppStage, string> = {
+  starting: 'Iniciando el navegador de WhatsApp de Central.',
+  qr: 'El navegador de Central espera su propio QR. Escanealo desde Dispositivos vinculados en la ventana del iniciador.',
+  loading: 'Sesión autenticada. WhatsApp está cargando.',
+  verifying: 'Sesión abierta. Central está comprobando el número vinculado.',
+  connected: 'Sesión verificada. Esperando la confirmación del servidor local.',
+  server_rejected: 'El ejecutor abrió WhatsApp, pero el servidor de Central no confirmó el enlace. Revisá el mensaje en el iniciador.',
+  auth_failed: 'WhatsApp cerró la sesión del ejecutor. Reiniciá el iniciador y escaneá su QR si aparece.',
+  restarting: 'El ejecutor está recuperando la sesión guardada.',
+};
+
 const ownerReportLabels = {
   sin_intento: 'Sin intento registrado',
   aceptado_proveedor: 'Aceptado por WhatsApp, entrega sin confirmar',
@@ -58,7 +69,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
   const items = [{ id: 'email', name: 'Correo comercial' }, { id: 'whatsapp', name: 'WhatsApp Web en tu PC' }, { id: 'intelligence', name: 'Inteligencia OpenJarvis' }] as const;
   return <section className="rounded-2xl bg-slate-900 text-white p-6 sm:p-8 space-y-6" aria-labelledby="runtime-title">
     <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-4"><Monitor size={25} className="mt-1 text-emerald-300 shrink-0" /><div><p className="text-xs uppercase tracking-widest text-slate-400 mb-2">Una sola Central Comercial</p><h2 id="runtime-title" className="text-xl font-semibold">Tu computadora, conectada al negocio.</h2><p className="text-sm text-slate-300 mt-2">Un iniciador coordina correo, WhatsApp y motor de inteligencia. La operación autónoma y los registros se conservan en tu PC dedicada.</p></div></div><button onClick={() => void refresh()} disabled={busy} aria-label="Actualizar estado de mi computadora" className="p-3 rounded-xl bg-white/10 min-h-12 min-w-12 disabled:opacity-40"><RefreshCw size={18} /></button></div>
-    <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] && !reportUnavailable ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{reportUnavailable ? (connections[item.id] ? 'Vinculado en el último reporte' : 'Esperando confirmación del servidor') : connections[item.id] ? (item.id === 'whatsapp' ? 'Sesión vinculada según el ejecutor' : 'Conexión confirmada por el ejecutor') : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
+    <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] && !reportUnavailable ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{reportUnavailable ? (connections[item.id] ? 'Vinculado en el último reporte' : 'Esperando confirmación del servidor') : connections[item.id] ? (item.id === 'whatsapp' ? 'Sesión vinculada según el ejecutor' : 'Conexión confirmada por el ejecutor') : item.id === 'whatsapp' && runtime?.whatsappStage ? whatsappStageLabels[runtime.whatsappStage] : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
     <p role="status" className="text-sm text-slate-300">{runtime?.online ? `Inicio único conectado · ${runtime.ramGB} GB de RAM · modelo elegido: ${runtime.model}.` : runtime?.lastSeenAt
       ? `Sin señal reciente de la PC · Última señal: ${new Date(runtime.lastSeenAt).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}.`
       : 'El inicio único todavía no está conectado. Los ejecutores anteriores pueden seguir apareciendo conectados por su cuenta.'}</p>

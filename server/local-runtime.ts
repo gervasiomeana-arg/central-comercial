@@ -2,7 +2,7 @@ import { validDay } from '../src/ledger.js';
 import { validateActivity } from './runtime-activity.js';
 import type { Express } from 'express';
 import { workerAuthorized } from './channelTests.js';
-import { pcUpdateStates, type LocalRuntimeState, type PcUpdateStatus } from '../src/runtime-types.js';
+import { pcUpdateStates, whatsappStages, type LocalRuntimeState, type PcUpdateStatus } from '../src/runtime-types.js';
 
 export class LocalRuntime {
   private current?: Omit<LocalRuntimeState, 'online'> & { id: string; at: number };
@@ -55,6 +55,7 @@ export class LocalRuntime {
     this.current = { activity, ownerReport, update, id: input.workerId, at: now, startedAt: input.startedAt, ramGB: input.ramGB, model: input.model, backupAt: input.backupAt,
       components: { email: input.components.email, whatsapp: input.components.whatsapp, intelligence: input.components.intelligence }, issues: [...new Set<string>(input.issues)],
       connections, reportAt, reportUnavailable,
+      whatsappStage: whatsappStages.includes(input.whatsappStage) ? input.whatsappStage : undefined,
       diagnosticMode:input.diagnosticMode,sourceFingerprint: reportUnavailable ? previous?.sourceFingerprint : input.sourceFingerprint };
   }
   status(): LocalRuntimeState {
