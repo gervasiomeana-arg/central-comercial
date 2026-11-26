@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -47,7 +47,7 @@ async function api(action,body={},area='channel-tests'){
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
-const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),puppeteer:{headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}});
+const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),puppeteer:{headless:true, ...(process.platform==='win32'?{pipe:true}:{}), ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}});
 const ownerReportFile=path.join(stateDir,'owner-reports.json');
 const ownerReports=fs.existsSync(ownerReportFile)?JSON.parse(fs.readFileSync(ownerReportFile,'utf8')):{};
 const saveOwnerReports=()=>{const tmp=ownerReportFile+'.tmp';fs.writeFileSync(tmp,JSON.stringify(ownerReports),{mode:0o600});fs.renameSync(tmp,ownerReportFile);};
@@ -194,10 +194,12 @@ process.on('SIGTERM',()=>void recover(0));
 void heartbeat();
 waitForSession();
 try{await client.initialize();}
-catch{
+catch(error){
  if(!stopping){
-  reportPhase('restarting');
-  console.log('No se pudo iniciar el navegador de WhatsApp. Se conserva el perfil vinculado.');
+  const failure=whatsappStartupFailure(error);
+  reportPhase(failure);
+  // This console is local. Never add provider exceptions to the web heartbeat.
+  console.error('[whatsapp] No se pudo iniciar el navegador de WhatsApp ('+failure+').', error?.message || error?.name || 'Sin detalle del navegador.');
  }
  await recover(75);
 }

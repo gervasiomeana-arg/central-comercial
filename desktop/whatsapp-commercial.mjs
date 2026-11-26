@@ -1,6 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+export function whatsappStartupFailure(error) {
+ const message = String(error?.message || '');
+ if (/already running for|ProcessSingleton|profile.{0,50}in use/i.test(message)) return 'profile_busy';
+ if (['EACCES','EPERM','ENOENT'].includes(error?.code) ||
+     /browser was not found|executable (?:does not exist|not found)|spawn.{0,80}(?:EACCES|ENOENT|EPERM)/i.test(message)) return 'browser_access';
+ if (/WS endpoint|DevToolsActivePort|ECONNREFUSED.{0,35}127\.0\.0\.1/i.test(message)) return 'browser_transport';
+ if (/net::ERR_|Navigation timeout/i.test(message)) return 'web_unavailable';
+ if (/Failed to launch the browser process/i.test(message)) return 'browser_launch';
+ return 'web_startup';
+}
 const reportClock = new Intl.DateTimeFormat('en-CA', {
  timeZone:'America/Argentina/Buenos_Aires', year:'numeric', month:'2-digit', day:'2-digit',
  hour:'2-digit', hourCycle:'h23'

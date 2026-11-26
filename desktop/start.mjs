@@ -57,7 +57,8 @@ function launch(name, command, args, options = {}) {
   const onExit = (code, signal) => {
     if (ended) return; ended = true; children.delete(child);
     if (name in components) components[name] = 'stopped';
-    if (name === 'whatsapp' && code !== 78 && !stopping) whatsappStage = 'restarting';
+    if (name === 'whatsapp' && code !== 78 && !stopping &&
+        !['profile_busy','browser_access','browser_transport','web_unavailable','browser_launch','web_startup'].includes(whatsappStage)) whatsappStage = 'restarting';
     if (stopping) return;
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
