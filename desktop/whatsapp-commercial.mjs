@@ -1,6 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+// Session readiness is unrelated to page rendering. Browsers can stop animation
+// frames while a window is hidden or Windows is locked (wwebjs issue #201940).
+export function useWhatsAppSessionPolling(page) {
+ const waitForFunction=page.waitForFunction.bind(page);
+ page.waitForFunction=(predicate,options,...args)=>{
+  const check=String(predicate);
+  const readiness=check.includes('window.Debug?.VERSION') ||
+   check.includes('WAWebSocketModel') || check.includes('typeof window.WWebJS');
+  return waitForFunction(predicate, readiness ? {polling:200,...options} : options, ...args);
+ };
+}
 export function whatsappStartupFailure(error) {
  const message = typeof error === 'string' ? error : String(error?.message || '');
  if (/already running for|ProcessSingleton|profile.{0,50}in use/i.test(message)) return 'profile_busy';

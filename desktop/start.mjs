@@ -33,7 +33,7 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
-let backendStarted = false, whatsappStage;
+let backendStarted = false, whatsappStage, whatsappVisible = false;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
   if(stopping)return null;
@@ -42,6 +42,7 @@ function launch(name, command, args, options = {}) {
   const background = name === 'intelligence' || name === 'ollama';
   const child = spawn(process.execPath, effectiveArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], ...options,
     ...(background ? {env:{...(options.env || process.env), CENTRAL_NATIVE_BACKGROUND:'true'}} : {}),
+    ...(name === 'whatsapp' && whatsappVisible ? {env:{...options.env, CENTRAL_WHATSAPP_VISIBLE:'true'}} : {}),
   });
   children.add(child);
   if (['email', 'whatsapp', 'intelligence'].includes(name)) components[name] = 'running';
@@ -49,7 +50,10 @@ function launch(name, command, args, options = {}) {
   child.stdout?.on('data', data => process.stdout.write(data));
   child.stderr?.on('data', data => process.stderr.write(data));
   child.on('message', message => {
-    if (name === 'whatsapp' && message?.type === 'whatsapp_status') whatsappStage = message.status;
+    if (name === 'whatsapp' && message?.type === 'whatsapp_status') {
+      whatsappStage = message.status;
+      if (process.platform === 'win32' && whatsappStage === 'session_timeout') whatsappVisible = true;
+    }
     if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
   });

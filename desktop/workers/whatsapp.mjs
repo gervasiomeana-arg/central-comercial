@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import qrcode from 'qrcode-terminal';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure,useWhatsAppSessionPolling} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -48,13 +48,25 @@ async function api(action,body={},area='channel-tests'){
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
-const client=new Client({
+const visibleBrowser=process.platform==='win32'&&process.env.CENTRAL_WHATSAPP_VISIBLE==='true';
+const observedPages=new WeakSet();
+class SessionClient extends Client {
+ async inject(){
+  const page=this.pupPage;
+  if(page&&!observedPages.has(page)){
+   useWhatsAppSessionPolling(page);
+   observedPages.add(page);
+  }
+  return super.inject();
+ }
+}
+const client=new SessionClient({
  authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),
  authTimeoutMs,
  userAgent:false,
  webVersionCache:{type:'none'},
  puppeteer:{
-  headless:true,
+  headless:!visibleBrowser,
   ...(process.platform==='win32'?{pipe:true}:{}),
   ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),
  },
@@ -182,7 +194,9 @@ async function tick(){
  }catch(error){console.log(error.httpStatus===401?'El servidor rechazo la clave de enlace. Revise la configuracion compartida con el correo.':`Conexion pendiente: ${error.message||'revise Internet'}`);}
  finally{running=false;}
 }
-console.log('Preparando WhatsApp dentro del inicio único de Central Comercial.');
+console.log(visibleBrowser
+ ? '[whatsapp] Abriendo el navegador de Central en una ventana visible con el mismo perfil.'
+ : '[whatsapp] Preparando WhatsApp dentro del inicio único de Central Comercial.');
 reportPhase('starting');
 const timer=setInterval(()=>void heartbeat(),20000);
 async function recover(code){
