@@ -138,3 +138,12 @@ test('pone en pausa nuevas promociones tras fallos confirmados a cinco destinata
   assert.equal(emailPromotionHold(failed.map((m,i)=>i===0?{...m,replyToProviderId:'reply'}:m),now),undefined);
   assert.equal(emailPromotionHold(failed,now+55*60000),undefined);
 });
+
+test('separa saludos automáticos y derivaciones de las consultas comerciales', async () => {
+  const {isAutomaticNotice, isReferralAcknowledgement} = await import('../src/email-policy.js');
+  assert.equal(isAutomaticNotice('Gracias por tu mensaje. Estamos fuera de nuestro horario hábil.'), true);
+  assert.equal(isAutomaticNotice('Gracias por comunicarte con Nueva Esperanza. 😊 ¿En qué podemos ayudarle?'), true);
+  assert.equal(isAutomaticNotice('¡Hola! 🎓 ¿Te interesa estudiar en EDUCEM? Pronto te enviaremos la información.'), true);
+  assert.equal(isAutomaticNotice('Hola, nos interesa una presentación para evaluar la app.'), false);
+  assert.equal(isReferralAcknowledgement('Ya enviamos la información al sector correspondiente. En caso de que les interese conocer más, se pondrán en contacto.'), true);
+});

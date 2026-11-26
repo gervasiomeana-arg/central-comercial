@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { emailPromotionHold } from '../email-policy.js';
+import { emailPromotionHold, hasOnlyAutomaticReplies, isReferralAcknowledgement } from '../email-policy.js';
 import { whatsappCampaignEligible } from '../whatsapp-policy.js';
 import { DraftReviewPanel, type DraftReviewInput } from './DraftReviewPanel.js';
 import React, { useState, useEffect } from 'react';
@@ -96,15 +96,21 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
   const [newConvInitialMsg, setNewConvInitialMsg] = useState('');
 
   const emailHoldUntil = emailPromotionHold(conversations.flatMap(c => c.messages));
+  const isReferralOnly = (conv: Conversation) => {
+    const received = conv.messages.filter(m => m.direction === 'inbound');
+    return received.length > 0 && received.every(m => isReferralAcknowledgement(m.content));
+  };
   const filteredConversations = conversations.filter(conv => {
+    const automaticOnly = hasOnlyAutomaticReplies(conv);
     const matchesApp =
       selectedAppFilter === 'all' || conv.appId === selectedAppFilter;
     const matchesClassification =
-      filterClassification === 'all' || conv.classification === filterClassification;
+      filterClassification === 'all' || (filterClassification === 'automatic_notice'
+        ? automaticOnly : !automaticOnly && !(filterClassification === 'interesado' && isReferralOnly(conv)) && conv.classification === filterClassification);
     const contact = contacts.find(c => c.id === conv.contactId);
     const app = applications.find(a => a.id === conv.appId);
     const matchesSearch = !search.trim() || `${contact?.orgName || ''} ${contact?.contactPerson || ''} ${app?.name || ''}`.toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es'));
-    const needsAttention = conv.requiresHumanIntervention && conv.messages.some(m => m.direction === 'inbound');
+    const needsAttention = !automaticOnly && conv.requiresHumanIntervention && conv.messages.some(m => m.direction === 'inbound');
     return matchesApp && matchesClassification && matchesSearch && (channel === 'all' || conv.channel === channel) && (!attentionOnly || needsAttention);
   }).sort((a,b) => Number(b.requiresHumanIntervention && b.messages.some(m=>m.direction==='inbound')) - Number(a.requiresHumanIntervention && a.messages.some(m=>m.direction==='inbound')) || b.lastMessageAt.localeCompare(a.lastMessageAt));
 
@@ -232,7 +238,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
         <div className="cc-inbox-filters">
           <label>Buscar organización<input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, persona o aplicación"/></label>
-          <label>Tipo de consulta<select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)}>{[{id:'all',label:'Todas'},{id:'interesado',label:'Interesados'},{id:'solicita_informacion',label:'Información'},{id:'solicita_demostracion',label:'Demostración'},{id:'consulta_precio',label:'Precios'},{id:'quiere_suscribirse',label:'Suscripción'},{id:'informa_pago',label:'Informa pago'},{id:'requiere_intervencion',label:'Requiere tu respuesta'},{id:'no_interesado',label:'Sin interés'},{id:'solicita_baja',label:'Bajas'}].map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+          <label>Tipo de consulta<select value={filterClassification} onChange={e=>setFilterClassification(e.target.value)}>{[{id:'all',label:'Todas'},{id:'interesado',label:'Interesados'},{id:'automatic_notice',label:'Avisos automáticos'},{id:'solicita_informacion',label:'Información'},{id:'solicita_demostracion',label:'Demostración'},{id:'consulta_precio',label:'Precios'},{id:'quiere_suscribirse',label:'Suscripción'},{id:'informa_pago',label:'Informa pago'},{id:'requiere_intervencion',label:'Requiere tu respuesta'},{id:'no_interesado',label:'Sin interés'},{id:'solicita_baja',label:'Bajas'}].map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
           <label>Canal
             <select value={channel} onChange={e => setChannel(e.target.value)}>
               <option value="all">Todos</option>
@@ -314,7 +320,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
                             : 'bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {conv.classification.replace('_', ' ')}
+                        {hasOnlyAutomaticReplies(conv) ? 'aviso automático' : isReferralOnly(conv) ? 'derivado internamente' : conv.classification.replace('_', ' ')}
                       </span>
                     </div>
                   </div>
@@ -349,7 +355,7 @@ export const ConversationsView: React.FC<ConversationsViewProps> = ({
 
                 <div className="flex items-center space-x-2">
                   <span className="text-[11px] font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 uppercase">
-                    {activeConv.classification.replace('_', ' ')}
+                    {hasOnlyAutomaticReplies(activeConv) ? 'aviso automático' : isReferralOnly(activeConv) ? 'derivado internamente' : activeConv.classification.replace('_', ' ')}
                   </span>
                 </div>
               </div>

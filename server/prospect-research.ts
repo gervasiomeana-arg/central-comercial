@@ -48,7 +48,7 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
         (contact.emailRecoveryCheckedAt && Date.parse(contact.emailRecoveryCheckedAt) > now.getTime() - 86400000)) continue;
     const email = contact.email?.trim().toLowerCase();
     const [message] = thread.messages;
-    const failedAt = Date.parse(message?.emailFailureAt || '');
+    const failedAt = Date.parse(message?.emailFailureAt || (message?.serviceError?.startsWith('Dominio descartado antes de enviar:') ? message.attemptedAt || '' : ''));
     if (thread.messages.length !== 1 || message.channel !== 'email' || message.direction !== 'outbound' ||
         message.status !== 'fallido' || message.approvedRecipient !== email || !invalid.has(email) ||
         message.replacementMessageId || !Number.isFinite(failedAt) || failedAt < cutoff || failedAt > now.getTime() ||

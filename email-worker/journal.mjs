@@ -1,3 +1,4 @@
+import { Resolver } from 'node:dns/promises';
 import { createHash } from 'node:crypto';
 const fingerprint = job => createHash('sha256').update(JSON.stringify([job.recipient, job.subject, job.content, job.inReplyTo || ''])).digest('hex');
 export function initializeJournal(state) {
@@ -52,4 +53,31 @@ export function collectBounces(mail, originalHeaders, threads, sender) {
     }
   }
   return bounces;
+}
+
+
+const domainCache = new Map();
+export async function hasInvalidMailDomain(address) {
+  const domain = address.split('@').at(-1).toLowerCase();
+  const cached = domainCache.get(domain);
+  if (cached?.expiresAt > Date.now()) return cached.invalid;
+  const resolver = new Resolver({ timeout: 2000, tries: 2 });
+  let invalid;
+  try {
+    const records = await resolver.resolveMx(domain);
+    if (records.length) invalid = records.every(record => !record.exchange || record.exchange === '.');
+  } catch (error) {
+    if (error.code === 'ENOTFOUND') invalid = true;
+    else if (error.code !== 'ENODATA') return false;
+  }
+  if (invalid === undefined) {
+    // SMTP can fall back to address records if the domain publishes no MX.
+    const records = await Promise.allSettled([resolver.resolve4(domain), resolver.resolve6(domain)]);
+    if (records.some(record => record.status === 'fulfilled' && record.value.length)) invalid = false;
+    else if (records.every(record => record.status === 'rejected' && ['ENOTFOUND','ENODATA'].includes(record.reason?.code))) invalid = true;
+    else return false;
+  }
+  if (domainCache.size >= 1000) domainCache.delete(domainCache.keys().next().value);
+  domainCache.set(domain, { invalid, expiresAt: Date.now() + 3600000 });
+  return invalid;
 }

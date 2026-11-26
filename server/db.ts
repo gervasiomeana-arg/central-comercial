@@ -1,5 +1,5 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {exampleContactEmail,usableContactEmail} from '../src/email-policy.js';
+import {nonInterestOnlyContacts,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
@@ -1093,7 +1093,7 @@ class DatabaseManager {
       contact.updatedAt = new Date().toISOString();
 
       // COMMERCIAL INTELLIGENCE RULES (Inteligencia comercial):
-      if (newMsg.direction === 'inbound') {
+      if (newMsg.direction === 'inbound' && !isAutomaticNotice(newMsg.content)) {
         // 1. Automatically halt further scheduled follow-ups once a reply is received
         contact.nextFollowUpDate = null;
 
@@ -1141,12 +1141,13 @@ class DatabaseManager {
         }
         // 4. Positive interest
         else if (
+          !isReferralAcknowledgement(newMsg.content) && (
           lower.includes('interes') ||
           lower.includes('precio') ||
           lower.includes('demo') ||
           lower.includes('probar') ||
           lower.includes('reunión') ||
-          lower.includes('llamada')
+          lower.includes('llamada'))
         ) {
           if (contact.status === 'prospecto' || contact.status === 'contactado') {
             contact.status = 'interesado';
@@ -1410,6 +1411,7 @@ class DatabaseManager {
     let messagesBounced = 0;
     let messagesUnknown = 0;
     let responsesReceived = 0;
+    const nonInterestOnly = nonInterestOnlyContacts(this.data.conversations.filter(c => appFilter === 'all' || c.appId === appFilter));
 
     for (const conv of this.data.conversations) {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
@@ -1422,7 +1424,7 @@ class DatabaseManager {
             if (m.channel === 'email' && /^Rebote permanente confirmado:/.test(m.serviceError || '')) messagesBounced++;
           }
           else if (m.status === 'resultado_desconocido') messagesUnknown++;
-        } else if (m.direction === 'inbound') {
+        } else if (m.direction === 'inbound' && !isAutomaticNotice(m.content)) {
           responsesReceived++;
         }
       }
@@ -1441,7 +1443,7 @@ class DatabaseManager {
       messagesBounced,
       messagesUnknown,
       responsesReceived,
-      interestedCount: contacts.filter(c => c.status === 'interesado').length,
+      interestedCount: contacts.filter(c => c.status === 'interesado' && !nonInterestOnly.has(c.id)).length,
       trialClientsCount: contacts.filter(c => c.status === 'en_prueba').length + subscriptions.filter(s => s.status === 'en_prueba').length,
       activeSubscriptionsCount: subscriptions.filter(s => s.status === 'activa').length,
       expiredSubscriptionsCount: subscriptions.filter(s => s.status === 'vencida').length,
@@ -1469,12 +1471,13 @@ class DatabaseManager {
         for (const m of conv.messages) {
           if (m.direction === 'outbound' && (m.status === 'enviado' || m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada')) {
             messagesSent++;
-          } else if (m.direction === 'inbound') {
+          } else if (m.direction === 'inbound' && !isAutomaticNotice(m.content)) {
             responsesReceived++;
           }
         }
       }
-      const interestedCount = contacts.filter(c => c.status === 'interesado').length;
+      const nonInterestOnly = nonInterestOnlyContacts(appConvs);
+      const interestedCount = contacts.filter(c => c.status === 'interesado' && !nonInterestOnly.has(c.id)).length;
       const trialCount = contacts.filter(c => c.status === 'en_prueba').length + this.data.subscriptions.filter(s => s.appId === app.id && s.status === 'en_prueba').length;
       const clientsCount = new Set(this.data.subscriptions.filter(s => s.appId === app.id && s.status === 'activa').map(s => s.clientId)).size;
 

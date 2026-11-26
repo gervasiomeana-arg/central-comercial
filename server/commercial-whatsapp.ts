@@ -1,3 +1,4 @@
+import { isAutomaticNotice } from '../src/email-policy.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import {randomUUID,createHash} from 'node:crypto';
@@ -101,6 +102,7 @@ export function importWhatsAppReply(input:any){
  if(db.getConversations().some(c=>c.messages.some(m=>m.providerMessageId===input.providerId)))return {success:true,duplicate:true};
  const conv=db.getConversationById(ids[0])!,contact=db.getContactById(conv.contactId)!,app=db.getApplicationById(conv.appId)!;
  const text=currentReplyText(input.text);db.addMessageToConversation(conv.id,{conversationId:conv.id,direction:'inbound',channel:'whatsapp',content:text,providerMessageId:input.providerId,status:'respuesta_recibida'});
+ if (isAutomaticNotice(text)) return { success:true, decision:'automatic_notice' };
  const decision=replyDecision(text,app,contact.country);
  if(decision.kind==='unsubscribe'){for(const c of db.getContacts().filter(c=>whatsappPhone(c.phone)===whatsappPhone(contact.phone))){c.permission='revocado';c.status='baja_solicitada';if(c.whatsappConsent)c.whatsappConsent.granted=false;}conv.requiresHumanIntervention=false;}
  else if(decision.kind==='answer'&&db.getMonthlyGoal().answerEmail&&!db.getTasks().some(t=>t.relatedId===conv.id&&t.status==='pendiente')){conv.requiresHumanIntervention=false;conv.messages.push({id:randomUUID(),conversationId:conv.id,direction:'outbound',channel:'whatsapp',content:decision.text,replyToProviderId:input.providerId,status:'preparado',reviewStatus:'approved',approvedRecipient:whatsappPhone(contact.phone),createdAt:new Date().toISOString()});}

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { initializeJournal, reserveMessage, finishMessage, collectBounces } from './journal.mjs';
+import { initializeJournal, reserveMessage, finishMessage, collectBounces, hasInvalidMailDomain } from './journal.mjs';
 import nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -47,6 +47,11 @@ async function send(){
   const {job}=await api('claim');if(!job)return false;
   // Persist before SMTP. A crash here becomes an unknown result, never an automatic resend.
   const {shouldSend,result}=reserveMessage(state,job);save();if(!shouldSend){await flush();return true;}
+  if (!job.inReplyTo && await hasInvalidMailDomain(job.recipient)) {
+    result.outcome = 'rejected';
+    result.response = 'Dominio descartado antes de enviar: 5.1.2, no admite correo.';
+    finishMessage(state, job, result); save(); await flush(); return true;
+  }
   try{
     const receipt=await smtp.sendMail({from:env.EMAIL_ADDRESS,to:job.recipient,subject:job.subject,text:job.content,messageId:job.providerMessageId,inReplyTo:job.inReplyTo,references:job.inReplyTo?[job.inReplyTo]:undefined,headers:{'X-Central-Comercial-Id':job.messageId},disableFileAccess:true,disableUrlAccess:true});
     result.outcome=receipt.accepted?.some(a=>String(a).toLowerCase()===job.recipient.toLowerCase())?'accepted':'rejected';result.response=String(receipt.response||'Sin respuesta SMTP');

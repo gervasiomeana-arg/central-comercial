@@ -30,7 +30,7 @@ export function DashboardView(props: DashboardViewProps) {
   const kpis = [
     { label: 'Contactos', value: metrics.contactsTotal, detail: metrics.contactsVerified + ' con fuente registrada', icon: Users },
     { label: 'Aceptados por el proveedor', value: metrics.messagesSent, detail: `${metrics.messagesPending} pendientes · ${metrics.messagesBounced ?? 0} rebotes confirmados`, icon: Send },
-    { label: 'Respuestas recibidas', value: metrics.responsesReceived, detail: metrics.interestedCount + ' interesados', icon: MessageSquare },
+    { label: 'Respuestas sin avisos automáticos', value: metrics.responsesReceived, detail: metrics.interestedCount + ' interesados', icon: MessageSquare },
     { label: 'Suscripciones activas', value: metrics.activeSubscriptionsCount, detail: metrics.trialClientsCount + ' en período de prueba', icon: CreditCard }
   ];
   const channels = [
@@ -118,7 +118,7 @@ export function PcMonitorOverview({ appId, onStatistics, onConnections }: {
   const kpis = summary ? [
     { label: 'Contactos', value: summary.contactsTotal, detail: summary.contactsVerified + ' con fuente registrada', Icon: Users },
     { label: 'Aceptados por el proveedor', value: summary.messagesSent, detail: summary.messagesPending + ' pendientes', Icon: Send },
-    { label: 'Respuestas recibidas', value: summary.responsesReceived, detail: summary.interestedCount + ' interesados', Icon: MessageSquare },
+    { label: 'Respuestas sin avisos automáticos', value: summary.responsesReceived, detail: summary.interestedCount + ' interesados', Icon: MessageSquare },
     { label: 'Suscripciones activas', value: summary.activeSubscriptionsCount, detail: summary.trialClientsCount + ' en período de prueba', Icon: CreditCard },
   ] : [];
 

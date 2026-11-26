@@ -1,6 +1,6 @@
 import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {emailPromotionHold, invalidEmailDestination, usableContactEmail} from '../src/email-policy.js';
+import {emailPromotionHold, invalidEmailDestination, isAutomaticNotice, isReferralAcknowledgement, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -117,8 +117,8 @@ export function completeCommercialEmail(input: any) {
     if (conv.campaignId) { const c = db.getCampaignById(conv.campaignId); if(c) c.stats.messagesSent++; }
   } else {
     msg.serviceError = String(input.response || 'Sin confirmación del proveedor').slice(0,500);
-    if (msg.status === 'fallido' && /^5\d{2}(?:[ -]|$)/.test(msg.serviceError)) {
-      msg.emailFailureAt = new Date().toISOString();
+    if (msg.status === 'fallido' && (/^5\d{2}(?:[ -]|$)/.test(msg.serviceError) || msg.serviceError.startsWith('Dominio descartado antes de enviar:'))) {
+      if (!msg.serviceError.startsWith('Dominio descartado antes de enviar:')) msg.emailFailureAt = new Date().toISOString();
       if (msg.approvedRecipient) suppressInvalidEmail(msg.approvedRecipient, msg.serviceError);
     }
   }
@@ -210,6 +210,7 @@ export function importCommercialReply(input: any) {
     input.references.includes(m.providerMessageId));
   const optedIn = Boolean(optIn && invitation && registerWhatsAppRequest(contact, conv, invitation, optIn[1], input.messageId));
   db.addMessageToConversation(conv.id, { conversationId:conv.id, direction:'inbound', channel:'email', content:input.text, providerMessageId:input.messageId, status:'enviado' });
+  if (isAutomaticNotice(input.text) || isReferralAcknowledgement(input.text)) return {success:true, decision:'acknowledgement'};
   if (optedIn) return {success:true, decision:'whatsapp_opt_in'};
   const decision = replyDecision(input.text, app, contact.country);
   if (decision.kind === 'unsubscribe') { for (const record of db.getContacts().filter(c => c.email.trim().toLowerCase() === contact.email.trim().toLowerCase())) { record.permission = 'revocado'; record.status = 'baja_solicitada'; record.nextFollowUpDate = null; } conv.requiresHumanIntervention = false; }

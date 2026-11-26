@@ -1,4 +1,4 @@
-import type {Message} from './types.js';
+import type {Conversation, Message} from './types.js';
 
 // Syntax is not proof of ownership or publication. This final guard also rejects
 // common form examples; legitimate addresses on free-mail domains remain valid.
@@ -35,5 +35,35 @@ export function emailPromotionHold(messages: Message[], now = Date.now()) {
 
 export function invalidEmailDestination(diagnostic: string, status?: string) {
   return ['5.1.1', '5.1.2', '5.1.3', '5.1.10'].includes(status || '') ||
-    /\b5\.1\.(?:1|2|3|10)\b|\bNXDOMAIN\b|\bdomain name not found\b|\bnull MX\b|\b(?:no such (?:user|person|mailbox)|user unknown|unknown recipient|recipient unknown|(?:user|mailbox|email account) (?:doesn.t|does not) exist|recipient (?:address )?(?:does not exist|not found))\b/i.test(diagnostic);
+    /\b5\.1\.(?:1|2|3|10)\b|\bNXDOMAIN\b|\bdomain name not found\b|\bnull MX\b|\b(?:correo|correio) (?:electronico|eletr[oô]nico) indispon[ií]vel\b|\b(?:no such (?:user|person|mailbox)|user unknown|unknown recipient|recipient unknown|(?:user|mailbox|email account) (?:doesn.t|does not) exist|recipient (?:address )?(?:does not exist|not found))\b/i.test(diagnostic);
+}
+
+
+export function isAutomaticNotice(content: string): boolean {
+  const text = content.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /(?:fuera|fora) (?:de|do|del|dos) (?:nuestro |nosso )?horario (?:habil|de atencion|de atendimento)|horario de atencion al socio|estamos recibiendo un alto volumen de consultas|estamos recebendo um alto volume de (?:consultas|mensagens)|gracias por comunicar(?:te|se) con .{1,100}(?:en que podemos ayudar|como podemos ayudar|no podemos responder)|te interesa estudiar en .{1,80}pronto te enviaremos la informacion|(?:hemos recibido|recebemos) (?:su|seu|a sua) (?:mensaje|mensagem|contato)|(?:out of office|automatic reply|resposta automatica|respuesta automatica)/.test(text);
+}
+
+export function hasOnlyAutomaticReplies(conversation: Conversation): boolean {
+  const replies = conversation.messages.filter(message => message.direction === 'inbound');
+  return replies.length > 0 && replies.every(message => isAutomaticNotice(message.content));
+}
+
+export function isReferralAcknowledgement(content: string): boolean {
+  const text = content.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /(?:enviamos|derivamos|remitimos) la informacion al sector correspondiente/.test(text) &&
+    /en caso de que les interese/.test(text);
+}
+
+export function nonInterestOnlyContacts(conversations: Conversation[]): Set<string> {
+  const nonInterest = new Set<string>();
+  const other = new Set<string>();
+  for (const conversation of conversations) {
+    for (const message of conversation.messages) {
+      if (message.direction !== 'inbound') continue;
+      (isAutomaticNotice(message.content) || isReferralAcknowledgement(message.content) ? nonInterest : other).add(conversation.contactId);
+    }
+  }
+  for (const contactId of other) nonInterest.delete(contactId);
+  return nonInterest;
 }
