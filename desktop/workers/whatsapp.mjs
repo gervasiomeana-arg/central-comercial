@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import wwebjs from 'whatsapp-web.js';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure,useWhatsAppSessionPolling} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure,useWhatsAppSessionPolling,openWhatsAppPhoneLink} from './commercial.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
@@ -48,7 +48,8 @@ async function api(action,body={},area='channel-tests'){
 }
 const {Client,LocalAuth}=wwebjs;
 const linkByPhone=process.env.CENTRAL_WHATSAPP_LINK_BY_PHONE==='true';
-const visibleBrowser=process.platform==='win32'&&(linkByPhone||process.env.CENTRAL_WHATSAPP_VISIBLE==='true');
+const visibleBrowser=process.platform==='win32'&&linkByPhone;
+const phoneLinkNavigation=new AbortController();
 const observedPages=new WeakSet();
 class PersistentSession extends LocalAuth {
  // A provider logout invalidates the session. Leave the browser profile on disk
@@ -61,6 +62,16 @@ class SessionClient extends Client {
   if(page&&!observedPages.has(page)){
    useWhatsAppSessionPolling(page);
    observedPages.add(page);
+   if(linkByPhone)void openWhatsAppPhoneLink(page,phoneLinkNavigation.signal).then(()=>{
+    if(phoneLinkNavigation.signal.aborted||stopping)return;
+    reportPhase('phone_link');
+    console.log('[whatsapp] Se abrió la vinculación por teléfono. Seguí las indicaciones de WhatsApp en esa ventana.');
+   }).catch(()=>{
+    if(phoneLinkNavigation.signal.aborted||stopping)return;
+    reportPhase('phone_link_failed');
+    console.log('[whatsapp] WhatsApp Web no abrió la vinculación por teléfono.');
+    void recover(78);
+   });
   }
   await super.inject();
   if(whatsappReady||sessionAuthenticated||stopping||!page)return;
@@ -118,25 +129,26 @@ async function ownerReportTick(account){
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
 client.on('qr',()=>{
- if(sessionAuthenticated||whatsappReady||stopping||phase==='qr')return;
+ if(sessionAuthenticated||whatsappReady||stopping||phase==='qr'||phase==='phone_link')return;
  reportPhase('qr');
  console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada.');
  clearTimeout(startupTimeout);
  // Let the browser finish restoring an earlier login before deciding it is unpaired.
- if(linkByPhone)console.log('[whatsapp] En la ventana de WhatsApp Web elegí Vincular con número de teléfono y seguí las indicaciones de WhatsApp.');
  startupTimeout=setTimeout(()=>{
   if(sessionAuthenticated||whatsappReady||stopping)return;
-  void recover(process.platform==='win32'&&!visibleBrowser ? 75 : 78);
+  void recover(78);
  },linkByPhone ? 5*60000 : 15000);
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
  sessionAuthenticated=true;
+ phoneLinkNavigation.abort();
  reportPhase('loading');
  waitForSession();
 });
 client.on('ready',()=>{
  clearTimeout(startupTimeout);
+ phoneLinkNavigation.abort();
  whatsappReady=true;
  reportPhase('verifying');
  void heartbeat();
@@ -230,6 +242,7 @@ const timer=setInterval(()=>void heartbeat(),20000);
 async function recover(code){
  if(stopping)return;
  stopping=true;
+ phoneLinkNavigation.abort();
  if(linkByPhone&&!whatsappReady&&code===75)code=78;
  whatsappReady=false;
  clearInterval(timer);

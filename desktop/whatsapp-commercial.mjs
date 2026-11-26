@@ -12,6 +12,22 @@ export function useWhatsAppSessionPolling(page) {
   return waitForFunction(predicate, readiness ? {polling:200,...options} : options, ...args);
  };
 }
+export async function openWhatsAppPhoneLink(page, signal) {
+ const handle=await page.waitForFunction(()=>{
+  const label=/^(?:vincular con (?:el )?número de teléfono|iniciar sesión con (?:el )?número de teléfono|link with phone number|log in with phone number|conectar com (?:o )?número de telefone|vincular com (?:o )?número de telefone)(?:\s+instead)?$/i;
+  return [...document.querySelectorAll('button, a, [role="button"], [role="link"]')].find(element=>
+   !element.closest('[hidden], [aria-hidden="true"]') && !element.matches(':disabled, [aria-disabled="true"]') &&
+   element.getClientRects().length && label.test((element.textContent||'').replace(/\s+/g,' ').trim())
+  ) || false;
+ },{polling:200,timeout:25000,signal});
+ try{
+  if(signal.aborted)return;
+  if(new URL(page.url()).origin!=='https://web.whatsapp.com')throw new Error('WhatsApp Web cambió de página.');
+  const control=handle.asElement();
+  if(!control)throw new Error('WhatsApp Web no mostró la opción por teléfono.');
+  await control.click();
+ }finally{await handle.dispose();}
+}
 export function whatsappStartupFailure(error) {
  const message = typeof error === 'string' ? error : String(error?.message || '');
  if (/already running for|ProcessSingleton|profile.{0,50}in use/i.test(message)) return 'profile_busy';

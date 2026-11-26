@@ -32,6 +32,8 @@ const whatsappStageLabels: Record<WhatsAppStage, string> = {
   browser_launch: 'El navegador de Central se cerró durante el arranque.',
   web_startup: 'WhatsApp Web no terminó de iniciar. La consola local tiene el detalle.',
   session_timeout: 'La sesión guardada de WhatsApp tardó demasiado en responder.',
+  phone_link: 'WhatsApp Web abrió la vinculación con número de teléfono.',
+  phone_link_failed: 'WhatsApp Web no abrió la vinculación con número de teléfono.',
 };
 
 const ownerReportLabels = {
@@ -64,7 +66,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     try {
       const result = await api.requestWhatsAppPhoneLink();
       setLinkMessage(result.alreadyConnected ? 'Central ya confirmó la conexión de WhatsApp.' :
-        'En la ventana de WhatsApp Web que abra Central, elegí «Vincular con número de teléfono» y seguí las indicaciones en tu celular.');
+        'Central abrirá directamente la vinculación por teléfono de WhatsApp Web. Seguí las indicaciones en esa ventana y en tu celular.');
     } catch (e: any) { setLinkMessage(e.message); }
     finally { setLinking(false); }
   };
