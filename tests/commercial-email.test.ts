@@ -24,9 +24,9 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     db.saveContact({id:'research-contact',orgName:'Club prueba',contactPerson:'',role:'Contacto',orgType:'Club',country:'Argentina',language:'es',timezone:'America/Argentina/Buenos_Aires',website:'https://club.test',email:'info@club.test',phone:'',source:'https://club.test/contacto',sourceReviewDate:new Date(now.getTime()-1000).toISOString(),interestedAppIds:[app.id],assignedTo:'',notes:'',history:[],preferredChannel:'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
     db.prepareCampaignDrafts(campaign.id);db.commercialEmailHeartbeat('test-worker',true,true,'owner@test.org');
     assert.throws(()=>claimCommercialEmail('another-worker'));
-    const originalContact=db.getContactById('research-contact');db.saveContact({...originalContact,email:'tu@email.com'});
+    const originalContact=db.getContactById('research-contact');db.saveContact({...originalContact,email:'tu@email.com',emailPublications:[{url:'https://club.test/contacto',email:'tu@email.com'}]});
     assert.equal(claimCommercialEmail('test-worker',now),null,'Existing prepared drafts cannot be sent to form examples');
-    db.saveContact({...originalContact,email:'info@club.test'});
+    db.saveContact({...originalContact,email:'info@club.test',emailPublications:[{url:'https://club.test/contacto',email:'info@club.test'},{url:'https://club.test/',email:'info@club.test'}]});
     const job=claimCommercialEmail('test-worker',now);assert.ok(job);assert.equal(job.recipient,'info@club.test');
     assert.equal(claimCommercialEmail('test-worker',now),null,'never leases same draft twice');
     assert.throws(()=>completeCommercialEmail({...job,workerId:'test-worker',lease:'wrong',outcome:'accepted',response:'250 OK'}));
@@ -66,6 +66,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       db.saveContact({
         ...originalContact, id:'fallback-contact', orgName:'Club canal alternativo', email:'fallback@club.test',
         phone:'+54 911 5555-1234', permission:'autorizado', sourceReviewDate:reviewed,
+        emailPublications:[{url:'https://club.test/contacto',email:'fallback@club.test'},{url:'https://club.test/',email:'fallback@club.test'}],
         whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed}
       });
       assert.equal(campaign.dailyLimit,0);
@@ -90,11 +91,13 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
         ...originalContact, id:'campaign-email', email:'alternate@club.test', phone:'+5491155559876',
         permission:'autorizado', sourceReviewDate:reviewed, history:[],
         whatsappConsent:undefined,
+        emailPublications:[{url:'https://club.test/contacto',email:'alternate@club.test'},{url:'https://club.test/',email:'consultas@club.test'}],
       });
       db.prepareCampaignDrafts(campaign.id);
       const emailJob = claimCommercialEmail('test-worker',early);
       assert.equal(emailJob?.recipient,'alternate@club.test');
       assert.ok(emailJob?.content.includes('WHATSAPP OK'));
+      assert.equal(claimCommercialEmail('test-worker',early)?.recipient,'consultas@club.test');
       const fallback = db.getConversations().find((c: import('../src/types.js').Conversation) => c.contactId === 'fallback-contact' && c.channel === 'whatsapp');
       assert.ok(fallback);
       const history = db.getConversations();

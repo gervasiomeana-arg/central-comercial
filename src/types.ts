@@ -88,6 +88,8 @@ export interface ContactHistoryItem {
 
 export interface Contact {
   funeralShiftEvidence?: string;
+  emailPublicationCheckedAt?: string;
+  emailPublications?: { url: string; email: string }[];
   publishedWhatsApp?: { number: string; source: string };
   whatsappConsent?:{granted:boolean;at:string;evidence:string};
   undeliverableEmail?: string;
@@ -237,6 +239,7 @@ export interface Message {
   replyToProviderId?: string;
   replacementMessageId?: string;
   whatsappInvitation?: string;
+  campaignRecipient?: string;
   emailFailureAt?: string;
   emailSubject?: string;
   sendLease?: string;

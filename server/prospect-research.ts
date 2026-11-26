@@ -1,5 +1,5 @@
 import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
-import { invalidEmailDestination } from '../src/email-policy.js';
+import { invalidEmailDestination, publishedCampaignRecipients } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
@@ -88,12 +88,49 @@ async function saveRecoveredAddress(id: string, original: string, found: Contact
   if (!latest || db.getSchedulerState().automationsPaused || latest.email.trim().toLowerCase() !== original ||
       latest.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(latest.status)) return false;
   db.saveContact({
-    ...latest, email: nextEmail, undeliverableEmail: original, source: found.source, sourceReviewDate: found.sourceReviewDate,
+    ...latest, email: nextEmail,
+    emailPublications: [...(latest.emailPublications || []).filter(p => p.url !== found.source), ...(found.emailPublications || [])].slice(-12),
+    undeliverableEmail: original, source: found.source, sourceReviewDate: found.sourceReviewDate,
     history: [...(latest.history || []), { id: `recovered-${Date.now()}`, type: 'nota', timestamp: new Date().toISOString(),
       description: `Dirección alternativa publicada por la organización en ${found.source} después de un rebote definitivo.`,
       author: 'Central Comercial' }],
   });
   return true;
+}
+
+async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
+  const now = Date.now();
+  const pending = new Set(db.getConversations().filter(c => c.campaignId &&
+    db.campaignInActiveRun(c.campaignId) && c.messages.some(m =>
+      m.channel === 'email' && m.direction === 'outbound' && m.status === 'preparado' && !m.replyToProviderId)).map(c => c.contactId));
+  const contact = db.getContacts().find(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
+    !publishedCampaignRecipients(c).length && c.permission !== 'revocado' &&
+    !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&
+    (!c.emailPublicationCheckedAt || Date.parse(c.emailPublicationCheckedAt) < now - 86400000));
+  if (!contact) return;
+  const app = contact.interestedAppIds.map(id => db.getApplicationById(id)).find(Boolean);
+  if (!app) return;
+  contact.emailPublicationCheckedAt = new Date(now).toISOString();
+  db.save();
+  try {
+    const site = publicUrl(contact.website), source = publicUrl(contact.source);
+    if (host(site.href) !== host(source.href)) return;
+    const pages = [...new Set([source.href, new URL('/',site).href])];
+    let context: ResearchCandidate['context'];
+    for (let i = 0; i < Math.min(pages.length, 3); i++) {
+      const page = await fetcher(pages[i]);
+      if (db.getSchedulerState().automationsPaused || host(page.url) !== host(site.href)) return;
+      const result = reviewContactPage(page.text, page.url, app, contact.country, new Date(now), context);
+      context = result.evidence;
+      for (const link of contactLinks(page.text,page.url)) if (!pages.includes(link)) pages.push(link);
+      const latest = db.getContactById(contact.id);
+      const entry = result.contact?.emailPublications?.[0];
+      if (!latest || host(latest.website) !== host(site.href) || !entry) continue;
+      latest.emailPublications = [...(latest.emailPublications || []).filter(item => item.url !== entry.url), entry].slice(-12);
+      db.save();
+      if (publishedCampaignRecipients(latest).length) return;
+    }
+  } catch { /* Keep the draft pending when there is insufficient evidence. */ }
 }
 
 export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetchPublicText) {
@@ -102,7 +139,10 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
   try {
     const report=db.getSalesGoalProgress(), goal=report.goal, state=db.getResearchState(), day=accountingDay();
     if (!goal.enabled || report.paused) return;
-    if (goal.sendEmail && report.remaining && fetcher === fetchPublicText) await recoverBouncedContact(fetcher);
+    if (goal.sendEmail && report.remaining && fetcher === fetchPublicText) {
+      await verifyQueuedEmailPublications(fetcher);
+      await recoverBouncedContact(fetcher);
+    }
     if (!goal.discoverContacts || db.getSchedulerState().automationsPaused) return;
     if(state.month!==goal.month)Object.assign(state,{month:goal.month,day,requests:0,visited:[],status:'pending',detail:undefined,lastError:undefined});
     if(state.day!==day)Object.assign(state,{day,requests:0,status:'pending',detail:undefined});
@@ -232,6 +272,11 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
           const existing = db.getContacts().find(c => (contact.email && c.email?.trim().toLowerCase() === contact.email) || sameWebsite(c));
           if(existing){
             const canUpdate = existing.permission !== 'revocado' && !['baja_solicitada', 'descartado'].includes(existing.status);
+            if (canUpdate && sameWebsite(existing) && contact.emailPublications?.length) {
+              const publications = new Map((existing.emailPublications || []).map(entry => [entry.url, entry]));
+              for (const entry of contact.emailPublications) publications.set(entry.url, entry);
+              existing.emailPublications = [...publications.values()].slice(-12);
+            }
             // Keep all prior contact evidence when filling a newly published address.
             if (canUpdate && !existing.email && contact.email) {
               existing.history ||= [];
@@ -259,7 +304,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
             outcome.reused++;
           }else{db.saveContact(contact);outcome.created++;}
         }
-        if (!reviewed.contact?.email || !reviewed.contact.phone) {
+        if (!reviewed.contact?.email || !reviewed.contact.phone || reviewed.contact.emailPublications?.length === 1) {
           const context=reviewed.evidence;
           if(!context.topicVerified && !candidate.context && new URL(page.url).pathname!=='/') {enqueue({url:new URL('/',page.url).href,context,returnTo:page.url},true);}
           if(context.topicVerified){

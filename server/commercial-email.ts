@@ -1,6 +1,6 @@
 import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {emailPromotionHold, invalidEmailDestination, isAutomaticNotice, isReferralAcknowledgement, usableContactEmail} from '../src/email-policy.js';
+import {emailPromotionHold, invalidEmailDestination, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -51,6 +51,8 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   }
   if (expired.length) db.save();
   const promotionHold = emailPromotionHold(all, now.getTime());
+  const invalid = new Set(all.filter(m => m.channel === 'email' && m.status === 'fallido' &&
+    m.approvedRecipient && invalidEmailDestination(m.serviceError || '')).map(m => m.approvedRecipient!.toLowerCase()));
   const directorUnlimited = unlimitedDirectorOutreach(goal);
   const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now);
   const failedAlternates = new Set(all.filter(m => m.status === 'fallido' && m.replacementMessageId)
@@ -58,10 +60,18 @@ export function claimCommercialEmail(id: string, now = new Date()) {
   for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
-    if (contact.undeliverableEmail === contact.email?.trim().toLowerCase() || !usableContactEmail(contact.email) || !contact.source || (!Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime())) continue;
+    if (!contact.source || !Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime()) continue;
     for (const msg of conv.messages) {
       if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
+      const defaultRecipient = contact.email?.trim().toLowerCase();
+      const discoveredPromotion = !replying && contact.outreachBasis === 'public_business_contact';
+      const verified = discoveredPromotion ? publishedCampaignRecipients(contact).filter(email =>
+        !invalid.has(email) && email !== contact.undeliverableEmail) : [];
+      const recipient = replying ? msg.approvedRecipient?.toLowerCase() || defaultRecipient
+        : discoveredPromotion ? msg.campaignRecipient ?? verified[0] : defaultRecipient;
+      if (!usableContactEmail(recipient) || invalid.has(recipient) || contact.undeliverableEmail === recipient ||
+          (discoveredPromotion && !verified.includes(recipient))) continue;
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
         if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
@@ -86,10 +96,20 @@ export function claimCommercialEmail(id: string, now = new Date()) {
         }
       }
       if (!replying && conv.requiresHumanIntervention && db.getTasks().some(t => t.relatedId === conv.id && t.status === 'pendiente')) continue;
-      if (msg.approvedRecipient && msg.approvedRecipient.toLowerCase() !== contact.email.trim().toLowerCase()) continue;
+      if (msg.approvedRecipient && msg.approvedRecipient.toLowerCase() !== recipient) continue;
       if (!directorUnlimited && dailyContacts.size >= goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
+      if (discoveredPromotion && !msg.campaignRecipient && verified.length === 2 &&
+          !conv.messages.some(m => m.campaignRecipient === verified[1] || m.approvedRecipient === verified[1])) {
+        const nextMessage: Message = {
+          id: randomUUID(), conversationId: conv.id, direction: 'outbound', channel: 'email',
+          content: msg.content, status: 'preparado', campaignRecipient: verified[1], createdAt: now.toISOString(),
+          reviewStatus: msg.reviewStatus,
+        };
+        conv.messages.push(nextMessage);
+      }
+      if (discoveredPromotion) msg.campaignRecipient = recipient;
       const lease = randomUUID(); msg.sendLease = hash(lease); msg.sendWorker = id; msg.sendDeadline = now.getTime() + 120000;
-      msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = contact.email.trim().toLowerCase();
+      msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = recipient;
       msg.providerMessageId = `<cc-${randomUUID()}@${status.sender!.split('@')[1]}>`;
       if (campaign && !replying) campaign.status = 'activa';
       if (!campaignWhatsAppPaused && !replying && campaign?.autoSendWhatsApp && campaign.channels.includes('whatsapp') && !whatsappCampaignEligible(contact, now)) {
@@ -200,7 +220,10 @@ export function importCommercialReply(input: any) {
   if (typeof input.messageId !== 'string' || input.messageId.length > 500 || !Array.isArray(input.references) || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 30000 || input.automatic) throw new Error('Respuesta no válida o automática.');
   input.text = currentReplyText(input.text);
   if (!input.text) return {success:true, skipped:true};
-  const conv = db.getConversations().find(c => db.getContactById(c.contactId)?.email.trim().toLowerCase() === String(input.from).toLowerCase() && c.messages.some(m => m.direction === 'outbound' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada') && input.references.includes(m.providerMessageId)));
+  const sender = String(input.from).trim().toLowerCase();
+  const conv = db.getConversations().find(c => c.messages.some(m => m.direction === 'outbound' && m.channel === 'email' &&
+    (m.approvedRecipient || db.getContactById(c.contactId)?.email)?.trim().toLowerCase() === sender &&
+    m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada') && input.references.includes(m.providerMessageId)));
   if (!conv) throw new Error('La respuesta no corresponde a un envío registrado.');
   if (db.getConversations().some(c => c.messages.some(m => m.providerMessageId === input.messageId))) return { success:true, duplicate:true };
   const contact = db.getContactById(conv.contactId)!, app = db.getApplicationById(conv.appId)!;
@@ -215,7 +238,7 @@ export function importCommercialReply(input: any) {
   const decision = replyDecision(input.text, app, contact.country);
   if (decision.kind === 'unsubscribe') { for (const record of db.getContacts().filter(c => c.email.trim().toLowerCase() === contact.email.trim().toLowerCase())) { record.permission = 'revocado'; record.status = 'baja_solicitada'; record.nextFollowUpDate = null; } conv.requiresHumanIntervention = false; }
   else if (decision.kind === 'answer' && db.getMonthlyGoal().answerEmail && !conv.requiresHumanIntervention) {
-    conv.messages.push({ id:randomUUID(), conversationId:conv.id, direction:'outbound', channel:'email', content:decision.text, replyToProviderId:input.messageId, status:'preparado', reviewStatus:'approved', reviewedAt:new Date().toISOString(), reviewedBy:'Regla comercial: catálogo verificado', approvedRecipient:contact.email.toLowerCase(), createdAt:new Date().toISOString() });
+    conv.messages.push({ id:randomUUID(), conversationId:conv.id, direction:'outbound', channel:'email', content:decision.text, replyToProviderId:input.messageId, status:'preparado', reviewStatus:'approved', reviewedAt:new Date().toISOString(), reviewedBy:'Regla comercial: catálogo verificado', approvedRecipient:sender, createdAt:new Date().toISOString() });
   } else {
     conv.requiresHumanIntervention = true;
     if (decision.kind === 'purchase') db.convertContactToClient(contact.id);

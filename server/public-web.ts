@@ -118,11 +118,18 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
   for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
   emails.push(...structured.emails);
-  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(email => usableContactEmail(email) && !excludedEmails.has(email));
+  const emailHost = hostname.replace(/^www\./, '');
+  const declared = new Set(structured.emails.map(email => email.trim().toLowerCase()));
+  for (const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
+    try { declared.add(decodeURIComponent(decode(link[1])).trim().toLowerCase()); } catch {}
+  }
+  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) &&
+    !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
+    (declared.has(email) || email.split('@')[1] === emailHost));
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
-  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,funeralShiftEvidence,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,emailPublications:email&&!/\b(?:directorio|ranking|lista de|mejores funerarias)\b/i.test(title)?[{url,email}]:undefined,funeralShiftEvidence,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
   return {contact,evidence,reason:phone ? (email ? 'Email y WhatsApp públicos verificados' : 'WhatsApp público verificado') : 'Email público verificado'};
 }
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {

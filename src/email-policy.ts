@@ -67,3 +67,22 @@ export function nonInterestOnlyContacts(conversations: Conversation[]): Set<stri
   for (const contactId of other) nonInterest.delete(contactId);
   return nonInterest;
 }
+
+export function publishedCampaignRecipients(contact: import('./types.js').Contact): string[] {
+  const pages = new Map<string, string>();
+  try {
+    const host = new URL(contact.website).hostname.replace(/^www\./, '');
+    for (const entry of contact.emailPublications ?? []) {
+      const page = new URL(entry.url);
+      const email = entry.email.trim().toLowerCase();
+      if (page.protocol !== 'https:' || page.hostname.replace(/^www\./, '') !== host || !usableContactEmail(email)) continue;
+      pages.set(page.pathname.replace(/\/+$/, '') || '/', email);
+    }
+  } catch { return []; }
+  if (pages.size < 2) return [];
+  const emails = [...pages.values()];
+  const counts = new Map<string, number>();
+  for (const email of emails) counts.set(email, (counts.get(email) || 0) + 1);
+  const repeated = [...counts].find(([, count]) => count >= 2)?.[0];
+  return repeated ? [repeated] : [...counts.keys()].slice(0, 2);
+}
