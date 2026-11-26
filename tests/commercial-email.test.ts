@@ -72,7 +72,6 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       campaign.channels = ['email'];
       db.prepareCampaignDrafts(campaign.id);
       const firstAttempt = claimCommercialEmail('test-worker',early);
-      campaign.channels = ['email','whatsapp'];
       assert.ok(firstAttempt, 'director claims promotions beyond the internal daily limit and outside the former send window');
       assert.equal(firstAttempt.recipient,'fallback@club.test');
       completeCommercialEmail({...firstAttempt,workerId:'test-worker',outcome:'rejected',response:'550 5.1.1 Unknown mailbox'});
@@ -80,23 +79,36 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
       db.prepareCampaignDrafts(campaign.id);
 
       const {TEST_RECIPIENTS} = await import(pathToFileURL(path.join(directory,'server','channelTests.ts')).href);
-      const {claimWhatsApp,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
+      const {claimWhatsApp,whatsappAppForDay,whatsappHeartbeat} = await import(pathToFileURL(path.join(directory,'server','commercial-whatsapp.ts')).href);
       whatsappHeartbeat('test-wa',true,TEST_RECIPIENTS.whatsapp);
       assert.equal(claimWhatsApp('test-wa',early),null);
       assert.equal(db.getConversationById(firstAttempt.conversationId).messages[0].replacementMessageId,undefined);
 
-      db.startMonthlyDirector('whatsapp');
-      assert.deepEqual(campaign.channels,['email']);
+      db.startMonthlyDirector('email');
+      assert.deepEqual(campaign.channels,['email','whatsapp']);
       db.saveContact({
         ...originalContact, id:'campaign-email', email:'alternate@club.test', phone:'+5491155559876',
         permission:'autorizado', sourceReviewDate:reviewed, history:[],
-        whatsappConsent:{granted:true,evidence:'Pidió promociones por WhatsApp',at:reviewed},
+        whatsappConsent:undefined,
       });
       db.prepareCampaignDrafts(campaign.id);
       const emailJob = claimCommercialEmail('test-worker',early);
       assert.equal(emailJob?.recipient,'alternate@club.test');
-      assert.ok(!emailJob?.content.includes('WHATSAPP OK'));
+      assert.ok(emailJob?.content.includes('WHATSAPP OK'));
+      const fallback = db.getConversations().find((c: import('../src/types.js').Conversation) => c.contactId === 'fallback-contact' && c.channel === 'whatsapp');
+      assert.ok(fallback);
+      const history = db.getConversations();
+      const previouslyAttempted = Array.from({length:10}, (_, index) => ({
+        ...fallback, id: `cap-thread-${index}`, messages: [{
+          ...fallback.messages[0], id: `cap-message-${index}`, status:'fallido', attemptedAt:early.toISOString(),
+        }],
+      }));
+      history.push(...previouslyAttempted);
       assert.equal(claimWhatsApp('test-wa',early),null);
+      history.splice(-1,1);
+      const tenth = claimWhatsApp('test-wa',early);
+      if (whatsappAppForDay(early) === app.slug) assert.equal(tenth?.recipient,'5491155551234');
+      else assert.equal(tenth,null);
     } finally {
       if (oldLocalMode === undefined) delete process.env.CENTRAL_LOCAL_MODE;
       else process.env.CENTRAL_LOCAL_MODE = oldLocalMode;
@@ -146,4 +158,16 @@ test('separa saludos automáticos y derivaciones de las consultas comerciales', 
   assert.equal(isAutomaticNotice('¡Hola! 🎓 ¿Te interesa estudiar en EDUCEM? Pronto te enviaremos la información.'), true);
   assert.equal(isAutomaticNotice('Hola, nos interesa una presentación para evaluar la app.'), false);
   assert.equal(isReferralAcknowledgement('Ya enviamos la información al sector correspondiente. En caso de que les interese conocer más, se pondrán en contacto.'), true);
+});
+
+
+test('rota una aplicación por día de Argentina desde el 26 de noviembre', async () => {
+  const {whatsappAppForDay} = await import('../server/commercial-whatsapp.js');
+  const day = (date: string) => whatsappAppForDay(new Date(date));
+  assert.equal(day('2026-11-26T02:59:59Z'), undefined);
+  assert.equal(day('2026-11-26T03:00:00Z'), 'open-voley');
+  assert.equal(day('2026-11-27T03:00:00Z'), 'neuroplaneta');
+  assert.equal(day('2026-11-28T03:00:00Z'), 'visibility-ai');
+  assert.equal(day('2026-11-29T03:00:00Z'), 'funeraria');
+  assert.equal(day('2026-11-30T03:00:00Z'), 'open-voley');
 });

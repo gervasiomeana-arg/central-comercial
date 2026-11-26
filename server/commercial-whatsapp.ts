@@ -1,3 +1,4 @@
+import { accountingDay } from '../src/ledger.js';
 import { isAutomaticNotice } from '../src/email-policy.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
@@ -16,6 +17,14 @@ export function whatsappHeartbeat(id:string,ready:boolean,account:string){
  if(typeof id!=='string'||!id||id.length>100||ready&&canonical(account)!==canonical(TEST_RECIPIENTS.whatsapp))throw new Error('La cuenta de WhatsApp no coincide con la del propietario.');
  if(active&&Date.now()-active.at<90000&&active.id!==id)throw new Error('Ya hay otro ejecutor WhatsApp activo.');active={id,at:Date.now(),ready};
 }
+const whatsappDailyLimit = 10;
+const whatsappRotation = ['open-voley', 'neuroplaneta', 'visibility-ai', 'funeraria'];
+const whatsappStart = Date.parse('2026-11-26');
+export function whatsappAppForDay(now: Date) {
+ const offset = (Date.parse(accountingDay(now)) - whatsappStart) / 86400000;
+ return offset >= 0 ? whatsappRotation[offset % whatsappRotation.length] : undefined;
+}
+
 export function claimWhatsApp(id:string,now=new Date()){
  worker(id);const report=db.getSalesGoalProgress();if(report.paused||!report.goal.enabled)return null;
  const threads = db.getConversations().filter(c => c.channel === 'whatsapp');
@@ -30,12 +39,19 @@ export function claimWhatsApp(id:string,now=new Date()){
    m.status === 'preparado' && !m.replacementMessageId && m.reviewStatus !== 'rejected' && !m.attemptedAt));
  if (!candidates.length) return null;
  const history = db.getConversations();
+ const dayForRotation = accountingDay(now);
+ const scheduledApp = whatsappAppForDay(now);
+ const attemptedThreads = history.flatMap(thread => thread.messages.filter(message =>
+  message.channel === 'whatsapp' && message.direction === 'outbound' && message.attemptedAt &&
+  Number.isFinite(Date.parse(message.attemptedAt)) && accountingDay(new Date(message.attemptedAt)) === dayForRotation).map(() => thread));
+ if (!scheduledApp || attemptedThreads.length >= whatsappDailyLimit ||
+     attemptedThreads.some(thread => db.getApplicationById(thread.appId)?.slug !== scheduledApp)) return null;
  const directorUnlimited=unlimitedDirectorOutreach(report.goal);
  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(history, now);
  const conversations = report.goal.directorEnabled ? orderCommercialConversations(candidates,now,history) : candidates;
  for(const conv of conversations){
   const contact=db.getContactById(conv.contactId),app=db.getApplicationById(conv.appId),campaign=conv.campaignId?db.getCampaignById(conv.campaignId):undefined;
-  if(!contact||!app||app.status!=='lista'||!app.campaignsAllowed||!whatsappCampaignEligible(contact,now))continue;
+  if(!contact||!app||app.slug!==scheduledApp||app.status!=='lista'||!app.campaignsAllowed||!whatsappCampaignEligible(contact,now))continue;
   for(const msg of conv.messages){
    if(msg.direction!=='outbound'||msg.channel!=='whatsapp'||msg.status!=='preparado'||msg.replacementMessageId||msg.reviewStatus==='rejected'||msg.attemptedAt)continue;
    const reply=Boolean(msg.replyToProviderId);

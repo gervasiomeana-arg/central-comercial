@@ -1,5 +1,5 @@
 import type {Contact} from './types.js';
-export const campaignWhatsAppPaused = true;
+export const campaignWhatsAppPaused = false;
 
 export const whatsappPhone=(value:string)=>String(value||'').replace(/[\s()+.-]/g,'');
 export function whatsappAuthorized(contact:Contact,now=new Date()){
