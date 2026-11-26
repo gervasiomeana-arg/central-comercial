@@ -26,6 +26,7 @@ const save=()=>{fs.writeFileSync(journalFile+'.tmp',JSON.stringify(journal),{mod
 const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');return digits.startsWith('549')?'54'+digits.slice(3):digits;};
 let whatsappReady=false,running=false,stopping=false,verified=false,signaling=false;
 let linkedAccount='', linkedWid='', connectedToCentral=false;
+const authTimeoutMs=90000;
 let phase, startupTimeout;
 function reportPhase(next) {
  if(phase===next)return;
@@ -35,10 +36,10 @@ function reportPhase(next) {
 function waitForSession() {
  clearTimeout(startupTimeout);
  startupTimeout=setTimeout(()=>{
-  reportPhase('restarting');
-  console.log('WhatsApp no terminó de iniciar. Se reintenta con el mismo perfil vinculado.');
+  reportPhase('session_timeout');
+  console.log('[whatsapp] WhatsApp no terminó de iniciar. Se reintenta con el mismo perfil vinculado.');
   void recover(75);
- },120000);
+ },2*authTimeoutMs+60000);
 }
 async function api(action,body={},area='channel-tests'){
  const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(20000),redirect:'error'})
@@ -47,7 +48,17 @@ async function api(action,body={},area='channel-tests'){
  return response.json();
 }
 const {Client,LocalAuth}=wwebjs;
-const client=new Client({authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),puppeteer:{headless:true, ...(process.platform==='win32'?{pipe:true}:{}), ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})}});
+const client=new Client({
+ authStrategy:new LocalAuth({dataPath:path.join(stateDir,'whatsapp')}),
+ authTimeoutMs,
+ userAgent:false,
+ webVersionCache:{type:'none'},
+ puppeteer:{
+  headless:true,
+  ...(process.platform==='win32'?{pipe:true}:{}),
+  ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),
+ },
+});
 const ownerReportFile=path.join(stateDir,'owner-reports.json');
 const ownerReports=fs.existsSync(ownerReportFile)?JSON.parse(fs.readFileSync(ownerReportFile,'utf8')):{};
 const saveOwnerReports=()=>{const tmp=ownerReportFile+'.tmp';fs.writeFileSync(tmp,JSON.stringify(ownerReports),{mode:0o600});fs.renameSync(tmp,ownerReportFile);};
@@ -199,7 +210,7 @@ catch(error){
   const failure=whatsappStartupFailure(error);
   reportPhase(failure);
   // This console is local. Never add provider exceptions to the web heartbeat.
-  console.error('[whatsapp] No se pudo iniciar el navegador de WhatsApp ('+failure+').', error?.message || error?.name || 'Sin detalle del navegador.');
+  console.error('[whatsapp] No se pudo iniciar el navegador de WhatsApp ('+failure+').', error?.message || (typeof error === 'string' ? error : error?.name) || 'Sin detalle del navegador.');
  }
  await recover(75);
 }

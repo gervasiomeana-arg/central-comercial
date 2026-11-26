@@ -31,6 +31,7 @@ const whatsappStageLabels: Record<WhatsAppStage, string> = {
   web_unavailable: 'El navegador de Central no pudo cargar WhatsApp Web.',
   browser_launch: 'El navegador de Central se cerró durante el arranque.',
   web_startup: 'WhatsApp Web no terminó de iniciar. La consola local tiene el detalle.',
+  session_timeout: 'La sesión de WhatsApp Web tardó demasiado en responder. Central volverá a intentarlo.',
 };
 
 const ownerReportLabels = {

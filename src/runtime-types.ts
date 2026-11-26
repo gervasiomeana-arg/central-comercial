@@ -32,7 +32,7 @@ export interface OwnerReportStatus {
 }
 
 export const whatsappStages = ['starting', 'qr', 'loading', 'verifying', 'connected', 'server_rejected', 'auth_failed', 'restarting',
-  'profile_busy', 'browser_access', 'browser_transport', 'web_unavailable', 'browser_launch', 'web_startup'] as const;
+  'profile_busy', 'browser_access', 'browser_transport', 'web_unavailable', 'browser_launch', 'web_startup', 'session_timeout'] as const;
 export type WhatsAppStage = typeof whatsappStages[number];
 
 export type LocalComponentState = 'running' | 'missing' | 'stopped';

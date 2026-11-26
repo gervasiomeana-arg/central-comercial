@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 export function whatsappStartupFailure(error) {
- const message = String(error?.message || '');
+ const message = typeof error === 'string' ? error : String(error?.message || '');
  if (/already running for|ProcessSingleton|profile.{0,50}in use/i.test(message)) return 'profile_busy';
  if (['EACCES','EPERM','ENOENT'].includes(error?.code) ||
      /browser was not found|executable (?:does not exist|not found)|spawn.{0,80}(?:EACCES|ENOENT|EPERM)/i.test(message)) return 'browser_access';
  if (/WS endpoint|DevToolsActivePort|ECONNREFUSED.{0,35}127\.0\.0\.1/i.test(message)) return 'browser_transport';
+ if (/Waiting failed: \d+ms exceeded|auth timeout|ready timeout/i.test(message)) return 'session_timeout';
  if (/net::ERR_|Navigation timeout/i.test(message)) return 'web_unavailable';
  if (/Failed to launch the browser process/i.test(message)) return 'browser_launch';
  return 'web_startup';
