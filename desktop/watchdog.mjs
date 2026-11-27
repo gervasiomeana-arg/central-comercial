@@ -4,7 +4,7 @@ import os from 'node:os';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { retryDelay } from './recovery.mjs';
+import { retryDelay, waitForChildExit } from './recovery.mjs';
 import {activeRoot, activeRelease, latestCommit, stageRelease, rememberPreparedRelease, activatePreparedRelease} from './auto-update.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const state = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'CentralComercial', 'runtime');
@@ -50,7 +50,7 @@ function start() {
   }
   const at = Date.now();
   const currentRoot=activeRoot(root);
-  child = spawn(process.execPath, [path.join(currentRoot, 'desktop', 'start.mjs')], { cwd: currentRoot, stdio: 'inherit', windowsHide: false });
+  child = spawn(process.execPath, [path.join(currentRoot, 'desktop', 'start.mjs')], { cwd: currentRoot, stdio: ['inherit','inherit','inherit','ipc'], windowsHide: false });
   let handled = false;
   const ended = code => {
     if (handled) return; handled = true;
@@ -63,13 +63,18 @@ function start() {
   child.once('error', () => ended(1)); child.once('exit', ended);
 }
 function finish() { stopped = true; if (timer) clearTimeout(timer); guard.close(); }
-function stop() {
+async function stop() {
+  if(stopped)return;
   stopped = true; fs.writeFileSync(manualStop, String(Date.now()));
   if (timer) clearTimeout(timer);
-  if (child?.pid) {
-    if (process.platform === 'win32') spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => {});
-    else child.kill('SIGTERM');
+  const running=child;
+  const closed=waitForChildExit(running,35000);
+  if(running?.connected)running.send({type:'central_stop'},()=>{});
+  if(!await closed && running?.connected){
+    console.log('Central sigue cerrando sus procesos. Se conservará el cierre del navegador.');
+    running.disconnect();
   }
-  finish(); setTimeout(() => process.exit(0), 1000);
+  finish();
+  process.exit(0);
 }
 process.on('SIGINT', stop); process.on('SIGTERM', stop); start();

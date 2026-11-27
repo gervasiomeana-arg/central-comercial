@@ -18,7 +18,8 @@ const issueLabels: Record<string, string> = {
 };
 const whatsappStageLabels: Record<WhatsAppStage, string> = {
   starting: 'Iniciando el navegador de WhatsApp de Central.',
-  qr: 'Central todavía no pudo recuperar su sesión guardada de WhatsApp.',
+  qr: 'WhatsApp está solicitando vinculación para el perfil de Central.',
+  pairing_required: 'WhatsApp sigue solicitando vinculación. Podés autorizar el perfil de Central con un código.',
   loading: 'Sesión autenticada. WhatsApp está cargando.',
   verifying: 'Sesión abierta. Central está comprobando el número vinculado.',
   identity_unavailable: 'WhatsApp abrió la sesión. Central sigue esperando que WhatsApp confirme el número de la cuenta.',

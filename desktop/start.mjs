@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
-import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport } from './recovery.mjs';
+import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport, waitForChildExit } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies, installWhatsAppDependencies } from './local-app.mjs';
 import { activeRelease, refreshInstalledUpdater } from './auto-update.mjs';
@@ -33,7 +33,7 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, whatsappLinkTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
-let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild;
+let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild, confirmWhatsAppBrowser;
 let whatsappGeneration=0;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
@@ -55,7 +55,11 @@ function launch(name, command, args, options = {}) {
     if (name === 'whatsapp' && message?.type === 'whatsapp_status') {
       whatsappStage = message.status;
     }
-    if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
+    if (message?.type === 'healthy') {
+      restartCounts.set(name, 0);
+      if(name==='whatsapp'&&!stopping)confirmWhatsAppBrowser?.();
+      if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');
+    }
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
   });
   const retry = (wait, nextOptions) => {
@@ -109,6 +113,10 @@ console.log('Correo, WhatsApp y motor local se coordinan desde esta ventana.');
 console.log('Este inicio no crea campañas, no confirma pagos y no repite tareas anteriores.');
 console.log('Las campañas ya autorizadas conservan sus reglas y límites.');
 process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
+if(process.send){
+  process.on('message',message=>{if(message?.type==='central_stop')void stop();});
+  process.on('disconnect',()=>void stop());
+}
 // Self-heal the application build before touching the authoritative local records.
 if (!dependenciesReady(root) || !fs.existsSync(path.join(root, 'dist', 'index.html'))) {
   console.log('Preparando la versión local desde los archivos del repositorio; se conservan los registros y sesiones.');
@@ -168,9 +176,14 @@ const installedEdge = [process.env['ProgramFiles(x86)'],process.env.ProgramFiles
   .filter(Boolean).map(dir=>path.join(dir,'Microsoft','Edge','Application','msedge.exe'));
 const installedChrome = [process.env.ProgramFiles,process.env['ProgramFiles(x86)'],process.env.LOCALAPPDATA]
   .filter(Boolean).map(dir=>path.join(dir,'Google','Chrome','Application','chrome.exe'));
-const sameBrowserPaths = /chrome[.]exe$/i.test(savedBrowser) ? installedChrome : /msedge[.]exe$/i.test(savedBrowser) ? installedEdge : [];
-const candidates = savedBrowser ? [savedBrowser,...sameBrowserPaths,process.env.CHROME_PATH]
-  : [process.env.CHROME_PATH,...installedEdge,...installedChrome];
+const browserFamily = file => /chrome[.]exe$/i.test(file||'') ? 'chrome' : /msedge[.]exe$/i.test(file||'') ? 'edge' : '';
+const savedFamily = browserFamily(savedBrowser);
+const explicitlyConfigured = process.env.CHROME_PATH;
+const sameBrowserPaths = savedFamily==='chrome' ? installedChrome : savedFamily==='edge' ? installedEdge : [];
+const hasSavedProfile = Boolean(waDir&&fs.existsSync(path.join(waDir,'private-state','whatsapp','session')));
+const candidates = savedBrowser
+  ? [savedBrowser,...sameBrowserPaths,...(savedFamily&&browserFamily(explicitlyConfigured)===savedFamily?[explicitlyConfigured]:[])]
+  : [explicitlyConfigured,...(hasSavedProfile?[]:[...installedEdge,...installedChrome])];
 const browser = candidates.find(file=>{
   try{return file&&fs.statSync(file).isFile();}catch{return false;}
 });
@@ -182,6 +195,13 @@ async function prepareWhatsApp(){
     issues.add('browser_missing');log('whatsapp','No se encontró el navegador configurado ni una instalación compatible.');
     return;
   }
+  confirmWhatsAppBrowser=()=>{
+    if(browser===savedBrowser)return;
+    try {
+      fs.writeFileSync(browserFile+'.tmp',browser,{mode:0o600});
+      fs.renameSync(browserFile+'.tmp',browserFile);
+    } catch { log('whatsapp','No se pudo guardar la ruta del navegador que confirmó la conexión.'); }
+  };
   const moduleDir=path.join(root,'channel-worker');
   await installWhatsAppDependencies(root);
   if(stopping)return;
@@ -340,13 +360,19 @@ async function stop() {
   if (stopping) return; stopping = true; clearInterval(timer);clearInterval(backupTimer);
   fs.writeFileSync(path.join(runtimeDir, 'manual-stop'), String(Date.now()));
   for (const retry of retryTimers) clearTimeout(retry);
-  for (const child of children) {
-    if (process.platform === 'win32' && child.pid) {
-      // Target only descendants launched by this supervisor, including its browser.
-      spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
-    } else child.kill('SIGTERM');
-  }
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Keep the local backend available while WhatsApp closes Chromium and saves its profile.
+  const whatsapp=whatsappChild;
+  const whatsappClosed=waitForChildExit(whatsapp,20000);
+  if(whatsapp?.connected)whatsapp.send({type:'central_stop'},()=>{});
+  if(!await whatsappClosed)log('whatsapp','El navegador sigue cerrando el perfil. No se forzará su cierre.');
+  await Promise.all([...children].filter(child=>child!==whatsapp).map(async child=>{
+    const closed=waitForChildExit(child,3500);
+    if(child.connected)child.disconnect();
+    if(await closed||!child.pid)return;
+    if(process.platform==='win32'){
+      spawn('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'}).on('error',()=>{});
+    }else child.kill('SIGTERM');
+  }));
   for (const key of Object.keys(components)) components[key] = 'stopped';
   await heartbeat(); lock.close(); process.exit(0);
 }

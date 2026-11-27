@@ -33,7 +33,9 @@ let linkedAccount='', linkedWid='';
 const authTimeoutMs=90000;
 const refreshWeb=process.env.CENTRAL_WHATSAPP_REFRESH_WEB==='true';
 const startupExitCode=()=>sessionAuthenticated?77:linkByPhone||refreshWeb?78:76;
-let phase, startupTimeout, sessionAuthenticated=false;
+let phase, startupTimeout, initialization, sessionAuthenticated=false;
+let notifyBrowserAvailable;
+const browserAvailable=new Promise(resolve=>{notifyBrowserAvailable=resolve;});
 function reportPhase(next) {
  if(phase===next)return;
  phase=next;
@@ -58,6 +60,10 @@ console.log('[whatsapp] Biblioteca '+requireWhatsApp('whatsapp-web.js/package.js
 const pairNumber=process.env.CENTRAL_WHATSAPP_PAIR_NUMBER||'';
 const linkByPhone=/^[1-9]\d{9,14}$/.test(pairNumber);
 class PersistentSession extends LocalAuth {
+ async afterBrowserInitialized(){
+  await super.afterBrowserInitialized();
+  notifyBrowserAvailable();
+ }
  // Keep the local profile even when the provider invalidates its authentication.
  async logout(){}
 }
@@ -70,10 +76,10 @@ class SessionClient extends Client {
 const client=new SessionClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
  authTimeoutMs,
- userAgent:false,
  ...(linkByPhone || refreshWeb ? {webVersionCache:{type:'none'}} : {}),
  puppeteer:{
-  headless:true,
+  headless:true, timeout:15000,
+  handleSIGINT:false, handleSIGTERM:false, handleSIGHUP:false,
   ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),
  },
 });
@@ -137,8 +143,10 @@ client.on('qr',()=>{
  }
  startupTimeout=setTimeout(()=>{
   if(sessionAuthenticated||whatsappReady||stopping)return;
+  if(!linkByPhone && refreshWeb)reportPhase('pairing_required');
+  else if(linkByPhone)reportPhase('phone_link_failed');
   void recover(startupExitCode());
- },5*60000);
+ },linkByPhone ? 5*60000 : 30000);
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
@@ -253,24 +261,37 @@ async function recover(code){
  clearInterval(timer);
  clearTimeout(startupTimeout);
 
- await Promise.allSettled([
+ const offline=Promise.allSettled([
   api('heartbeat',{ready:false,account:''},'commercial-whatsapp'),
   api('heartbeat',{channel:'whatsapp',whatsapp:false})
  ]);
- await Promise.race([client.destroy().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);
+ try{
+  if(initialization && !client.pupBrowser)await Promise.race([browserAvailable,initialization.catch(()=>{})]);
+  await client.destroy();
+ }catch{
+  console.log('[whatsapp] El navegador no confirmó el cierre del perfil.');
+ }
+ await Promise.race([offline,new Promise(resolve=>setTimeout(resolve,2000))]);
  process.exit(code);
 }
 if(process.send){
  process.on('disconnect',()=>void recover(75));
  process.on('message',message=>{
+  if(message?.type==='central_stop')void recover(0);
   if(message?.type==='whatsapp_prepare_pairing'&&!whatsappReady&&!sessionAuthenticated&&!linkByPhone)void recover(79);
  });
 }
 process.on('SIGINT',()=>void recover(0));
 process.on('SIGTERM',()=>void recover(0));
+process.on('SIGHUP',()=>void recover(0));
 await tick();
 if(!stopping)waitForSession();
-try{if(!stopping)await client.initialize();}
+try{
+ if(!stopping){
+  initialization=client.initialize();
+  await initialization;
+ }
+}
 catch(error){
  if(!stopping){
   const failure=whatsappStartupFailure(error);

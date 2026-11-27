@@ -1,6 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 export const retryDelay = attempts => Math.min(300000, 5000 * 2 ** Math.min(6, Math.max(0, attempts - 1)));
+export function waitForChildExit(child, timeoutMs) {
+  if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise(resolve => {
+    const finish = exited => {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    child.once('exit', onExit);
+  });
+}
 export function atomicJSON(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const fd = fs.openSync(file + '.tmp', 'w', 0o600);
