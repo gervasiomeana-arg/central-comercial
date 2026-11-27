@@ -159,8 +159,7 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
       } catch { return; }
       startWhatsApp(true);
     };
-    tryPhoneLink();
-    if (components.whatsapp !== 'running') startWhatsApp(false);
+    startWhatsApp(false);
     whatsappLinkTimer = setInterval(tryPhoneLink, 2500);
   }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
