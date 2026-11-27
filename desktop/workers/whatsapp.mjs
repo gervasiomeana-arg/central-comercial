@@ -26,6 +26,8 @@ const canonicalPhone=value=>{const digits=String(value||'').replace(/\D/g,'');re
 let whatsappReady=false,running=false,stopping=false,verified=false;
 let linkedAccount='', linkedWid='';
 const authTimeoutMs=90000;
+const refreshWeb=process.env.CENTRAL_WHATSAPP_REFRESH_WEB==='true';
+const startupExitCode=()=>linkByPhone||refreshWeb?78:76;
 let phase, startupTimeout, sessionAuthenticated=false;
 function reportPhase(next) {
  if(phase===next)return;
@@ -37,7 +39,7 @@ function waitForSession() {
  startupTimeout=setTimeout(()=>{
   reportPhase('session_timeout');
   console.log('[whatsapp] WhatsApp no terminó de iniciar con el perfil guardado.');
-  void recover(78);
+  void recover(startupExitCode());
  },2*authTimeoutMs+60000);
 }
 async function api(action,body={},area='channel-tests'){
@@ -87,7 +89,7 @@ class SessionClient extends Client {
 const WhatsAppClient=linkByPhone?SessionClient:Client;
 const client=new WhatsAppClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
- ...(linkByPhone ? {authTimeoutMs,userAgent:false,webVersionCache:{type:'none'}} : {}),
+ ...(linkByPhone || refreshWeb ? {authTimeoutMs,userAgent:false,webVersionCache:{type:'none'}} : {}),
  puppeteer:{
   headless:!visibleBrowser,
   ...(visibleBrowser ? {pipe:true} : {}),
@@ -135,7 +137,7 @@ client.on('qr',()=>{
  // Allow the saved profile to finish loading. Never display a QR code.
  startupTimeout=setTimeout(()=>{
   if(sessionAuthenticated||whatsappReady||stopping)return;
-  void recover(78);
+  void recover(startupExitCode());
  },5*60000);
 });
 client.on('authenticated',()=>{
@@ -143,7 +145,7 @@ client.on('authenticated',()=>{
  sessionAuthenticated=true;
  phoneLinkNavigation.abort();
  reportPhase('loading');
- if(linkByPhone)waitForSession();
+ waitForSession();
 });
 client.on('ready',()=>{
  clearTimeout(startupTimeout);
@@ -253,8 +255,8 @@ if(process.send)process.on('disconnect',()=>void recover(75));
 process.on('SIGINT',()=>void recover(0));
 process.on('SIGTERM',()=>void recover(0));
 await tick();
-if(linkByPhone)waitForSession();
-try{await client.initialize();}
+if(!stopping)waitForSession();
+try{if(!stopping)await client.initialize();}
 catch(error){
  if(!stopping){
   const failure=whatsappStartupFailure(error);
@@ -262,5 +264,5 @@ catch(error){
   // This console is local. Never add provider exceptions to the web heartbeat.
   console.error('[whatsapp] No se pudo iniciar el navegador de WhatsApp ('+failure+').', error?.message || (typeof error === 'string' ? error : error?.name) || 'Sin detalle del navegador.');
  }
- await recover(visibleBrowser && phase==='session_timeout' ? 78 : 75);
+ await recover(phase==='session_timeout' ? startupExitCode() : 75);
 }

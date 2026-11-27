@@ -65,6 +65,13 @@ function launch(name, command, args, options = {}) {
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
     if (name === 'backend' && !backendStarted) return;
+    if (name === 'whatsapp' && code === 76 && options.env?.CENTRAL_WHATSAPP_REFRESH_WEB !== 'true') {
+      log(name, 'Reintentando con la versión actual de WhatsApp Web y el mismo perfil guardado.');
+      const env = {...options.env, CENTRAL_WHATSAPP_REFRESH_WEB:'true'};
+      const timer = setTimeout(() => { retryTimers.delete(timer); launch(name, command, args, {...options, env}); }, 3000);
+      retryTimers.add(timer);
+      return;
+    }
     if (code === 78) {
       log(name, name === 'whatsapp'
         ? 'Se detuvo la recuperación de WhatsApp. El perfil guardado se conserva.'
@@ -148,7 +155,7 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
     const startWhatsApp = linkByPhone => launch('whatsapp',process.execPath,[waFile], {
       cwd:waDir,
       env:{...process.env,CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE:config.file,CHROME_PATH:browser,
-        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone)},
+        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone),CENTRAL_WHATSAPP_REFRESH_WEB:'false'},
     });
     const tryPhoneLink = () => {
       if (stopping || diagnosticMode || components.whatsapp === 'running' || !fs.existsSync(linkRequest)) return;

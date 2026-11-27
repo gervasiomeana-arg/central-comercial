@@ -1,6 +1,6 @@
 import { isOpenVoley, volleyballMediaDomain, volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
-import { invalidEmailDestination, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
+import { emailDomainsWithDeliveryProblems, recoverableEmailFailure, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
@@ -30,14 +30,17 @@ async function domainReceivesEmail(email: string) {
   return results.some(result => result.status === 'fulfilled' && result.value.length > 0);
 }
 
-async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
+async function recoverBouncedContacts(fetcher: typeof fetchPublicText) {
   const now = new Date();
   const threads = db.getConversations();
+  const blockedDomains = emailDomainsWithDeliveryProblems(threads.flatMap(thread => thread.messages), now.getTime());
+  let reviewedCount = 0;
   const invalid = new Set(threads.flatMap(thread => thread.messages
     .filter(m => m.channel === 'email' && m.status === 'fallido' && m.approvedRecipient &&
-      invalidEmailDestination(m.serviceError || ''))
+      recoverableEmailFailure(m.serviceError || '', m.emailDeliveryStatus))
     .map(m => normalizeContactEmail(m.approvedRecipient!))));
   for (const thread of threads) {
+    if (reviewedCount >= 3 || db.getSchedulerState().automationsPaused) break;
     const contact = db.getContactById(thread.contactId);
     const campaign = thread.campaignId && db.getCampaignById(thread.campaignId);
     const app = db.getApplicationById(thread.appId);
@@ -59,7 +62,8 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
     for (const message of related.flatMap(other => other.messages)) {
       if (message.channel === 'email' && message.approvedRecipient) excluded.add(normalizeContactEmail(message.approvedRecipient));
     }
-    if (original && !excluded.has(original) && publishedCampaignRecipients(contact).includes(original)) continue;
+    if (original && !excluded.has(original) && !blockedDomains.has(original.split('@')[1]) &&
+        publishedCampaignRecipients(contact).includes(original)) continue;
 
     let site: URL;
     let source: URL;
@@ -68,6 +72,7 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
       source = publicUrl(contact.source);
       if (host(site.href) !== host(source.href)) continue;
     } catch { continue; }
+    reviewedCount++;
     db.saveContact({ ...contact, emailRecoveryCheckedAt: now.toISOString() });
     const queue = [...new Set([source.href, new URL('/', site).href])];
     let context: ResearchCandidate['context'];
@@ -82,14 +87,13 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
         context = result.evidence;
         for (const link of contactLinks(page.text, page.url, isOpenVoley(app))) if (!queue.includes(link)) queue.push(link);
         const entry = result.contact?.emailPublications?.[0];
-        if (!entry || !result.contact) continue;
+        if (!entry || !result.contact || blockedDomains.has(entry.email.split('@')[1])) continue;
         const pageKey = new URL(entry.url).pathname.replace(/\/+$/, '') || '/';
         publications.set(pageKey, entry);
         if ([...publications.values()].filter(publication => publication.email === entry.email).length >= 2 &&
-            await saveRecoveredAddress(contact.id, original, normalizeContactEmail(failedRecipient), result.contact, [...publications.values()])) return;
+            await saveRecoveredAddress(contact.id, original, normalizeContactEmail(failedRecipient), result.contact, [...publications.values()])) break;
       } catch { /* An unavailable page can be reviewed on the next day. */ }
     }
-    return;
   }
 }
 
@@ -114,12 +118,12 @@ async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
   const now = Date.now();
   const pending = new Set(db.getConversations().filter(c => c.campaignId &&
     db.campaignInActiveRun(c.campaignId) && c.messages.some(m =>
-      m.channel === 'email' && m.direction === 'outbound' && m.status === 'preparado' && !m.replyToProviderId)).map(c => c.contactId));
+      m.channel === 'email' && m.direction === 'outbound' && m.status === 'preparado' && !m.replyToProviderId && !m.attemptedAt && m.reviewStatus !== 'rejected')).map(c => c.contactId));
   const contacts = db.getContacts().filter(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
-    !publishedCampaignRecipients(c).length && c.permission !== 'revocado' &&
+    !publishedCampaignRecipients(c).some(email => email !== c.undeliverableEmail) && c.permission !== 'revocado' &&
     !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&
     (!c.emailPublicationCheckedAt || Date.parse(c.emailPublicationCheckedAt) < now - 86400000));
-  contacts.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  contacts.sort((a, b) => (a.emailPublicationCheckedAt || '').localeCompare(b.emailPublicationCheckedAt || '') || a.createdAt.localeCompare(b.createdAt));
   await Promise.allSettled(contacts.slice(0, 4).map(contact => verifyQueuedContact(contact, now, fetcher)));
 }
 
@@ -147,7 +151,7 @@ async function verifyQueuedContact(contact: Contact, now: number, fetcher: typeo
           (latest.volleyballCoach && entry.email !== normalizeContactEmail(latest.email))) continue;
       latest.emailPublications = [...(latest.emailPublications || []).filter(item => item.url !== entry.url), entry].slice(-12);
       db.save();
-      if (publishedCampaignRecipients(latest).length) return;
+      if (publishedCampaignRecipients(latest).some(email => email !== latest.undeliverableEmail)) return;
     }
   } catch { /* Keep the draft pending when there is insufficient evidence. */ }
 }
@@ -198,7 +202,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
     if (!goal.enabled || report.paused) return;
     if (goal.sendEmail && report.remaining && fetcher === fetchPublicText) {
       await verifyQueuedEmailPublications(fetcher);
-      await recoverBouncedContact(fetcher);
+      await recoverBouncedContacts(fetcher);
     }
     if (!goal.discoverContacts || db.getSchedulerState().automationsPaused) return;
     if(state.month!==goal.month)Object.assign(state,{month:goal.month,day,requests:0,visited:[],status:'pending',detail:undefined,lastError:undefined});

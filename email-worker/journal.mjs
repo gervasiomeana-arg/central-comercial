@@ -34,10 +34,12 @@ export function collectBounces(mail, originalHeaders, threads, sender) {
     for (const block of part.content.toString('utf8').split(/\r?\n[ \t]*\r?\n/)) {
       const address = block.match(/^Final-Recipient:[ \t]*rfc822;[ \t]*([^\s<>]+)[ \t]*\r?$/im)?.[1]?.toLowerCase();
       const status = block.match(/^Status:[ \t]*([45]\.\d{1,3}\.\d{1,3})[ \t]*\r?$/im)?.[1];
-      if (!address || status?.startsWith('4.') || !/^Action:[ \t]*failed[ \t]*\r?$/im.test(block)) continue;
+      const action = block.match(/^Action:[ \t]*(failed|delayed)[ \t]*\r?$/im)?.[1]?.toLowerCase();
+      if (!address || !action || (action === 'delayed' && !status?.startsWith('4.'))) continue;
       const references = threads.filter(thread => thread.from === address && ids.has(thread.id)).map(thread => thread.id);
       const diagnostic = block.match(/^Diagnostic-Code:[ \t]*smtp;[ \t]*([^\r\n]+)/im)?.[1];
-      if (references.length) bounces.push({ recipient: address, status: status || '5.0.0', references, diagnostic });
+      if (references.length) bounces.push({ recipient: address, status: status || '5.0.0', references, diagnostic,
+        ...(action === 'delayed' || status?.startsWith('4.') ? { action } : {}) });
     }
   }
   if (!bounces.length && /^mailer-daemon@(?:googlemail|gmail)\.com$/i.test(sender || '') &&

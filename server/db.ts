@@ -1,5 +1,5 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {nonInterestOnlyContacts,normalizeContactEmail,ownerEmailCorrection,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
+import {nonInterestOnlyContacts,normalizeContactEmail,ownerEmailCorrection,publishedCampaignRecipients,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { createFuneralShiftPilot,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
@@ -1449,7 +1449,10 @@ class DatabaseManager {
     const contactedIds = new Set<string>();
     const attemptedIds = new Set<string>();
     const includedContactIds = new Set(contacts.map(contact => contact.id));
+    const allContactsById = new Map(this.data.contacts.map(contact => [contact.id, contact]));
     let messagesPending = 0;
+    let emailPendingVerification = 0;
+    let emailDeliveryDelayed = 0;
     let messagesSent = 0;
     let messagesFailed = 0;
     let messagesBounced = 0;
@@ -1462,7 +1465,18 @@ class DatabaseManager {
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
           if (m.attemptedAt && includedContactIds.has(conv.contactId)) attemptedIds.add(conv.contactId);
-          if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') messagesPending++;
+          if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') {
+            const contact = allContactsById.get(conv.contactId);
+            if (m.channel === 'email' && !m.replyToProviderId && contact?.outreachBasis === 'public_business_contact' &&
+                !publishedCampaignRecipients(contact).some(email => email !== contact.undeliverableEmail &&
+                  (!m.campaignRecipient || email === m.campaignRecipient))) emailPendingVerification++;
+            else messagesPending++;
+          }
+          else if (m.channel === 'email' && m.status === 'aceptado_proveedor' &&
+              m.emailDelayAt && Date.parse(m.emailDelayAt) > Date.now() - 48 * 3600000) {
+            emailDeliveryDelayed++;
+            if (includedContactIds.has(conv.contactId)) contactedIds.add(conv.contactId);
+          }
           else if (['enviado','aceptado_proveedor','entrega_confirmada'].includes(m.status) && m.serviceConfirmationId) {
             messagesSent++;
             if (includedContactIds.has(conv.contactId)) {
@@ -1491,6 +1505,8 @@ class DatabaseManager {
       contactsAttempted: attemptedIds.size,
       contactsVerified: contacts.filter(c => c.permission === 'autorizado' || (c.source && c.source.length > 3)).length,
       messagesPending,
+      emailPendingVerification,
+      emailDeliveryDelayed,
       messagesSent,
       messagesFailed,
       messagesBounced,

@@ -1,6 +1,6 @@
 import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {invalidEmailDestination, ownerEmailCorrection, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
+import {recoverableEmailFailure, ownerEmailCorrection, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation, Message } from '../src/types.js';
@@ -21,7 +21,7 @@ export type PromotionCapacity = Record<PromotionQueue, number>;
 function definitelyRejectedEmail(message: Message) {
   const error = message.serviceError || '';
   return message.status === 'fallido' &&
-    (/^Rebote permanente confirmado: 5\.\d{1,3}\.\d{1,3}\b/.test(error) ||
+    (/^Rebote permanente confirmado: [45]\.\d{1,3}\.\d{1,3}\b/.test(error) ||
       error.startsWith('Dominio descartado antes de enviar:') ||
       /^5[0-9]{2}[- ]5\.1\.(?:1|3|10)\b/.test(error));
 }
@@ -138,7 +138,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
       const rejected = messages.find(message => message.channel === 'email' && message.direction === 'outbound' &&
         !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected' &&
         message.approvedRecipient && message.approvedRecipient !== email && definitelyRejectedEmail(message) &&
-        (invalidEmailDestination(message.serviceError || '') || ownerEmailCorrection(message.approvedRecipient) === email));
+        (recoverableEmailFailure(message.serviceError || '', message.emailDeliveryStatus) || ownerEmailCorrection(message.approvedRecipient) === email));
       if (rejected && messages.every(message => message.status === 'fallido' || message.reviewStatus === 'rejected')) {
         prepare(contact, 'email', threads, rejected);
         continue;

@@ -139,7 +139,9 @@ export function reviewContactPage(html: string, url: string, app: Application, c
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
     (declared.has(email) || email.split('@')[1] === emailHost) &&
     (profile !== 'coach' || !/^(?:info|contacto?|contato|administracion|secretaria|hola)@/.test(email)));
-  const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
+  const institutional = /^(?:info|contacto|contact|administracion|secretaria|hola|contato)@/;
+  const email = valid.sort((a, b) => Number(declared.has(b)) - Number(declared.has(a)) ||
+    Number(institutional.test(b)) - Number(institutional.test(a)))[0] || '';
   if (profile === 'coach' && !email && !phone) return {contact:null,evidence:{...evidence,volleyballSource:undefined,topicVerified:false},reason:'Perfil técnico sin contacto profesional publicado'};
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';

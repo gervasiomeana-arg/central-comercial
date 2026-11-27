@@ -245,6 +245,8 @@ export interface Message {
   whatsappInvitation?: string;
   campaignRecipient?: string;
   emailFailureAt?: string;
+  emailDelayAt?: string;
+  emailDeliveryStatus?: string;
   emailSubject?: string;
   sendLease?: string;
   sendWorker?: string;
@@ -422,6 +424,8 @@ export interface DashboardMetrics {
   messagesSent: number;
   messagesFailed: number;
   messagesBounced?: number;
+  emailDeliveryDelayed?: number;
+  emailPendingVerification?: number;
   messagesUnknown: number;
   responsesReceived: number;
   interestedCount: number;

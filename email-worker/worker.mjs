@@ -60,7 +60,13 @@ async function send(){
 }
 async function read(){
   const {threads}=await api('routing');if(!threads.length)return;await imap.noop();
-  await reviewArchivedBounces(threads);
+  if (state.deliveryReviewVersion !== 2) {
+    state.deliveryReviewVersion = 2;
+    delete state.bounceReviewValidity;
+    delete state.bounceReview;
+    delete state.archivedBounceReviewAt;
+    save();
+  }
   const validity=String(imap.mailbox.uidValidity);if(state.validity!==validity){state.validity=validity;state.uid=Math.max(0,Number(imap.mailbox.uidNext)-51);save();}
   if (state.bounceReviewValidity !== validity && state.bounceReview?.validity !== validity) {
     try {
@@ -95,30 +101,41 @@ async function read(){
       console.error('Lote histórico pendiente:', error.message);
     }
   }
+  await reviewArchivedBounces(threads);
 }
 async function reviewArchivedBounces(threads) {
   if (Date.now() < (state.archivedBounceReviewAt || 0) + 6 * 3600000) return;
   try {
     const folders = (await imap.list()).filter(mailbox => ['\\All', '\\Trash', '\\Junk'].includes(mailbox.specialUse));
-    for (const folder of folders) {
-      // Each folder has its own UID sequence. The live INBOX cursor stays independent.
+    state.archivedBounceFolders ||= {};
+    const folder = folders.find(item => !state.archivedBounceFolders[item.specialUse]?.done);
+    if (folder) {
+      // The live INBOX cursor and each archive have independent UID sequences.
       const lock = await imap.getMailboxLock(folder.path, { readOnly: true });
       try {
-        const uids = await imap.search({
-          since: new Date(Date.now() - 7 * 86400000),
-          or: [{ from: 'mailer-daemon' }, { from: 'postmaster' }]
-        }, { uid: true });
-        if (Array.isArray(uids)) {
-          for (let offset = Math.max(0, uids.length - 250); offset < uids.length; offset += 12) {
-            await readMessages(uids.slice(offset, offset + 12), threads, true);
-          }
+        const validity = String(imap.mailbox.uidValidity);
+        let scan = state.archivedBounceFolders[folder.specialUse];
+        if (scan?.validity !== validity) {
+          const uids = await imap.search({
+            since: new Date(Date.now() - 7 * 86400000),
+            or: [{ from: 'mailer-daemon' }, { from: 'postmaster' }]
+          }, { uid: true });
+          scan = { validity, uids: Array.isArray(uids) ? uids.slice(-250).reverse() : [], done: false };
+          state.archivedBounceFolders[folder.specialUse] = scan;
         }
+        const batch = scan.uids.slice(0, 12);
+        if (batch.length) await readMessages(batch, threads, true);
+        scan.uids.splice(0, batch.length);
+        scan.done = scan.uids.length === 0;
       } finally {
         lock.release();
         await imap.mailboxOpen('INBOX');
       }
     }
-    state.archivedBounceReviewAt = Date.now();
+    if (folders.every(item => state.archivedBounceFolders[item.specialUse]?.done)) {
+      state.archivedBounceReviewAt = Date.now();
+      delete state.archivedBounceFolders;
+    }
     save();
   } catch (error) {
     if (!imap.usable || imap.mailbox?.path !== 'INBOX') throw error;

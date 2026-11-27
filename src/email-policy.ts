@@ -37,13 +37,14 @@ export function exampleContactEmail(value: unknown): boolean {
 export function usableContactEmail(value: unknown): value is string {
  if(typeof value!=='string')return false;
  const email=value.trim().toLowerCase();
- return email.length<=200&&/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)&&!/\.(png|jpg|webp|svg|css|js)$/.test(email)&&!/^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply)@/.test(email)&&!exampleContactEmail(email);
+ return email.length<=200&&/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)&&!/\.(png|jpg|webp|svg|css|js)$/.test(email)&&!/^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply)@/.test(email)&&!/(?:^|\.)hostingersite\.com$/.test(email.split('@')[1])&&!exampleContactEmail(email);
 }
 
 export function emailPromotionHold(messages: Message[], now = Date.now()) {
   const windowMs = 60 * 60 * 1000;
   const failureTimes = new Map<string, number>();
   for (const message of messages) {
+    if (message.emailDeliveryStatus?.startsWith('4.')) continue;
     if (message.channel !== 'email' || message.direction !== 'outbound' || message.replyToProviderId ||
         message.status !== 'fallido' || !message.emailFailureAt || !message.approvedRecipient) continue;
     const at = Date.parse(message.emailFailureAt);
@@ -53,6 +54,23 @@ export function emailPromotionHold(messages: Message[], now = Date.now()) {
   }
   const fifth = [...failureTimes.values()].sort((a,b) => b-a)[4];
   return fifth === undefined ? undefined : fifth + windowMs;
+}
+
+export function recoverableEmailFailure(diagnostic: string, status?: string) {
+  return invalidEmailDestination(diagnostic, status) || /^(?:4\.4\.[1-7])$/.test(status || '') ||
+    /\b550[ -]5\.4\.1\b.{0,160}recipient address rejected/i.test(diagnostic);
+}
+
+export function emailDomainsWithDeliveryProblems(messages: Message[], now: number) {
+  const domains = new Set<string>();
+  for (const message of messages) {
+    if (message.channel !== 'email' || message.direction !== 'outbound' ||
+        !/^4\.4\.[1-7]$/.test(message.emailDeliveryStatus || '')) continue;
+    const at = Date.parse((message.status === 'fallido' ? message.emailFailureAt : message.emailDelayAt) || '');
+    const domain = message.approvedRecipient?.toLowerCase().split('@')[1];
+    if (domain && at <= now && at > now - 48 * 3600000) domains.add(domain);
+  }
+  return domains;
 }
 
 export function invalidEmailDestination(diagnostic: string, status?: string) {
