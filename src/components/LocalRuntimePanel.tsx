@@ -11,6 +11,7 @@ const issueLabels: Record<string, string> = {
   whatsapp_missing: 'Falta localizar el ejecutor de WhatsApp vinculado.',
   browser_missing: 'Falta la ruta guardada de Chrome o Edge para WhatsApp.',
   jarvis_missing: 'Falta instalar OpenJarvis en esta computadora.',
+  ollama_unavailable: 'Ollama no pudo cargar el modelo local. La consola de Central muestra el motivo.',
   model_missing: 'Falta iniciar Ollama o instalar el modelo local elegido.',
   low_memory: 'La memoria del equipo no alcanza para el inicio automático del modelo recomendado.',
   component_stopped: 'Un componente se detuvo. Revisá la ventana de Central Comercial.',

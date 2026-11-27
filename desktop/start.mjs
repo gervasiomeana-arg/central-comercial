@@ -5,10 +5,11 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
+import { findConfig, findJarvis, jarvisEnvironment, selectedModel } from './config.mjs';
 import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport, waitForChildExit, selectWhatsAppBrowser } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies, installWhatsAppDependencies } from './local-app.mjs';
+import { findOllamaExecutable, ollamaModels, verifyLocalOllamaModel, missingWindowsOllamaRunner, repairWindowsOllama } from './ollama-runtime.mjs';
 import { activeRelease, refreshInstalledUpdater } from './auto-update.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,6 +32,7 @@ const startedAt = Date.now(), ramGB = Math.round(os.totalmem() / 1024 ** 3);
 let model = selectedModel(ramGB, process.env.OPENJARVIS_MODEL);
 const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missing' };
 const issues = new Set(), children = new Set();
+const intentionalStops = new WeakSet();
 let stopping = false, timer, backupTimer, whatsappLinkTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
 let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild, confirmWhatsAppBrowser, pairingActive = false;
@@ -80,7 +82,7 @@ function launch(name, command, args, options = {}) {
     if (name === 'whatsapp') pairingActive = false;
     if (name === 'whatsapp' && code !== 78 && !stopping &&
         !['profile_busy','browser_access','browser_transport','web_unavailable','browser_launch','web_startup','session_timeout'].includes(whatsappStage)) whatsappStage = 'restarting';
-    if (stopping) return;
+    if (stopping || intentionalStops.has(child)) return;
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
     if (name === 'backend' && !backendStarted) return;
@@ -272,34 +274,68 @@ void prepareWhatsApp().catch(error=>{
 const profile = path.join(runtimeDir, 'intelligence'); fs.mkdirSync(profile, { recursive: true });
 fs.writeFileSync(path.join(profile, 'config.toml'), '[engine]\ndefault = "ollama"\n[server]\nhost = "127.0.0.1"\nport = 8765\nagent = ""\n');
 const jarvis = findJarvis();
-if (ramGB < 6) { issues.add('low_memory'); log('intelligence', 'Memoria insuficiente para iniciar automáticamente el modelo local recomendado.'); }
-else if (!jarvis) { issues.add('jarvis_missing'); log('intelligence', 'OpenJarvis aún no está instalado. El correo y los informes escritos siguen disponibles.'); }
-else {
+async function startIntelligence() {
+  if (ramGB < 6) { issues.add('low_memory'); log('intelligence', 'Memoria insuficiente para iniciar automáticamente el modelo local recomendado.'); return; }
+  if (!jarvis) { issues.add('jarvis_missing'); log('intelligence', 'OpenJarvis aún no está instalado. El correo y los informes escritos siguen disponibles.'); return; }
+
+  let ownedOllama;
+  async function availableModels() {
+    const running = await ollamaModels().catch(() => null);
+    if (running) return running;
+    const ollama = findOllamaExecutable();
+    if (!ollama) throw new Error('No se encontró Ollama instalado.');
+    if (!ownedOllama) {
+      const modelsPath = process.env.OLLAMA_MODELS;
+      const env = { ...jarvisEnvironment(profile), OLLAMA_HOST: '127.0.0.1:11434', OLLAMA_NO_CLOUD: '1',
+        ...(modelsPath && path.isAbsolute(modelsPath) ? { OLLAMA_MODELS: modelsPath } : {}) };
+      ownedOllama = launch('ollama', ollama, ['serve'], { cwd: runtimeDir, env });
+    }
+    for (let attempt = 0; attempt < 10 && !stopping; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const models = await ollamaModels().catch(() => null);
+      if (models) return models;
+    }
+    throw new Error('Ollama no abrió su servicio local.');
+  }
+
   try {
-    try { await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(2000), redirect: 'error' }); }
-    catch {
-      const ollamaCandidates = [executable('ollama'), process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe')].filter(Boolean);
-      const ollama = ollamaCandidates.find(p => fs.existsSync(p));
-      if (ollama) {
-        launch('ollama', ollama, ['serve'], { cwd: runtimeDir, env: { ...jarvisEnvironment(profile), OLLAMA_HOST: '127.0.0.1:11434' } });
-        for (let attempt = 0; attempt < 6; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          try { const response = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1000), redirect: 'error' }); if (response.ok) break; } catch {}
-        }
+    let available = await availableModels();
+    const availableModel = name => available.some(entry => entry.name === name || entry.model === name);
+    if (!process.env.OPENJARVIS_MODEL && !availableModel(model) && availableModel('qwen3.5:2b')) model = 'qwen3.5:2b';
+    if (!availableModel(model)) { issues.add('model_missing'); log('intelligence', `Falta el modelo local ${model}.`); return; }
+    try {
+      await verifyLocalOllamaModel(model);
+    } catch (error) {
+      if (stopping || process.platform !== 'win32' ||
+          (error.code !== 'OLLAMA_RUNNER_MISSING' && !await missingWindowsOllamaRunner(findOllamaExecutable()))) throw error;
+      log('intelligence', 'Falta el ejecutable de inferencia de Ollama. Reparando con WinGet; los modelos se conservan.');
+      if (ownedOllama) {
+        const closed = waitForChildExit(ownedOllama, 5000);
+        intentionalStops.add(ownedOllama);
+        if (ownedOllama.connected) ownedOllama.disconnect();
+        if (!await closed) throw new Error('Ollama sigue cerrándose. La reparación no arrancó.');
+        ownedOllama = undefined;
       }
+      if (stopping) return;
+      await repairWindowsOllama(runtimeDir);
+      if (stopping) return;
+      available = await availableModels();
+      if (!availableModel(model)) { issues.add('model_missing'); log('intelligence', `Ollama no encontró el modelo local ${model} después de la reparación.`); return; }
+      await verifyLocalOllamaModel(model);
     }
-    const tags = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(5000), redirect: 'error' }).then(r => { if (!r.ok) throw new Error(); return r.json(); });
-    if (!process.env.OPENJARVIS_MODEL && !tags.models?.some(m => m.name === model || m.model === model) && tags.models?.some(m => m.name === 'qwen3.5:2b' || m.model === 'qwen3.5:2b')) model = 'qwen3.5:2b';
-    if (!tags.models?.some(m => m.name === model || m.model === model)) { issues.add('model_missing'); log('intelligence', `Falta el modelo local ${model}. No se descargó otro ni se usó un proveedor de pago.`); }
-    else {
-      // Do not attach to an unrelated service already occupying the private port.
-      const probe = http.createServer();
-      await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(8765, '127.0.0.1', () => probe.close(resolve)); });
-      launch('intelligence', jarvis, ['serve', '--host', '127.0.0.1', '--port', '8765', '--engine', 'ollama', '--model', model], { cwd: runtimeDir, env: jarvisEnvironment(profile) });
-      launch('bridge', process.execPath, [path.join(root, 'openjarvis-worker', 'worker.mjs'), config.file], { env: { ...jarvisEnvironment(profile), CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, OPENJARVIS_MODEL: model, OPENJARVIS_URL: 'http://127.0.0.1:8765' } });
-    }
-  } catch (error) { issues.add(error.code === 'EADDRINUSE' ? 'jarvis_port_busy' : 'model_missing'); log('intelligence', 'El motor local no pudo prepararse. Revisá Ollama y el modelo instalado.'); }
+    if (stopping) return;
+    const probe = http.createServer();
+    await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(8765, '127.0.0.1', () => probe.close(resolve)); });
+    const env = jarvisEnvironment(profile);
+    launch('intelligence', jarvis, ['serve', '--host', '127.0.0.1', '--port', '8765', '--engine', 'ollama', '--model', model], { cwd: runtimeDir, env });
+    launch('bridge', process.execPath, [path.join(root, 'openjarvis-worker', 'worker.mjs'), config.file], { env: { ...env, CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE: config.file, OPENJARVIS_MODEL: model, OPENJARVIS_URL: 'http://127.0.0.1:8765' } });
+  } catch (error) {
+    if (stopping) return;
+    issues.add(error.code === 'EADDRINUSE' ? 'jarvis_port_busy' : 'ollama_unavailable');
+    log('intelligence', error.code === 'EADDRINUSE' ? 'El puerto de OpenJarvis está ocupado.' : error.message);
+  }
 }
+void startIntelligence();
 async function backup(){if(backingUp||stopping)return;backingUp=true;try{backupAt=await saveCheckpoint(config,runtimeDir);issues.delete('backup_failed');}catch{issues.add('backup_failed');console.log('Copia local pendiente de actualizar. Se conserva la última copia válida.');}finally{backingUp=false;}}
 await backup();backupTimer=setInterval(()=>void backup(),60000);
 async function shareRequestedRecords(requestId) {

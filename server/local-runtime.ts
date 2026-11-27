@@ -9,7 +9,7 @@ export class LocalRuntime {
   constructor(private now = () => Date.now()) {}
   heartbeat(input: any) {
     const states = ['running', 'missing', 'stopped'];
-    const issues = ['email_missing', 'whatsapp_missing', 'browser_missing', 'jarvis_missing', 'model_missing', 'low_memory', 'component_stopped', 'jarvis_port_busy', 'email_auth', 'whatsapp_auth', 'backup_failed'];
+    const issues = ['email_missing', 'whatsapp_missing', 'browser_missing', 'jarvis_missing', 'model_missing', 'low_memory', 'component_stopped', 'jarvis_port_busy', 'ollama_unavailable', 'email_auth', 'whatsapp_auth', 'backup_failed'];
     if (!input || typeof input.workerId !== 'string' || !input.workerId || input.workerId.length > 100 ||
       typeof input.startedAt !== 'number' || !Number.isFinite(input.startedAt) ||
       !Number.isInteger(input.ramGB) || input.ramGB < 1 || input.ramGB > 4096 ||

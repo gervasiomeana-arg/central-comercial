@@ -36,7 +36,7 @@ El inicio por sí mismo no crea campañas, cambia objetivos ni confirma pagos. L
 - Correo: `worker.mjs` y dependencias en la carpeta del `.env` ya configurado.
 - WhatsApp: instalación y sesión existentes en `%LOCALAPPDATA%\CentralComercial\WhatsApp`, con su `browser-path.txt` guardado. No crea otra sesión.
 - OpenJarvis: ejecutable `jarvis.exe` del PATH o `%LOCALAPPDATA%\OpenJarvis\src\.venv\Scripts\jarvis.exe`, ubicación usada por el instalador oficial de Windows. Se conserva compatibilidad con la variante sin la carpeta `src`. Se puede indicar `CENTRAL_JARVIS_EXE` para otra instalación de confianza.
-- Ollama: API local `127.0.0.1:11434`; si no está ejecutándose, se intenta iniciar el ejecutable ya instalado, limitado a esa dirección. No se accede a motores remotos ni se instala Ollama automáticamente.
+- Ollama: API local `127.0.0.1:11434`. Central inicia Ollama si ya está instalado y comprueba que pueda cargar el modelo local. Si detecta una instalación incompleta de Windows, intenta repararla con WinGet conservando los modelos.
 
 ## Instalación inicial del motor
 
