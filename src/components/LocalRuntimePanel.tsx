@@ -32,7 +32,7 @@ const whatsappStageLabels: Record<WhatsAppStage, string> = {
   browser_launch: 'El navegador de Central se cerró durante el arranque.',
   web_startup: 'WhatsApp Web no terminó de iniciar. La consola local tiene el detalle.',
   session_timeout: 'La sesión guardada de WhatsApp tardó demasiado en responder.',
-  phone_link: 'WhatsApp Web abrió la vinculación con número de teléfono.',
+  phone_link: 'WhatsApp generó un código de vinculación en la consola de esta PC.',
   phone_link_failed: 'WhatsApp Web no abrió la vinculación con número de teléfono.',
 };
 
@@ -66,7 +66,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     try {
       const result = await api.requestWhatsAppPhoneLink();
       setLinkMessage(result.alreadyConnected ? 'Central ya confirmó la conexión de WhatsApp.' :
-        'Central abrirá directamente la vinculación por teléfono de WhatsApp Web. Seguí las indicaciones en esa ventana y en tu celular.');
+        'Central solicitará un código de vinculación a WhatsApp. Aparecerá solo en la consola de tu PC.');
     } catch (e: any) { setLinkMessage(e.message); }
     finally { setLinking(false); }
   };
@@ -78,7 +78,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
       if(remote || local.reportUnavailable)setConnections(local.online&&local.connections?local.connections:{email:false,whatsapp:false,intelligence:false});
       else {
         const [jarvis,goal,channel]=await Promise.all([api.getJarvisStatus(),api.getSalesGoal(),api.getRealChannelTests()]);
-        setConnections({email:goal.worker.online&&goal.worker.send&&goal.worker.read,whatsapp:channel.whatsappReady,intelligence:jarvis.ready});
+        setConnections({email:goal.worker.online&&goal.worker.send&&goal.worker.read,whatsapp:channel.commercialWhatsApp?.ready ?? channel.whatsappReady,intelligence:jarvis.ready});
       }
       setError('');
     } catch (e: any) { setError(e.message); }
@@ -93,7 +93,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     {!remote && runtime?.online && !runtime.diagnosticMode && !connections.whatsapp &&
       runtime.components?.whatsapp === 'stopped' && <div className="space-y-2">
         <button className="rounded-xl bg-white/10 px-4 py-2 text-sm" onClick={() => void requestPhoneLink()} disabled={linking}>
-          Vincular WhatsApp con número de teléfono
+          Vincular Central con un código de WhatsApp
         </button>
       </div>}
     {linkMessage && !connections.whatsapp && <p role="status" className="text-sm text-slate-200">{linkMessage}</p>}

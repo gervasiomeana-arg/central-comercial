@@ -372,7 +372,9 @@ adminRouter.post('/openjarvis/plans', (req, res) => {
 
 adminRouter.get('/channel-tests', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ ...channelTests.status(), workerConfigured: (process.env.CHANNEL_TEST_WORKER_KEY || '').length >= 32 });
+  res.json({ ...channelTests.status(),
+    ...(localMode ? { commercialEmail: db.getCommercialEmailStatus(), commercialWhatsApp: whatsappStatus() } : {}),
+    workerConfigured: (process.env.CHANNEL_TEST_WORKER_KEY || '').length >= 32 });
 });
 
 adminRouter.post('/channel-tests', (req, res) => {

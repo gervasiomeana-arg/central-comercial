@@ -161,22 +161,24 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
     upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));
     upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
     const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
-    const startWhatsApp = linkByPhone => launch('whatsapp',process.execPath,[waFile], {
+    const startWhatsApp = (phoneNumber = '') => launch('whatsapp',process.execPath,[waFile], {
       cwd:waDir,
       env:{...process.env,CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE:config.file,CHROME_PATH:browser,
-        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone),CENTRAL_WHATSAPP_REFRESH_WEB:'false',
+        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_PAIR_NUMBER:phoneNumber,CENTRAL_WHATSAPP_REFRESH_WEB:'false',
         CENTRAL_WHATSAPP_MODULE_DIR:path.join(root,'channel-worker'),CENTRAL_WHATSAPP_SYNC_RETRIES:'0'},
     });
     const tryPhoneLink = () => {
       if (stopping || diagnosticMode || components.whatsapp === 'running' || !fs.existsSync(linkRequest)) return;
+      let phoneNumber;
       try {
         const requestedAt = fs.statSync(linkRequest).mtimeMs;
+        phoneNumber = fs.readFileSync(linkRequest,'utf8').trim();
         fs.unlinkSync(linkRequest);
-        if (Date.now()-requestedAt > 5*60000) return;
+        if (Date.now()-requestedAt > 5*60000 || !/^[1-9]\d{9,14}$/.test(phoneNumber)) return;
       } catch { return; }
-      startWhatsApp(true);
+      startWhatsApp(phoneNumber);
     };
-    startWhatsApp(false);
+    startWhatsApp();
     whatsappLinkTimer = setInterval(tryPhoneLink, 2500);
   }
   else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }

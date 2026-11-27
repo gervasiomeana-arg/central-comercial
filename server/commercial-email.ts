@@ -62,7 +62,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
     if (!contact.source || !Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime()) continue;
     for (const msg of conv.messages) {
-      if (msg.channel !== 'email' || msg.direction !== 'outbound' || msg.status !== 'preparado' || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
+      if (msg.channel !== 'email' || msg.direction !== 'outbound' || (msg.status !== 'preparado' && !(msg.status === 'pendiente' && campaign?.mode === 'automatico' && !msg.replyToProviderId)) || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
       const defaultRecipient = contact.email?.trim().toLowerCase();
       const discoveredPromotion = !replying && contact.outreachBasis === 'public_business_contact';

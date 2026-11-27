@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Router } from 'express';
 import { accountingDay } from '../src/ledger.js';
 import { diagnosticMode } from './execution-role.js';
+import { TEST_RECIPIENTS } from './channelTests.js';
 import { whatsappStatus } from './commercial-whatsapp.js';
 
 export function registerOwnerReportRoutes(router: Router) {
@@ -14,7 +15,7 @@ export function registerOwnerReportRoutes(router: Router) {
     if (whatsappStatus().ready) return res.json({ alreadyConnected: true });
     const root = path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp', 'private-state');
     try {
-      fs.closeSync(fs.openSync(path.join(root, 'link-by-phone-request'), 'wx', 0o600));
+      fs.writeFileSync(path.join(root, 'link-by-phone-request'), TEST_RECIPIENTS.whatsapp, { flag: 'wx', mode: 0o600 });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
         return res.status(503).json({ error: 'El ejecutor local de WhatsApp no pudo recibir la solicitud.' });

@@ -113,7 +113,7 @@ async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
   const now = Date.now();
   const pending = new Set(db.getConversations().filter(c => c.campaignId &&
     db.campaignInActiveRun(c.campaignId) && c.messages.some(m =>
-      m.channel === 'email' && m.direction === 'outbound' && m.status === 'preparado' && !m.replyToProviderId && !m.attemptedAt && m.reviewStatus !== 'rejected')).map(c => c.contactId));
+      m.channel === 'email' && m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && !m.replyToProviderId && !m.attemptedAt && m.reviewStatus !== 'rejected')).map(c => c.contactId));
   const contacts = db.getContacts().filter(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
     !publishedCampaignRecipients(c).some(email => email !== c.undeliverableEmail) && c.permission !== 'revocado' &&
     !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&

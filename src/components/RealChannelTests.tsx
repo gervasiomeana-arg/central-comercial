@@ -40,10 +40,10 @@ export function RealChannelTests({localRuntime}:{localRuntime:boolean}) {
     <p className="text-sm text-slate-600">La aplicación ordena el envío y el ejecutor de tu computadora lo realiza. Los resultados quedan separados de clientes, ventas y pagos.</p>
     {status && <>
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
-        <div className="bg-slate-50 rounded-lg p-3"><strong>Email</strong><p>{status.recipients.email}</p><p>{status.emailReady ? 'Conectado' : 'Pendiente de autorización en tu computadora'}</p></div>
-        <div className="bg-slate-50 rounded-lg p-3"><strong>WhatsApp</strong><p>+{status.recipients.whatsapp}</p><p>{status.whatsappReady ? 'Vinculado' : 'Pendiente de vincular por QR en tu computadora'}</p></div>
+        <div className="bg-slate-50 rounded-lg p-3"><strong>Email</strong><p>{status.recipients.email}</p><p>{status.commercialEmail ? status.commercialEmail.send ? 'Correo comercial conectado' : 'Envío comercial desconectado' : status.emailReady ? 'Ejecutor de pruebas disponible' : 'Ejecutor de pruebas sin conexión'}</p></div>
+        <div className="bg-slate-50 rounded-lg p-3"><strong>WhatsApp</strong><p>+{status.recipients.whatsapp}</p><p>{(status.commercialWhatsApp?.ready ?? status.whatsappReady) ? 'Sesión conectada' : 'Sesión de Central sin confirmar'}</p></div>
       </div>
-      <p className="text-sm">Ejecutor: {status.online ? 'En línea' : 'Desconectado'} · Clave de conexión: {status.workerConfigured ? 'Configurada' : 'Pendiente'}</p>
+      <p className="text-sm">Ejecutor de pruebas: {status.online ? 'En línea' : 'Desconectado'} · Clave de conexión: {status.workerConfigured ? 'Configurada' : 'Pendiente'}</p>
       <div className="flex flex-wrap gap-2">
         <button disabled={busy || !status.emailReady} onClick={() => send(['email'])} className="px-4 py-2 bg-blue-700 text-white rounded-lg disabled:opacity-40">Probar email</button>
         <button disabled={busy || !status.whatsappReady} onClick={() => send(['whatsapp'])} className="px-4 py-2 bg-emerald-700 text-white rounded-lg disabled:opacity-40">Probar WhatsApp</button>
@@ -54,7 +54,7 @@ export function RealChannelTests({localRuntime}:{localRuntime:boolean}) {
       {report && report.status !== 'sin_intento' && <p role="status" className="text-sm">
         Informe inmediato de hoy. {reportLabels[report.status]}
       </p>}
-      {!status.online && <details className="text-sm bg-amber-50 p-3 rounded-lg"><summary className="font-semibold cursor-pointer">Conectar mi computadora una sola vez</summary>
+      {!localRuntime && !status.online && <details className="text-sm bg-amber-50 p-3 rounded-lg"><summary className="font-semibold cursor-pointer">Conectar mi computadora una sola vez</summary>
         <p className="mt-2">Descargá el proyecto y abrí channel-worker/iniciar-windows.bat. La guía channel-worker/README.md indica cómo configurar la conexión privada y autorizar Gmail. El QR de WhatsApp aparece solamente en tu computadora. No ingreses tu contraseña habitual de Gmail en esta página.</p>
       </details>}
       <p className="text-xs text-slate-500">Aceptado por el servicio no significa leído por el destinatario. WhatsApp Web es una integración extraoficial y puede desconectarse.</p>
