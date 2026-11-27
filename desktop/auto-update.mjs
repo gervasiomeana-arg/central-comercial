@@ -31,8 +31,11 @@ export function activeRoot(fallback){
 export function refreshInstalledUpdater(root){
  const installed=path.join(path.dirname(runtime),'App','desktop');
  if(root!==activeRoot(null)||!fs.existsSync(path.join(installed,'watchdog.mjs')))return;
- // Install the compatible update module before switching the stable watchdog.
- for(const name of ['auto-update.mjs','watchdog.mjs']){
+ // The stable watchdog and its update module both import recovery helpers.
+ // Install dependencies before switching either entry point.
+ const modules=['recovery.mjs','auto-update.mjs','watchdog.mjs'];
+ if(!modules.every(name=>fs.existsSync(path.join(root,'desktop',name))))return;
+ for(const name of modules){
   upgradeWorker(path.join(root,'desktop',name),path.join(installed,name));
  }
 }
