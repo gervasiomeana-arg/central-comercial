@@ -100,7 +100,8 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const editorial = /property=["']og:type["'][^>]*content=["']article["']|["']@type["']\s*:\s*["'](?:NewsArticle|Article|BlogPosting)["']/i.test(html);
   const profile = volleyball ? volleyballProfile(heading, title, page, editorial) ||
     volleyballProfile(title, title, page, editorial) : undefined;
-  const channelHtml = profile === 'coach' ? clean.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
+  const main = clean.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1];
+  const channelHtml = profile === 'coach' ? main ||
     clean.replace(/<(?:header|footer|nav)\b[^>]*>[\s\S]*?<\/(?:header|footer|nav)>/gi, '') : clean;
   const channelText = profile === 'coach' ? decode(channelHtml.replace(/<[^>]+>/g, ' ')) : text;
   const whatsappLink = channelHtml.match(/href\s*=\s*["']https?:\/\/wa\.me\/(\+?\d{10,15})(?=[?/"'#])/i)?.[1] ||
@@ -137,7 +138,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   }
   const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) && !excludedMailDomains.has(email.split('@')[1]) &&
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
-    (declared.has(email) || email.split('@')[1] === emailHost) &&
+    (declared.has(email) || email.split('@')[1] === emailHost || (profile === 'coach' && Boolean(main))) &&
     (profile !== 'coach' || !/^(?:info|contacto?|contato|administracion|secretaria|hola)@/.test(email)));
   const institutional = /^(?:info|contacto|contact|administracion|secretaria|hola|contato)@/;
   const email = valid.sort((a, b) => Number(declared.has(b)) - Number(declared.has(a)) ||

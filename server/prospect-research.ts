@@ -111,19 +111,20 @@ async function saveRecoveredAddress(id: string, original: string, rejected: stri
 
 async function verifyQueuedEmailPublications(fetcher: typeof fetchPublicText) {
   const now = Date.now();
-  const pending = new Set(db.getConversations().filter(c => c.campaignId &&
+  const pending = new Map(db.getConversations().filter(c => c.campaignId &&
     db.campaignInActiveRun(c.campaignId) && c.messages.some(m =>
-      m.channel === 'email' && m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) && !m.replyToProviderId && !m.attemptedAt && m.reviewStatus !== 'rejected')).map(c => c.contactId));
+      m.channel === 'email' && m.direction === 'outbound' && ['preparado', 'pendiente'].includes(m.status) &&
+      !m.replyToProviderId && !m.attemptedAt && m.reviewStatus !== 'rejected')).map(c => [c.contactId, c.appId]));
   const contacts = db.getContacts().filter(c => pending.has(c.id) && c.outreachBasis === 'public_business_contact' &&
     !publishedCampaignRecipients(c).some(email => email !== c.undeliverableEmail) && c.permission !== 'revocado' &&
     !['descartado', 'baja_solicitada', 'cliente'].includes(c.status) &&
     (!c.emailPublicationCheckedAt || Date.parse(c.emailPublicationCheckedAt) < now - 86400000));
   contacts.sort((a, b) => (a.emailPublicationCheckedAt || '').localeCompare(b.emailPublicationCheckedAt || '') || a.createdAt.localeCompare(b.createdAt));
-  await Promise.allSettled(contacts.slice(0, 4).map(contact => verifyQueuedContact(contact, now, fetcher)));
+  await Promise.allSettled(contacts.slice(0, 4).map(contact => verifyQueuedContact(contact, pending.get(contact.id)!, now, fetcher)));
 }
 
-async function verifyQueuedContact(contact: Contact, now: number, fetcher: typeof fetchPublicText) {
-  const app = contact.interestedAppIds.map(id => db.getApplicationById(id)).find(Boolean);
+async function verifyQueuedContact(contact: Contact, appId: string, now: number, fetcher: typeof fetchPublicText) {
+  const app = db.getApplicationById(appId);
   if (!app) return;
   contact.emailPublicationCheckedAt = new Date(now).toISOString();
   db.save();

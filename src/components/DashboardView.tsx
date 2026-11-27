@@ -35,7 +35,7 @@ export function DashboardView(props: DashboardViewProps) {
   const activeCampaigns = campaigns.filter(c => c.status === 'activa' && (selectedAppFilter === 'all' || c.appId === selectedAppFilter));
   const pending = tasks.filter(t => t.status === 'pendiente');
   const kpis = [
-    { label: 'Contactos', value: metrics.contactsTotal, detail: contactCoverage(metrics), icon: Users },
+    { label: 'Contactos', value: metrics.contactsTotal, detail: props.selectedPeriod === 'all' ? contactCoverage(metrics) : 'Total en la base comercial', icon: Users },
     { label: 'Mensajes aceptados', value: metrics.messagesSent, detail: `${metrics.messagesPending} en cola de Central · ${metrics.emailPendingVerification ?? 0} por verificar · ${metrics.emailDeliveryDelayed ?? 0} con entrega demorada · ${metrics.messagesBounced ?? 0} rebotes`, icon: Send },
     { label: 'Respuestas sin avisos automáticos', value: metrics.responsesReceived, detail: metrics.interestedCount + ' interesados', icon: MessageSquare },
     { label: 'Suscripciones activas', value: metrics.activeSubscriptionsCount, detail: metrics.trialClientsCount + ' en período de prueba', icon: CreditCard }

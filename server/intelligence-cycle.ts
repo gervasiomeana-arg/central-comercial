@@ -39,7 +39,7 @@ async function runIntelligenceCycle(){
   if(c.intelligencePlanId || c.intelligenceRequestId)assignedByApp.set(c.appId,(assignedByApp.get(c.appId)||0)+1);
  }
  const directorLocal = unlimitedDirectorOutreach(report.goal);
- const pending=campaigns.filter(c=>!c.intelligencePlanId).sort((a,b)=>
+ const pending=campaigns.filter(c=>!c.funeralShiftPilot&&!c.intelligencePlanId).sort((a,b)=>
   Number(Boolean(a.intelligenceNextAttemptAt && a.intelligenceError !== planningQuotaMessage)) -
   Number(Boolean(b.intelligenceNextAttemptAt && b.intelligenceError !== planningQuotaMessage)) ||
   (assignedByApp.get(a.appId)||0)-(assignedByApp.get(b.appId)||0));

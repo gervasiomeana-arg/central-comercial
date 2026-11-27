@@ -164,7 +164,12 @@ class CommercialScheduler {
 
       if (!phase || phase === 'buscar') {
         await intelligenceCycle();
-        if (!phase || batchWindowActive(phase)) await researchGoalProspects();
+        if (!phase) {
+          void researchGoalProspects().catch(error =>
+            db.addLog('error', 'contactos', 'Falló la búsqueda de prospectos.', {error: String(error)}));
+        } else if (batchWindowActive(phase)) {
+          await researchGoalProspects();
+        }
       }
       return true;
     } catch (err: any) {

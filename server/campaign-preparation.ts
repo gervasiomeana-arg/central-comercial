@@ -104,7 +104,9 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     threadsByContact.set(contact.id, [...threads, draft]);
     usedRecipients.add(recipientKey);
   };
-  for (const contact of contacts) {
+  const orderedContacts = app.slug === 'open-voley'
+    ? [...contacts].sort((a, b) => Number(Boolean(b.volleyballCoach)) - Number(Boolean(a.volleyballCoach))) : contacts;
+  for (const contact of orderedContacts) {
     if (!contact.interestedAppIds?.includes(app.id) || !countries.includes(normalized(contact.country || '')) || normalized(contact.language || '') !== normalized(campaign.language)) { skip('Fuera de aplicación, país o idioma'); continue; }
     if (campaign.funeralShiftPilot && (!contact.funeralShiftEvidence || conversations.some(other =>
       other.campaignId !== campaign.id && other.contactId === contact.id && other.appId === app.id &&
@@ -165,7 +167,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
           ['preparado', 'pendiente'].includes(message.status) && !message.attemptedAt &&
           !message.sentAt && !message.serviceConfirmationId) {
         const channel = message.channel === 'email' && preferWhatsApp && whatsappAllowed && campaign.autoSendWhatsApp
-          ? 'whatsapp' : message.channel === 'whatsapp' && !whatsappAllowed && emailUsable && campaign.autoSendEmail
+          ? 'whatsapp' : message.channel === 'whatsapp' && (!whatsappAllowed || !preferWhatsApp) && emailUsable && campaign.autoSendEmail
             ? 'email' : undefined;
         if (channel) {
           const key = recipientKeyFor(contact, channel);

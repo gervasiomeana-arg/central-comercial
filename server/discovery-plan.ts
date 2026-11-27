@@ -4,15 +4,17 @@ import { marketFor } from './campaign-markets.js';
 import {normalize,researchQueriesFor,prospectingTerms} from './sales-director.js';
 export function prospectQuery(query:string,app:Application,country:string){
  const q=normalize(query),name=normalize(app.slug+' '+app.name);
- const audience=name.includes('voley')?/(club|federac|asociac|associac|associat|escuela|escola|school|equipe|equipo|team|vereniging)/:name.includes('visibility')?/(agencia|agency|agence|bureau|consult|empresa|business|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin|center|school|foundation|clinic|education|stichting|onderwijs|fondation|ecole|clinique)/;
+ const audience=name.includes('voley')?/(entrenador|tecnico|treinador|coach|entraineur|volleyballtrainer|club|federac|asociac|associac|associat|escuela|escola|school|equipe|equipo|team|vereniging)/:name.includes('visibility')?/(agencia|agency|agence|bureau|consult|empresa|business|pyme|hotel)/:name.includes('funer')?/(funer|velator|funebr)/:/(centro|institu|escuela|escola|colegio|fundac|asociac|associac|clinica|consultorio|educativ|jardin|center|school|foundation|clinic|education|stichting|onderwijs|fondation|ecole|clinique)/;
  return (marketFor(country)?.aliases || [country]).some(alias=>q.includes(normalize(alias)))&&
    (audience.test(q) || researchQueriesFor(app,country).some(candidate=>normalize(candidate)===q))&&prospectingTerms(app,country).some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
 }
 export function repairDiscoveryPlan(c:Campaign,app:Application){
  if(c.researchDiscoveryVersion===3){
   if (!isOpenVoley(app)) return false;
-  const queries = [...new Set([...(c.researchQueries || []), ...researchQueriesFor(app, c.country)])];
-  if (queries.length === c.researchQueries?.length) return false;
+  const canonical = researchQueriesFor(app, c.country);
+  const queries = [...new Set([canonical[0], ...(c.researchQueries || []), ...canonical])].filter(Boolean);
+  if (queries.join('\n') === c.researchQueries?.join('\n')) return false;
+  if (c.researchQueries?.[0] !== queries[0]) c.researchQueryIndex = 0;
   c.researchQueries = queries;
   return true;
  }

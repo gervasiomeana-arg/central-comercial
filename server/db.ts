@@ -1,7 +1,7 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
 import {nonInterestOnlyContacts,normalizeContactEmail,ownerEmailCorrection,publishedCampaignRecipients,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
-import { createFuneralShiftPilot,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
+import { createFuneralShiftPilot, funeralShiftQueries,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
 import { commercialCatalog, mergeCommercialCatalog } from './commercial-catalog.js';
 import { DATA_DIR } from './data-directory.js';
@@ -855,6 +855,28 @@ class DatabaseManager {
     this.data.campaigns.push(...created);
     let changed = Boolean(pilot || created.length);
     if (report.goal.directorEnabled) {
+      for (const campaign of this.data.campaigns) {
+        if (!campaign.funeralShiftPilot || !this.campaignInActiveRun(campaign.id) ||
+            ['pausada', 'finalizada'].includes(campaign.status)) continue;
+        const autoSendEmail = report.goal.sendEmail;
+        const autoSendWhatsApp = !campaignWhatsAppPaused;
+        const channels: Campaign['channels'] = [...(autoSendEmail ? ['email' as const] : []),
+          ...(autoSendWhatsApp ? ['whatsapp' as const] : [])];
+        const dailyLimit = unlimitedDirectorOutreach(report.goal) ? 0 : Math.max(1, campaign.dailyLimit);
+        if (campaign.researchQueries?.join('\n') !== funeralShiftQueries.join('\n')) {
+          campaign.researchQueries = [...funeralShiftQueries];
+          campaign.researchQueryVersion = 2;
+          campaign.researchQueryIndex = 0;
+          changed = true;
+        }
+        if (campaign.maxContacts !== undefined || campaign.dailyLimit !== dailyLimit ||
+            campaign.channels.join() !== channels.join() || campaign.autoSendEmail !== autoSendEmail ||
+            campaign.autoSendWhatsApp !== autoSendWhatsApp || !campaign.allowPublicEmail) {
+          delete campaign.maxContacts;
+          Object.assign(campaign, {channels, dailyLimit, autoSendEmail, autoSendWhatsApp, allowPublicEmail: true, updatedAt: new Date().toISOString()});
+          changed = true;
+        }
+      }
       const channels: Campaign['channels'] = campaignWhatsAppPaused ? ['email'] : [...new Set([...(report.goal.directorChannels || ['email'] as const), 'whatsapp' as const])];
       for (const c of this.data.campaigns.filter(c => !c.chatManaged && !c.funeralShiftPilot && this.campaignInActiveRun(c.id))) {
         const app = this.getApplicationById(c.appId);
@@ -1460,6 +1482,13 @@ class DatabaseManager {
       pendingTotal: paymentsByCurrency[cur].pendingTotal
     }));
 
+    const days = period === 'hoy' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 0;
+    const today = accountingDay();
+    const firstDay = days ? new Date(Date.parse(today) - (days - 1) * 86400000).toISOString().slice(0, 10) : undefined;
+    const inPeriod = (timestamp: string | undefined) => !firstDay ||
+      Boolean(timestamp && Number.isFinite(Date.parse(timestamp)) &&
+        accountingDay(new Date(timestamp)) >= firstDay && accountingDay(new Date(timestamp)) <= today);
+
     const contactedIds = new Set<string>();
     const attemptedIds = new Set<string>();
     const includedContactIds = new Set(contacts.map(contact => contact.id));
@@ -1472,12 +1501,16 @@ class DatabaseManager {
     let messagesBounced = 0;
     let messagesUnknown = 0;
     let responsesReceived = 0;
+    const respondedInPeriod = new Set<string>();
     const nonInterestOnly = nonInterestOnlyContacts(this.data.conversations.filter(c => appFilter === 'all' || c.appId === appFilter));
 
     for (const conv of this.data.conversations) {
       if (appFilter !== 'all' && conv.appId !== appFilter) continue;
       for (const m of conv.messages) {
         if (m.direction === 'outbound') {
+          const activityAt = m.status === 'fallido' ? m.emailFailureAt || m.attemptedAt
+            : m.acceptedAt || m.sentAt || m.attemptedAt;
+          if (activityAt ? !inPeriod(activityAt) : !inPeriod(m.createdAt)) continue;
           if (m.attemptedAt && includedContactIds.has(conv.contactId)) attemptedIds.add(conv.contactId);
           if ((m.status === 'pendiente' || m.status === 'preparado') && !m.replacementMessageId && m.reviewStatus !== 'rejected') {
             const contact = allContactsById.get(conv.contactId);
@@ -1503,8 +1536,9 @@ class DatabaseManager {
             if (m.channel === 'email' && /^Rebote permanente confirmado:/.test(m.serviceError || '')) messagesBounced++;
           }
           else if (m.status === 'resultado_desconocido') messagesUnknown++;
-        } else if (m.direction === 'inbound' && !isAutomaticNotice(m.content)) {
+        } else if (m.direction === 'inbound' && inPeriod(m.createdAt) && !isAutomaticNotice(m.content)) {
           responsesReceived++;
+          respondedInPeriod.add(conv.contactId);
         }
       }
     }
@@ -1526,7 +1560,7 @@ class DatabaseManager {
       messagesBounced,
       messagesUnknown,
       responsesReceived,
-      interestedCount: contacts.filter(c => c.status === 'interesado' && !nonInterestOnly.has(c.id)).length,
+      interestedCount: contacts.filter(c => c.status === 'interesado' && !nonInterestOnly.has(c.id) && (!firstDay || respondedInPeriod.has(c.id))).length,
       trialClientsCount: contacts.filter(c => c.status === 'en_prueba').length + subscriptions.filter(s => s.status === 'en_prueba').length,
       activeSubscriptionsCount: subscriptions.filter(s => s.status === 'activa').length,
       expiredSubscriptionsCount: subscriptions.filter(s => s.status === 'vencida').length,

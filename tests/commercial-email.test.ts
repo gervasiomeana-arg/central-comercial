@@ -12,7 +12,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     for(const folder of ['server','src','data'])await fs.mkdir(path.join(directory,folder));
     await fs.writeFile(path.join(directory,'package.json'),'{"type":"module"}');
     await fs.symlink(path.resolve('node_modules'),path.join(directory,'node_modules'),'junction');
-    for(const name of ['db.ts','data-directory.ts','execution-role.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','commercial-whatsapp.ts','channelTests.ts','discovery-plan.ts', 'campaign-markets.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
+    for(const name of ['db.ts','data-directory.ts','execution-role.ts','sales-director.ts','commercial-catalog.ts','campaign-preparation.ts','commercial-email.ts','commercial-whatsapp.ts','channelTests.ts','discovery-plan.ts', 'campaign-markets.ts', 'volleyball-outreach.ts'])await fs.copyFile(new URL(`../server/${name}`,import.meta.url),path.join(directory,'server',name));
     await fs.copyFile(new URL('../src/whatsapp-policy.ts',import.meta.url),path.join(directory,'src','whatsapp-policy.ts'));
     await fs.copyFile(new URL('../src/email-policy.ts',import.meta.url),path.join(directory,'src','email-policy.ts'));
     await fs.copyFile(new URL('../src/ledger.ts',import.meta.url),path.join(directory,'src','ledger.ts'));
@@ -21,7 +21,7 @@ test('commercial email lifecycle persists attempts, stops repeats, routes verifi
     const app=db.getApplications().find((a:any)=>/voley/i.test(a.name)), now=new Date();
     db.setAutomationsPaused(false);db.saveMonthlyGoal({...db.getMonthlyGoal(),enabled:true,targetClients:5});
     const campaign=db.getCampaigns().find((c:any)=>c.goalMonth&&c.appId===app.id);campaign.sendWindowStart='00:00';campaign.sendWindowEnd='23:59';campaign.startDate='2026-11-01';
-    db.saveContact({id:'research-contact',orgName:'Club prueba',contactPerson:'',role:'Contacto',orgType:'Club',country:'Argentina',language:'es',timezone:'America/Argentina/Buenos_Aires',website:'https://club.test',email:'info@club.test',phone:'',source:'https://club.test/contacto',sourceReviewDate:new Date(now.getTime()-1000).toISOString(),interestedAppIds:[app.id],assignedTo:'',notes:'',history:[],preferredChannel:'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
+    db.saveContact({id:'research-contact',orgName:'Club prueba',contactPerson:'',role:'Contacto',orgType:'Club',country:'Argentina',language:'es',timezone:'America/Argentina/Buenos_Aires',website:'https://club.test',volleyballSource:'https://club.test/voleibol',email:'info@club.test',phone:'',source:'https://club.test/contacto',sourceReviewDate:new Date(now.getTime()-1000).toISOString(),interestedAppIds:[app.id],assignedTo:'',notes:'',history:[],preferredChannel:'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()});
     db.prepareCampaignDrafts(campaign.id);db.commercialEmailHeartbeat('test-worker',true,true,'owner@test.org');
     assert.throws(()=>claimCommercialEmail('another-worker'));
     const originalContact=db.getContactById('research-contact');db.saveContact({...originalContact,email:'tu@email.com',emailPublications:[{url:'https://club.test/contacto',email:'tu@email.com'}]});

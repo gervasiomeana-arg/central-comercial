@@ -84,13 +84,15 @@ export function claimWhatsApp(id:string,now=new Date()){
       if (!attemptedContacts.has(conv.contactId) && attemptedContacts.size >= campaign.maxContacts) continue;
     }
     if (!unlimited) {
-      const sentToday = dailyOutreachKeys(history, now, campaign.id);
+      const sentToday = dailyOutreachKeys(history, now, campaign.id, 'whatsapp');
       if (sentToday.size >= campaign.dailyLimit && !sentToday.has(outreachKey(conv, msg))) continue;
     }
    }
    if(!reply&&db.getTasks().some(t=>t.relatedId===conv.id&&t.status==='pendiente'))continue;
    const recipient=whatsappPhone(contact.phone);if(msg.approvedRecipient&&msg.approvedRecipient!==recipient)continue;
-   const lease=randomUUID();Object.assign(msg,{sendLease:hash(lease),sendWorker:id,sendDeadline:now.getTime()+120000,status:'envio_intentado',attemptedAt:now.toISOString(),approvedRecipient:recipient});db.save();
+   const lease=randomUUID();Object.assign(msg,{sendLease:hash(lease),sendWorker:id,sendDeadline:now.getTime()+120000,status:'envio_intentado',attemptedAt:now.toISOString(),approvedRecipient:recipient});
+   if(msg.attemptedAt!>conv.lastMessageAt)conv.lastMessageAt=msg.attemptedAt!;
+   db.save();
    return {conversationId:conv.id,messageId:msg.id,lease,recipient,content:msg.content};
   }
  }

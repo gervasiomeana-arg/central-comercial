@@ -56,8 +56,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     m.approvedRecipient && invalidEmailDestination(m.serviceError || '')).map(m => m.approvedRecipient!.toLowerCase()));
   const delayedDomains = emailDomainsWithDeliveryProblems(all, now.getTime());
   const directorUnlimited = unlimitedDirectorOutreach(goal);
-  const dailyContacts = directorUnlimited ? new Set<string>() : dailyOutreachKeys(db.getConversations(), now, undefined, 'email');
-  for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now) : db.getConversations()) {
+  for (const conv of goal.directorEnabled ? orderCommercialConversations(db.getConversations(),now,undefined,'email') : db.getConversations()) {
     const app = db.getApplicationById(conv.appId), contact = db.getContactById(conv.contactId), campaign = conv.campaignId ? db.getCampaignById(conv.campaignId) : undefined;
     if (!app || app.status !== 'lista' || !app.campaignsAllowed || !contact || contact.status === 'baja_solicitada' || contact.status === 'descartado' || contact.permission === 'revocado') continue;
     if (!contact.source || !Number.isFinite(Date.parse(contact.sourceReviewDate)) || Date.parse(contact.sourceReviewDate) > now.getTime()) continue;
@@ -91,13 +90,12 @@ export function claimCommercialEmail(id: string, now = new Date()) {
         const time = new Intl.DateTimeFormat('en-GB', { timeZone: campaign.timezone, hour:'2-digit', minute:'2-digit', hour12:false }).format(now);
         if (day < campaign.startDate || day > campaign.endDate || (!unlimited && (time < campaign.sendWindowStart || time >= campaign.sendWindowEnd))) continue;
         if (!unlimited) {
-          const sentToday = dailyOutreachKeys(db.getConversations(), now, campaign.id);
+          const sentToday = dailyOutreachKeys(db.getConversations(), now, campaign.id, 'email');
           if (sentToday.size >= campaign.dailyLimit && !sentToday.has(outreachKey(conv, msg))) continue;
         }
       }
       if (!replying && conv.requiresHumanIntervention && db.getTasks().some(t => t.relatedId === conv.id && t.status === 'pendiente')) continue;
       if (approvedRecipient && approvedRecipient !== recipient) continue;
-      if (!directorUnlimited && dailyContacts.size >= goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
       if (discoveredPromotion && !msg.campaignRecipient && verified.length === 2 &&
           !conv.messages.some(m => normalizeContactEmail(m.campaignRecipient || '') === verified[1] ||
             normalizeContactEmail(m.approvedRecipient || '') === verified[1])) {
@@ -113,6 +111,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
       msg.status = 'envio_intentado'; msg.attemptedAt = now.toISOString(); msg.approvedRecipient = recipient;
       msg.providerMessageId = `<cc-${randomUUID()}@${status.sender!.split('@')[1]}>`;
       if (campaign && !replying) campaign.status = 'activa';
+      if (msg.attemptedAt > conv.lastMessageAt) conv.lastMessageAt = msg.attemptedAt;
       if (!campaignWhatsAppPaused && !replying && campaign?.autoSendWhatsApp && campaign.channels.includes('whatsapp') && !whatsappCampaignEligible(contact, now)) {
         msg.whatsappInvitation = whatsappInvitations[marketLanguage(contact.country)];
       }
@@ -301,7 +300,14 @@ export function registerCommercialEmailRoutes(app: Express) {
           if (!status.send || !status.sender || !/^\\d{4}-\\d{2}-\\d{2}$/.test(data.day)) return res.status(409).json({error:'Correo o fecha no disponibles.'});
           return res.json(dailyCommercialDigest(data.day,status.sender));
         }
-        case 'complete': return res.json(completeCommercialEmail(data));
+        case 'complete':
+          try { return res.json(completeCommercialEmail(data)); }
+          catch (error) {
+            if (error instanceof Error && ['Intento no válido.', 'El intento ya finalizó.'].includes(error.message)) {
+              return res.status(409).json({error:error.message});
+            }
+            throw error;
+          }
         case 'routing': worker(data.workerId); return res.json({threads:db.getConversations().flatMap(c => c.messages.filter(m => m.direction === 'outbound' && m.channel === 'email' && m.providerMessageId && (m.status === 'aceptado_proveedor' || m.status === 'entrega_confirmada' || legacyBounce(m))).map(m => ({id:m.providerMessageId, from: m.approvedRecipient || db.getContactById(c.contactId)?.email.trim().toLowerCase()})))});
         case 'bounce': worker(data.workerId); return res.json(recordCommercialBounce(data));
         case 'bounces': {

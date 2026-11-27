@@ -146,13 +146,14 @@ test('el iniciador retoma la cola con una base que ya consumió las 24 consultas
 });
 
 
-test('el refuerzo de Funeraria requiere el director activo en México y limita el piloto a diez contactos', () => {
+test('el refuerzo de Funeraria requiere el director activo en México y admite correo', () => {
   const goal = { ...defaultGoal('2026-11'), directorEnabled: true, countries: ['México', 'Argentina'] };
   const pilot = createFuneralShiftPilot(goal, apps, [], now);
   assert.ok(pilot);
   assert.equal(pilot.country, 'México');
-  assert.equal(pilot.maxContacts, 10);
-  assert.deepEqual(pilot.channels, ['whatsapp']);
+  assert.equal(pilot.maxContacts, undefined);
+  assert.deepEqual(pilot.channels, ['email', 'whatsapp']);
+  assert.equal(pilot.autoSendEmail, true);
   assert.match(pilot.messageTemplate, /información entre turnos/);
   const funeral = apps.find(app => app.slug === 'funeraria')!;
   const url = 'https://funeraria-local.test/contacto';

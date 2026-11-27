@@ -8,12 +8,12 @@ import { americanMarkets, campaignCountryAllowed, marketLanguage, marketSearchNa
 export { normalize } from './campaign-markets.js';
 
 // Give each application an opportunity before one with more drafts takes another turn.
-export function orderCommercialConversations(conversations: Conversation[], now: Date, history = conversations) {
+export function orderCommercialConversations(conversations: Conversation[], now: Date, history = conversations, channel?: 'email' | 'whatsapp') {
   const day = accountingDay(now);
   const attempts = new Map<string,number>();
   for (const conversation of history) {
     const count = conversation.messages.filter(message => message.direction === 'outbound' &&
-      !message.replyToProviderId && message.attemptedAt && accountingDay(new Date(message.attemptedAt)) === day).length;
+      (!channel || message.channel === channel) && !message.replyToProviderId && message.attemptedAt && accountingDay(new Date(message.attemptedAt)) === day).length;
     attempts.set(conversation.appId, (attempts.get(conversation.appId) || 0) + count);
   }
   return [...conversations].sort((a,b)=>(attempts.get(a.appId)||0)-(attempts.get(b.appId)||0) ||
@@ -42,7 +42,7 @@ export function validateGoal(input: MonthlySalesGoal) {
 }
 export function playbook(app: Application) {
   const name = normalize(`${app.slug} ${app.name}`);
-  if (name.includes('voley')) return { audience: 'Clubes, escuelas, asociaciones y técnicos de voleibol', reason: 'Sus entrenadores registran partidos y preparan análisis y entrenamientos.', terms: ['voleibol', 'voley', 'volley', 'vôlei', 'volleyball', 'volleybal'], segments: ['club voleibol contacto', 'club vóley contacto', 'federación voleibol contacto', 'asociación voley contacto', 'escuela voleibol contacto', 'entrenador de voleibol contacto profesional', 'director técnico de vóley contacto profesional'] };
+  if (name.includes('voley')) return { audience: 'Clubes, escuelas, asociaciones y técnicos de voleibol', reason: 'Sus entrenadores registran partidos y preparan análisis y entrenamientos.', terms: ['voleibol', 'voley', 'volley', 'vôlei', 'volleyball', 'volleybal'], segments: ['entrenador de voleibol contacto profesional', 'director técnico de vóley contacto profesional', 'club voleibol contacto', 'club vóley contacto', 'federación voleibol contacto', 'asociación voley contacto', 'escuela voleibol contacto'] };
   if (name.includes('visibility')) return { audience: 'Agencias digitales, consultoras y pymes con sitio web', reason: 'Pueden contratar auditorías y seguimiento o sumar el servicio para sus clientes.', terms: ['agencia', 'marketing', 'consultora', 'digital', 'seo'], segments: ['agencia marketing digital contacto', 'consultora SEO contacto', 'agencia diseño web contacto'] };
   if (name.includes('funer')) return {audience:'Empresas funerarias y salas velatorias',reason:'Pueden organizar los servicios, recursos, agenda e inventario de su empresa.',terms:['funeraria','funerarias','funerario','funerarios','funeral','funerales','velatorio','velatorios','velatoria','velatorias','servicios funebres'],segments:['empresa funeraria contacto','servicios funerarios contacto','sala velatoria contacto']};
   if (name.includes('neuro')) return { audience: 'Instituciones educativas y centros con contacto institucional público', reason: 'Pueden conocer las actividades y herramientas de acompañamiento adulto. No se investigan familias ni datos de niños.', terms: ['educacion', 'educativo', 'educativa', 'educacao', 'infantil', 'escola', 'infancia', 'escuela', 'inclusion', 'neurodesarrollo', 'actividades infantiles', 'jardin de infantes', 'autismo', 'tdah', 'psicopedagog', 'terapeutic'], segments: ['centro educativo contacto institucional', 'institución educativa actividades niños contacto', 'fundación educación familias contacto'] };
@@ -50,17 +50,17 @@ export function playbook(app: Application) {
 }
 const translatedProspecting = {
   en: {
-    voley: ['volleyball club', 'volleyball federation', 'volleyball academy', 'volleyball coach professional contact'],
+    voley: ['volleyball coach professional contact', 'volleyball club', 'volleyball federation', 'volleyball academy'],
     visibility: ['digital marketing agency', 'SEO consultancy', 'web design agency'],
     neuro: ['early childhood education centre', 'kindergarten', 'family education foundation'],
   },
   fr: {
-    voley: ['club de volleyball', 'fédération de volleyball', 'école de volleyball', 'entraîneur de volleyball'],
+    voley: ['entraîneur de volleyball', 'club de volleyball', 'fédération de volleyball', 'école de volleyball'],
     visibility: ['agence de marketing numérique', 'consultant SEO', 'agence web'],
     neuro: ['école maternelle', 'centre de la petite enfance', 'association éducative'],
   },
   nl: {
-    voley: ['volleybalclub', 'volleybalbond', 'volleybalschool', 'volleyballtrainer'],
+    voley: ['volleyballtrainer', 'volleybalclub', 'volleybalbond', 'volleybalschool'],
     visibility: ['digitaal marketingbureau', 'SEO adviesbureau', 'webdesignbureau'],
     neuro: ['kleuterschool', 'centrum voor kinderopvang', 'educatieve stichting'],
   },
@@ -84,7 +84,7 @@ export function researchQueriesFor(app: Application, country: string) {
   }
   if (language !== 'pt-BR') return playbook(app).segments.map(segment => `${segment} ${market}`);
   const name=normalize(`${app.slug} ${app.name}`);
-  const segments=name.includes('voley')?['clube vôlei contato','escola voleibol contato','federação voleibol contato','treinador de vôlei contato profissional','técnico de voleibol contato profissional']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('funer')?['empresa funerária contato','serviços funerários contato','sala velatória contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
+  const segments=name.includes('voley')?['treinador de vôlei contato profissional','técnico de voleibol contato profissional','clube vôlei contato','escola voleibol contato','federação voleibol contato']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('funer')?['empresa funerária contato','serviços funerários contato','sala velatória contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
   return segments.map(segment=>`${segment} ${country}`);
 }
 // Catalog execution is explicit and distinct from a completed AI proposal.
@@ -154,8 +154,10 @@ export function goalCampaigns(goal: MonthlySalesGoal, apps: Application[], exist
   return result;
 }
 
+export const funeralShiftQueries = ['funeraria servicio 24 horas contacto México', 'funeraria nuestras sucursales contacto México'];
+
 export function createFuneralShiftPilot(goal: MonthlySalesGoal, apps: Application[], existing: Campaign[], now = new Date()) {
-  if (!goal.directorEnabled || existing.some(c => c.funeralShiftPilot)) return undefined;
+  if (!goal.directorEnabled || existing.some(c => c.funeralShiftPilot && c.goalMonth === goal.month)) return undefined;
   const app = apps.find(a => a.slug === 'funeraria');
   const country = goal.countries.find(name => normalize(name) === 'mexico');
   if (!app || !country) return undefined;
@@ -167,15 +169,14 @@ export function createFuneralShiftPilot(goal: MonthlySalesGoal, apps: Applicatio
     name: 'Funeraria Control · Refuerzo de cambio de turno',
     objective: 'Conocer cómo las funerarias mexicanas coordinan los servicios entre turnos.',
     funeralShiftPilot: true,
-    channels: ['whatsapp'],
+    channels: goal.sendEmail ? ['email', 'whatsapp'] : ['whatsapp'],
     autoSendWhatsApp: true,
-    autoSendEmail: false,
-    allowPublicEmail: false,
-    dailyLimit: 10,
-    maxContacts: 10,
+    autoSendEmail: goal.sendEmail,
+    allowPublicEmail: true,
+    dailyLimit: unlimitedDirectorOutreach(goal) ? 0 : base.dailyLimit,
     researchDiscoveryVersion: 3,
     researchSegment: 'Funerarias mexicanas con varias sucursales o atención 24 horas',
-    researchQueries: ['funeraria servicio 24 horas contacto México', 'funeraria nuestras sucursales contacto México'],
+    researchQueries: [...funeralShiftQueries],
     messageTemplate: `Hola, equipo de {organizacion}.
 
 Soy Gervasio, de Funeraria Control. La app reúne el expediente de cada servicio, sus horarios, el vehículo asignado y las tareas pendientes.
