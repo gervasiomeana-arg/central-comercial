@@ -4,6 +4,7 @@ const ownerEmailCorrections: ReadonlyMap<string, string> = new Map([
   ['contacto@funerariamagana.com', 'contacto@xn--funerariamagaa-2nb.com'],
   ['contact@xn--funerariamagaa-2nb.com', 'contacto@xn--funerariamagaa-2nb.com'],
   ['contato@huiosweb.com.br', 'contact@huiosweb.com.br'],
+  ['caring@jennyjennyfoundation.com', 'jennyjennyfoundation@gmail.com'],
 ]);
 const ownerConfirmedAddresses = new Set(ownerEmailCorrections.values());
 
