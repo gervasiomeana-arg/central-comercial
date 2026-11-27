@@ -1,7 +1,8 @@
 import type {Contact, Conversation, Message} from './types.js';
 
 const ownerEmailCorrections: ReadonlyMap<string, string> = new Map([
-  ['contacto@funerariamagana.com', 'contact@xn--funerariamagaa-2nb.com'],
+  ['contacto@funerariamagana.com', 'contacto@xn--funerariamagaa-2nb.com'],
+  ['contact@xn--funerariamagaa-2nb.com', 'contacto@xn--funerariamagaa-2nb.com'],
   ['contato@huiosweb.com.br', 'contact@huiosweb.com.br'],
 ]);
 const ownerConfirmedAddresses = new Set(ownerEmailCorrections.values());
