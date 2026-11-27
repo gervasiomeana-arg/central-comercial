@@ -1,0 +1,1752 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-27T17:13:03.427Z",
+  "scheduler": {
+    "isRunning": true,
+    "automationsPaused": false,
+    "lastRunAt": "2026-11-27T17:13:03.424Z",
+    "nextRunAt": "2026-11-27T17:13:33.424Z",
+    "activeJobsCount": 0,
+    "environmentNote": "El motor programado del backend procesará tareas cuando el proceso Node.js esté activo. Mantener abierta la pestaña del navegador no es necesario si se ejecuta como servicio o tarea en segundo plano.",
+    "windowsExecutionGuide": "Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Abrir PowerShell o CMD en la carpeta del proyecto y ejecutar \"npm run start\" o instalar PM2 con \"npm install -g pm2\" y \"pm2 start server.ts --name central-comercial\".\n3. Alternativamente, configurar el script scripts/run-scheduler-windows.bat en el Programador de Tareas de Windows (Task Scheduler) para que se ejecute al iniciar sesión."
+  },
+  "applications": [
+    {
+      "id": "app-open-voley",
+      "name": "Open Voley",
+      "slug": "open-voley",
+      "description": "Plataforma integral de scouting táctico y análisis estadístico de voleibol para entrenadores, cuerpos técnicos, clubes y asociaciones.",
+      "targetAudience": "Entrenadores de voleibol profesional y formativo, analistas de rendimiento, directores deportivos de clubes, asociaciones y federaciones.",
+      "countries": [
+        "Brasil",
+        "Argentina",
+        "España",
+        "Italia",
+        "México",
+        "Colombia"
+      ],
+      "languages": [
+        "pt-BR",
+        "es",
+        "it",
+        "en"
+      ],
+      "website": "https://openvoley.com",
+      "verifiedFeatures": [
+        "Registro táctico en vivo punto por punto",
+        "Scouting de rotaciones y mapas de calor de saques y ataques",
+        "Sincronización de video y clips por jugada",
+        "Reportes tácticos exportables en PDF para charlas de equipo",
+        "Modo offline para partidos sin conexión con sincronización posterior",
+        "Registro de acciones y rotaciones de ambos equipos",
+        "Análisis estadístico del partido",
+        "Video y entrenamiento conectados al trabajo del equipo"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 7,
+      "plans": [
+        {
+          "id": "ov-plan-club-basico",
+          "name": "Club Básico",
+          "price": 29,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "1 Equipo",
+            "Estadísticas esenciales",
+            "Exportación PDF",
+            "Soporte vía email"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "ov-plan-club-pro",
+          "name": "Club Pro",
+          "price": 69,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Equipos ilimitados",
+            "Scouting táctico avanzado",
+            "Sincronización de video",
+            "Multi-usuario cuerpo técnico",
+            "Soporte prioritario"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "ov-plan-federacion",
+          "name": "Federación / Asociación",
+          "price": 199,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Múltiples clubes federados",
+            "Torneos completos",
+            "Base de datos unificada",
+            "Capacitación presencial/remota"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-ov-dt-ars",
+          "name": "DT / Entrenador · Argentina",
+          "price": 30000,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-club-ars",
+          "name": "Club Pro & Liga · Argentina",
+          "price": 52500,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-federacion-ars",
+          "name": "Federación / Torneo · Argentina",
+          "price": 148500,
+          "currency": "ARS",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Argentina",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Argentina."
+        },
+        {
+          "id": "catalog-ov-dt-usd",
+          "name": "DT / Entrenador · USD general",
+          "price": 20,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-club-usd",
+          "name": "Club Pro & Liga · USD general",
+          "price": 35,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-federacion-usd",
+          "name": "Federación / Torneo · USD general",
+          "price": 99,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "General, excepto Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: General, excepto Brasil."
+        },
+        {
+          "id": "catalog-ov-br-dt",
+          "name": "Brasil · Treinador",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
+        },
+        {
+          "id": "catalog-ov-br-club",
+          "name": "Brasil · Clube Pro",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
+        },
+        {
+          "id": "catalog-ov-br-federacion",
+          "name": "Brasil · Federação / Torneio",
+          "price": null,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Precio a consultar en la tabla de Brasil"
+          ],
+          "verified": true,
+          "sourceUrl": "https://openvoley.com",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Brasil",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://openvoley.com. Mercado: Brasil."
+        }
+      ],
+      "registerUrl": "https://openvoley.com/registro",
+      "paymentUrl": "https://openvoley.com",
+      "faqs": [
+        {
+          "id": "ov-faq-1",
+          "question": "¿Se necesita conexión a internet en la cancha durante el partido?",
+          "answer": "No. Open Voley cuenta con modo de toma de datos offline. Podés cargar el partido completo sin conexión y los datos se sincronizan automáticamente cuando el dispositivo vuelve a tener internet.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "ov-faq-2",
+          "question": "¿En qué dispositivos se puede utilizar?",
+          "answer": "Funciona en tablets (iPad y tablets Android modernas), laptops y cualquier navegador web actual.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "ov-faq-3",
+          "question": "¿Ofrecen período de prueba para evaluar la plataforma?",
+          "answer": "Sí, disponemos de 14 días de prueba gratuita sin compromiso para probar el scouting en tus entrenamientos y partidos de pretemporada.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [
+        {
+          "id": "ov-mat-1",
+          "title": "Ficha Técnica Open Voley (PDF)",
+          "url": "https://openvoley.com/docs/ficha-tecnica.pdf",
+          "type": "pdf"
+        }
+      ],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "Priorizar clubes de vóley de Brasil (Superliga y ligas estaduales) y federaciones de Argentina y España.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": true,
+      "commercialNotes": "La tabla general ofrece ARS y USD. Para Brasil hay una tabla independiente en USD: actualmente publica «Preço sob consulta». No aplicar la tarifa general a Brasil ni convertir a BRL. El pago se realiza en Open Voley, no en Central Comercial.",
+      "commercialCatalogVersion": "2026-11-15.2"
+    },
+    {
+      "id": "app-visibility-ai",
+      "name": "Visibility AI",
+      "slug": "visibility-ai",
+      "description": "Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.",
+      "targetAudience": "Agencias de marketing digital, consultores de SEO/visibilidad, directores de marketing de PYMES y e-commerce.",
+      "countries": [
+        "España",
+        "México",
+        "Colombia",
+        "Argentina",
+        "Chile",
+        "Estados Unidos"
+      ],
+      "languages": [
+        "es",
+        "en"
+      ],
+      "website": "https://visibility-ia.ai.studio/",
+      "verifiedFeatures": [
+        "Auditoría técnica de Core Web Vitals y velocidad móvil",
+        "Diagnóstico de indexación y estructura de rastreo",
+        "Evaluación de preparación para motores de búsqueda de IA (AI Search Readiness)",
+        "Reportes marca blanca para agencias exportables en PDF",
+        "Alertas de caídas de rendimiento y enlaces rotos",
+        "Auditoría técnica de sitios web",
+        "Historial e informes de seguimiento",
+        "Oportunidades y plan de acción",
+        "Integración de Search Console según el plan"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 7,
+      "plans": [
+        {
+          "id": "vai-plan-starter",
+          "name": "Starter PYME",
+          "price": 49,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Hasta 3 dominios",
+            "Escaneo semanal",
+            "Reportes estándar",
+            "Soporte email"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "vai-plan-agency",
+          "name": "Agency Pro",
+          "price": 149,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Dominios ilimitados",
+            "Escaneos diarios",
+            "Reportes con marca blanca",
+            "API de auditorías",
+            "Soporte prioritario"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-vai-diagnostic",
+          "name": "Diagnóstico",
+          "price": 30,
+          "currency": "USD",
+          "interval": "unico",
+          "features": [
+            "Auditoría puntual",
+            "Resumen ejecutivo",
+            "Problemas y oportunidades principales"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-monitor",
+          "name": "Visibility Monitor",
+          "price": 50,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Auditoría mensual",
+            "Historial",
+            "PageSpeed",
+            "Informe mensual"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-growth",
+          "name": "Visibility Growth",
+          "price": 100,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Search Console",
+            "Keywords reales",
+            "Oportunidades",
+            "Plan de acción",
+            "IA"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-pro",
+          "name": "Visibility PRO Gestionado",
+          "price": 200,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Seguimiento gestionado",
+            "Optimización y contenido asistido",
+            "Hasta 3 negocios"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        },
+        {
+          "id": "catalog-vai-agency",
+          "name": "Agency",
+          "price": 350,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Multi-cliente",
+            "Informes",
+            "Administración centralizada",
+            "Hasta 30 negocios"
+          ],
+          "verified": true,
+          "sourceUrl": "https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://github.com/gervasiomeana-arg/visibility-ai/blob/main/src/config/markets.ts. Mercado: Todos."
+        }
+      ],
+      "registerUrl": "https://visibility-ia.ai.studio/",
+      "paymentUrl": "https://visibility-ia.ai.studio/",
+      "faqs": [
+        {
+          "id": "vai-faq-1",
+          "question": "¿Cómo se ejecuta la auditoría del sitio web?",
+          "answer": "Se realiza mediante un escaneo externo no invasivo sobre las URLs públicas del sitio. No requiere instalar scripts, plugins ni alterar el código del servidor del cliente.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        },
+        {
+          "id": "vai-faq-2",
+          "question": "¿Las agencias pueden entregar el reporte con su propio logo?",
+          "answer": "Sí. El plan Agency Pro permite personalizar el PDF con el logotipo, colores corporativos y datos de contacto de la agencia.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "Enfocar prospección en agencias digitales medianas con cartera activa de clientes que busquen automatizar sus auditorías mensuales.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": false,
+      "commercialNotes": "Tarifas contrastadas con src/config/markets.ts y la elección del propietario: Diagnóstico se cobra una vez; los demás son mensuales. La web publicada actualmente tiene acceso privado del operador. Los informes se entregan al cliente; no prometer registro público de clientes ni una prueba gratuita.",
+      "commercialCatalogVersion": "2026-11-15.2"
+    },
+    {
+      "id": "app-neuroplaneta",
+      "name": "NeuroPlaneta",
+      "slug": "neuroplaneta",
+      "description": "Plataforma lúdica de actividades y juegos interactivos para niños de 4 a 12 años, con módulo de acompañamiento para adultos y registro de tiempo de uso.",
+      "targetAudience": "Familias con niños en edad escolar, educadores, centros lúdicos y de estimulación temprana.",
+      "countries": [
+        "España",
+        "Argentina",
+        "México",
+        "Colombia",
+        "Chile"
+      ],
+      "languages": [
+        "es"
+      ],
+      "website": "https://neuroplaneta.ai.studio/",
+      "verifiedFeatures": [
+        "Catálogo de juegos interactivos de atención, memoria, lógica y creatividad",
+        "Panel de control parental para adultos con configuración de límites de tiempo",
+        "Registro de actividades realizadas y evolución lúdica",
+        "Actividades guiadas para realizar juntos adultos y niños",
+        "Entorno seguro sin publicidad ni compras integradas para menores",
+        "Actividades de atención, calma, rutinas y comunicación visual",
+        "Acompañamiento adulto y registro de uso"
+      ],
+      "trialAvailable": true,
+      "trialDurationDays": 2,
+      "plans": [
+        {
+          "id": "np-plan-familia-mensual",
+          "name": "Plan Familia Mensual",
+          "price": 12,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Hasta 3 perfiles de niños",
+            "Acceso a todos los juegos",
+            "Panel de registro de uso",
+            "Cancelación en cualquier momento"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "np-plan-familia-anual",
+          "name": "Plan Familia Anual",
+          "price": 99,
+          "currency": "USD",
+          "interval": "anual",
+          "features": [
+            "Ahorro del 30%",
+            "Perfiles ilimitados",
+            "Guías de actividades descargables para imprimir",
+            "Nuevos juegos mensuales"
+          ],
+          "verified": false,
+          "verificationNotes": "Precio de ejemplo reemplazado por el catálogo verificado el 12/11/2026. Conservado para historial; excluido de ofertas.",
+          "archived": true
+        },
+        {
+          "id": "catalog-np-family",
+          "name": "Plan Familia",
+          "price": 20,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Actividades y juegos acompañados",
+            "Herramientas para el adulto y registro de uso"
+          ],
+          "verified": true,
+          "sourceUrl": "https://neuroplaneta.ai.studio/",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://neuroplaneta.ai.studio/. Mercado: Todos."
+        }
+      ],
+      "registerUrl": "https://neuroplaneta.ai.studio/",
+      "paymentUrl": "https://neuroplaneta.ai.studio/",
+      "faqs": [
+        {
+          "id": "np-faq-1",
+          "question": "¿NeuroPlaneta diagnostica o trata alguna condición médica, TDAH o autismo?",
+          "answer": "NO. NeuroPlaneta es estrictamente una herramienta lúdica y educativa de entretenimiento acompañado. No constituye una herramienta de diagnóstico, tratamiento clínico, evaluación psicológica ni intervención médica de ningún tipo. Ante cualquier inquietud sobre la salud o el desarrollo infantil, debe consultarse siempre a profesionales de la salud matriculados.",
+          "approved": true
+        },
+        {
+          "id": "np-faq-2",
+          "question": "¿Los niños pueden utilizar la aplicación solos?",
+          "answer": "NeuroPlaneta promueve expresamente el acompañamiento y supervisión de un adulto responsable para enriquecer la experiencia compartida.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "medicalDisclaimer": "ADVERTENCIA ESTRICTA: NeuroPlaneta no es ni debe presentarse como herramienta de diagnóstico ni tratamiento médico o psicológico.",
+      "internalNotes": "Nunca asociar con claims médicos ni diagnósticos en ninguna comunicación o mensaje de prospección.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": true,
+      "commercialNotes": "Plan Familia USD 20 mensuales. Prueba de 2 días sin tarjeta ni PayPal y sin cobro automático al finalizar. La suscripción es opcional y requiere autorización en PayPal. Central Comercial no acredita pagos automáticamente.",
+      "commercialCatalogVersion": "2026-11-15.2"
+    },
+    {
+      "id": "app-funeraria",
+      "name": "Funeraria Control",
+      "slug": "funeraria",
+      "description": "Gestión operativa y administrativa para empresas funerarias: expedientes, etapas del servicio, recursos, agenda e inventario.",
+      "targetAudience": "Empresas de servicios fúnebres, salas velatorias independientes, mutuales y cooperativas de previsión social funeraria.",
+      "countries": [
+        "Argentina",
+        "Uruguay",
+        "Chile",
+        "España",
+        "México"
+      ],
+      "languages": [
+        "es"
+      ],
+      "website": "https://funeraria-control.ai.studio/",
+      "verifiedFeatures": [],
+      "trialAvailable": false,
+      "trialDurationDays": 0,
+      "plans": [
+        {
+          "id": "catalog-funeraria-mensual",
+          "name": "Funeraria Control · mensual",
+          "price": 50,
+          "currency": "USD",
+          "interval": "mensual",
+          "features": [
+            "Gestión de expedientes, etapas, recursos, agenda e inventario"
+          ],
+          "verified": true,
+          "sourceUrl": "https://funeraria-control.ai.studio/",
+          "verifiedAt": "2026-11-12T18:00:00.000Z",
+          "market": "Todos",
+          "verificationNotes": "Consultado el 12/11/2026. Fuente: https://funeraria-control.ai.studio/. Mercado: Todos."
+        }
+      ],
+      "registerUrl": "https://funeraria-control.ai.studio/",
+      "paymentUrl": "",
+      "faqs": [
+        {
+          "id": "fun-faq-1",
+          "question": "¿El software Funeraria ya se encuentra disponible para su contratación comercial?",
+          "answer": "Actualmente el software se encuentra en etapa activa de desarrollo y homologación técnica. Las campañas comerciales permanecen expresamente suspendidas hasta concluir la versión 1.0 y recibir autorización de lanzamiento.",
+          "approved": false,
+          "verified": false,
+          "verificationNotes": "Respuesta no verificada oficialmente. Conservada para revisión; excluida de respuestas automáticas y de IA."
+        }
+      ],
+      "promotionalMaterials": [],
+      "status": "lista",
+      "campaignsAllowed": true,
+      "internalNotes": "BLOQUEO ACTIVO: Mantener sus campañas desactivadas hasta completar su información técnica y autorizar formalmente su lanzamiento.\nActualización 15/11/2026: bloqueo de lanzamiento levantado por autorización del propietario.",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-12T18:00:00.000Z",
+      "trialVerified": false,
+      "commercialNotes": "Lanzamiento habilitado por el propietario el 15/11/2026. Plan comercial de referencia USD 50 mensuales, indicado por el propietario; confirmar condiciones de contratación antes de cobrar. Prueba y enlaces de pago no verificados; no inventarlos.",
+      "commercialCatalogVersion": "2026-11-15.2"
+    }
+  ],
+  "accountCharges": [],
+  "monthlySalesGoals": [
+    {
+      "month": "2026-11",
+      "targetClients": 5,
+      "enabled": true,
+      "discoverContacts": true,
+      "sendEmail": true,
+      "answerEmail": true,
+      "countries": [
+        "Argentina"
+      ],
+      "dailyEmailLimit": 10,
+      "dailyResearchLimit": 40,
+      "updatedAt": "2026-11-18T14:09:45.525Z"
+    }
+  ],
+  "researchState": {
+    "month": "2026-11",
+    "day": "2026-11-27",
+    "requests": 12,
+    "visited": [],
+    "status": "waiting",
+    "detail": "1 página revisada; 0 contactos nuevos. Pendientes: 9.",
+    "lastSuccess": "2026-11-27T17:11:06.111Z"
+  },
+  "contacts": [
+    {
+      "id": "contact-9f4859c8-ffb1-4af8-9062-6e070677db0e",
+      "orgName": "Agencia de Marketing Digital, Argentina | Seonet Digital",
+      "contactPerson": "",
+      "role": "Contacto institucional público",
+      "orgType": "Agencias digitales, consultoras y pymes con sitio web",
+      "country": "Argentina",
+      "language": "es",
+      "timezone": "America/Argentina/Buenos_Aires",
+      "website": "https://www.seonet.com.ar",
+      "email": "hola@seonet.com.ar",
+      "phone": "5491136128259",
+      "emailPublications": [
+        {
+          "url": "https://www.seonet.com.ar/",
+          "email": "hola@seonet.com.ar"
+        },
+        {
+          "url": "https://www.seonet.com.ar/contacto-seonet.php",
+          "email": "hola@seonet.com.ar"
+        }
+      ],
+      "publishedWhatsApp": {
+        "number": "5491136128259",
+        "source": "https://www.seonet.com.ar/"
+      },
+      "source": "https://www.seonet.com.ar/",
+      "sourceReviewDate": "2026-11-27T17:10:34.634Z",
+      "interestedAppIds": [
+        "app-visibility-ai"
+      ],
+      "assignedTo": "Central Comercial",
+      "notes": "Datos publicados por la organización y verificados en su sitio.",
+      "history": [
+        {
+          "id": "hist-1795799434643",
+          "timestamp": "2026-11-27T17:10:34.643Z",
+          "type": "creacion",
+          "description": "Contacto registrado desde fuente: https://www.seonet.com.ar/",
+          "author": "Administrador"
+        }
+      ],
+      "preferredChannel": "whatsapp",
+      "permission": "desconocido",
+      "outreachBasis": "public_business_contact",
+      "status": "prospecto",
+      "nextFollowUpDate": null,
+      "createdAt": "2026-11-27T17:10:34.643Z",
+      "updatedAt": "2026-11-27T17:10:34.643Z",
+      "emailPublicationCheckedAt": "2026-11-27T17:11:03.425Z"
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "camp-open-voley-brasil-clubes",
+      "appId": "app-open-voley",
+      "name": "Open Voley — Clubes de Brasil",
+      "objective": "Prospección directa a directores deportivos y entrenadores de clubes de voleibol de Brasil para presentar la prueba gratuita de 7 días.",
+      "country": "Brasil",
+      "language": "pt-BR",
+      "segment": "Clubes federados de voleibol (Superliga A, B e campeonatos estaduais) e colégios esportivos.",
+      "channels": [
+        "email",
+        "whatsapp"
+      ],
+      "messageTemplate": "Olá {nombre}, acompanhamos o excelente trabalho da comissão técnica do {organizacion}.\n\nGostaria de apresentar o Open Voley (https://openvoley.com), plataforma de scouting e análise tática desenvolvida especialmente para treinadores e clubes.\n\nDisponibilizamos 7 días de teste gratuito sem compromisso para os seus próximos jogos.\n\nSeria interessante agendarmos uma demonstração rápida de 10 minutos esta semana?",
+      "followUpTemplates": [
+        "Olá {nombre}, tudo bem? Queria verificar se você teve oportunidade de ver a mensagem anterior sobre o teste gratuito do Open Voley para o {organizacion}. Podemos liberar o acesso em 5 minutos.",
+        "Olá {nombre}, compreendo que a rotina de treinos e jogos seja intensa. Se fizer sentido mais adiante no campeonato, ficamos à disposição pelo site https://openvoley.com. Um abraço!"
+      ],
+      "timezone": "America/Sao_Paulo",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 25,
+      "startDate": "2026-11-15",
+      "endDate": "2026-12-31",
+      "maxFollowUps": 2,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "contacto_convertido"
+      ],
+      "mode": "revision_previa",
+      "status": "bloqueada_por_configuracion",
+      "blockingReason": "Conectores de salida (Email SMTP y WhatsApp API) en estado Pendiente de conexión. Configure las credenciales antes de activar envíos reales.",
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-11T21:48:42.606Z",
+      "updatedAt": "2026-11-11T21:48:42.607Z"
+    },
+    {
+      "id": "goal-2026-11-app-open-voley-argentina",
+      "appId": "app-open-voley",
+      "name": "Open Voley · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Clubes, escuelas, asociaciones y técnicos de voleibol",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "club voleibol contacto Argentina",
+        "club vóley contacto Argentina",
+        "federación voleibol contacto Argentina",
+        "asociación voley contacto Argentina",
+        "escuela voleibol contacto Argentina",
+        "entrenador de voleibol contacto profesional Argentina",
+        "director técnico de vóley contacto profesional Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde Open Voley queremos presentarles nuestros servicios. Plataforma integral de scouting táctico y análisis estadístico de voleibol para entrenadores, cuerpos técnicos, clubes y asociaciones.\n\nPueden conocer las funciones y condiciones en https://openvoley.com. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Open Voley\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Fuera de aplicación, país o idioma": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 4,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://clubtelefonos.ar/contacto/",
+          "context": {
+            "url": "https://clubtelefonos.ar/voley/",
+            "appId": "app-open-voley",
+            "country": "Argentina",
+            "title": "Voley – Club Telefonos",
+            "countryVerified": false,
+            "volleyballSource": "https://clubtelefonos.ar/voley/",
+            "topicVerified": true
+          }
+        },
+        {
+          "url": "https://ar.todosnegocios.com/asociacion-de-clubes-liga-argentina-de-011-4115-8010"
+        },
+        {
+          "url": "https://feva.org.ar/secretarias"
+        },
+        {
+          "url": "https://aclav.com/public/web/estadio/67"
+        },
+        {
+          "url": "https://www.aclav.com/public/web/participantes"
+        },
+        {
+          "url": "https://ar.todosnegocios.com/confederacion-argentina-de-voleibol_1L-011-4331-3813"
+        },
+        {
+          "url": "https://clubdeamigos.org.ar/"
+        }
+      ],
+      "researchSeenUrls": [
+        "clubtelefonos.ar/voley",
+        "clubtelefonos.ar/"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:11:33.425Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:11:33.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "País de la organización sin verificar": 1
+        }
+      }
+    },
+    {
+      "id": "goal-2026-11-app-visibility-ai-argentina",
+      "appId": "app-visibility-ai",
+      "name": "Visibility AI · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Agencias digitales, consultoras y pymes con sitio web",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "agencia marketing digital contacto Argentina",
+        "consultora SEO contacto Argentina",
+        "agencia diseño web contacto Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde Visibility AI queremos presentarles nuestros servicios. Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.\n\nPueden conocer las funciones y condiciones en https://visibility-ia.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Visibility AI\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 1,
+        "messagesPending": 1,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Ya preparado en esta campaña": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 4,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://agenciadigital.com.ar/"
+        },
+        {
+          "url": "https://nichoseo.com/agencias-de-marketing-digital-argentina/"
+        },
+        {
+          "url": "https://www.pcmdigital.com.ar/"
+        },
+        {
+          "url": "https://www.sortlist.com/es/l/argentina-ar"
+        },
+        {
+          "url": "https://dilemacreative.ar/"
+        },
+        {
+          "url": "https://mejordigital.com.ar/"
+        },
+        {
+          "url": "https://mktmarketingdigital.com/"
+        },
+        {
+          "url": "https://www.coffeetalk.com.ar/"
+        }
+      ],
+      "researchSeenUrls": [
+        "seonet.com.ar/",
+        "seonet.com.ar/contacto-seonet.php"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:12:03.425Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:12:03.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 1,
+        "checked": 1,
+        "reasons": {
+          "Email y WhatsApp públicos verificados": 1
+        }
+      }
+    },
+    {
+      "id": "goal-2026-11-app-neuroplaneta-argentina",
+      "appId": "app-neuroplaneta",
+      "name": "NeuroPlaneta · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Instituciones educativas y centros con contacto institucional público",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "centro educativo contacto institucional Argentina",
+        "institución educativa actividades niños contacto Argentina",
+        "fundación educación familias contacto Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde NeuroPlaneta queremos presentarles nuestros servicios. Plataforma lúdica de actividades y juegos interactivos para niños de 4 a 12 años, con módulo de acompañamiento para adultos y registro de tiempo de uso.\n\nPueden conocer las funciones y condiciones en https://neuroplaneta.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de NeuroPlaneta\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Fuera de aplicación, país o idioma": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 4,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          },
+          "returnTo": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/"
+        },
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=6.2.4.1",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          }
+        },
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          }
+        },
+        {
+          "url": "https://consejo.mec.gob.ar/contacto"
+        },
+        {
+          "url": "https://www.educ.ar/contacto"
+        },
+        {
+          "url": "https://www.mendoza.edu.ar/category/contactos-institucionales/"
+        },
+        {
+          "url": "https://www.austral.edu.ar/educacion/contacto/"
+        },
+        {
+          "url": "https://acel.edu.ar/contacto/"
+        },
+        {
+          "url": "https://ceao.com.ar/contacto.html",
+          "attempts": 1,
+          "retryAt": 1795821074229
+        }
+      ],
+      "researchSeenUrls": [
+        "centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:12:33.434Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:12:33.434Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Sin email ni enlace de WhatsApp publicados": 1
+        }
+      }
+    }
+  ],
+  "conversations": [
+    {
+      "id": "conv-0d21a259-5795-4c72-baa8-3f86274d2f9d",
+      "contactId": "contact-9f4859c8-ffb1-4af8-9062-6e070677db0e",
+      "appId": "app-visibility-ai",
+      "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+      "channel": "email",
+      "classification": "sin_clasificar",
+      "requiresHumanIntervention": false,
+      "createdAt": "2026-11-27T17:11:03.421Z",
+      "lastMessageAt": "2026-11-27T17:11:03.421Z",
+      "messages": [
+        {
+          "id": "msg-692f58f1-740c-4ce1-b56c-0fc68766a6e2",
+          "conversationId": "conv-0d21a259-5795-4c72-baa8-3f86274d2f9d",
+          "direction": "outbound",
+          "channel": "email",
+          "content": "Hola, equipo de Agencia de Marketing Digital, Argentina | Seonet Digital:\n\nDesde Visibility AI queremos presentarles nuestros servicios. Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.\n\nPueden conocer las funciones y condiciones en https://visibility-ia.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Visibility AI\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+          "status": "preparado",
+          "createdAt": "2026-11-27T17:11:03.421Z"
+        }
+      ]
+    }
+  ],
+  "clients": [],
+  "subscriptions": [],
+  "payments": [
+    {
+      "appId": "app-open-voley",
+      "clientId": "client-test-1",
+      "clientName": "Club Deportivo Voley",
+      "amount": 150,
+      "currency": "USD",
+      "status": "rechazado",
+      "reference": "TRANSFER-TEST-9988",
+      "channel": "transferencia_bancaria",
+      "id": "pay-1794435057839",
+      "reviewedBy": "Migración: corrección de datos de prueba",
+      "reviewedAt": "2026-11-18T14:09:45.525Z",
+      "createdAt": "2026-11-11T22:10:57.839Z",
+      "auditorNote": "Registro de prueba identificado por el propietario: no corresponde a un cobro real. Se conserva importe y referencia para auditoría."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-pay-review-pay-1794435057839",
+      "title": "Revisar y auditar pago de USD 150",
+      "description": "Comprobante / Referencia: Sin número. Revisar extracto bancario y confirmar manualmente.",
+      "priority": "alta",
+      "category": "revision_pago",
+      "relatedType": "pago",
+      "relatedId": "pay-1794435057839",
+      "dueDate": null,
+      "status": "completada",
+      "createdAt": "2026-11-11T22:10:57.841Z"
+    },
+    {
+      "id": "task-ai-escalate-1794433772211",
+      "title": "Intervención requerida: Consulta de Coach Silva (Open Voley)",
+      "description": "Motivo: Error técnico al procesar el asistente de IA. Se requiere atención manual.. Mensaje recibido: \"¿En qué dispositivos puedo usar Open Voley?\"",
+      "priority": "alta",
+      "category": "intervencion_ia",
+      "relatedType": "conversacion",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:49:32.211Z"
+    },
+    {
+      "id": "task-initial-1",
+      "title": "Configurar credenciales del conector SMTP para Open Voley",
+      "description": "Cargar servidor de correo saliente para habilitar el envío de invitaciones de prueba de Open Voley a clubes de Brasil.",
+      "priority": "alta",
+      "category": "conector",
+      "relatedType": "conector",
+      "relatedId": "conn-email-smtp",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:48:42.607Z"
+    },
+    {
+      "id": "task-initial-2",
+      "title": "Definir enlaces de pago y registro para Visibility AI y NeuroPlaneta",
+      "description": "Cargar las URLs oficiales de registro y cobro en las fichas de Visibility AI y NeuroPlaneta.",
+      "priority": "media",
+      "category": "general",
+      "relatedType": "campaña",
+      "dueDate": null,
+      "status": "pendiente",
+      "createdAt": "2026-11-11T21:48:42.607Z"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "conn-email-smtp",
+      "name": "Servidor de Correo Saliente (SMTP / Resend)",
+      "type": "email_smtp",
+      "status": "pendiente_conexion",
+      "statusDescription": "Verificación fallida: Servidor SMTP no configurado.",
+      "missingRequirements": [
+        "Servidor SMTP (Host, Puerto, TLS)",
+        "Usuario y Contraseña / API Key de envío (ej. Resend / SendGrid / Postmark / Brevo)",
+        "Dirección de correo remitente verificada (From Email con SPF/DKIM)"
+      ],
+      "configSummary": {
+        "host": "No configurado",
+        "port": "587",
+        "fromEmail": "No configurado",
+        "authConfigured": "No"
+      },
+      "documentationUrl": "https://central-comercial.local/docs/conectores/smtp",
+      "lastError": "Debe especificar un host SMTP real (ej. smtp.resend.com, smtp.sendgrid.net, etc.) y credenciales válidas."
+    },
+    {
+      "id": "conn-whatsapp-cloud",
+      "name": "WhatsApp Business Cloud API (Meta)",
+      "type": "whatsapp_cloud",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. Requiere aplicación en Meta for Developers y número comercial validado.",
+      "missingRequirements": [
+        "Phone Number ID de Meta Business",
+        "System User Permanent Access Token",
+        "WhatsApp Business Account ID (WABA)",
+        "Plantillas de mensaje aprobadas por Meta"
+      ],
+      "configSummary": {
+        "phoneNumberId": "No configurado",
+        "wabaId": "No configurado",
+        "tokenConfigured": "No"
+      },
+      "documentationUrl": "https://developers.facebook.com/docs/whatsapp/cloud-api"
+    },
+    {
+      "id": "conn-telegram-bot",
+      "name": "Telegram Bot API",
+      "type": "telegram",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. Opcional para alertas internas al administrador o atención comercial.",
+      "missingRequirements": [
+        "Bot Token (@BotFather)",
+        "Chat ID del administrador para alertas de intervención"
+      ],
+      "configSummary": {
+        "botUsername": "No configurado",
+        "tokenConfigured": "No"
+      }
+    },
+    {
+      "id": "conn-webhooks",
+      "name": "Webhooks de Entrada y Pasarelas de Pago",
+      "type": "webhook",
+      "status": "pendiente_conexion",
+      "statusDescription": "Pendiente de conexión. En esta etapa los pagos se verifican manualmente.",
+      "missingRequirements": [
+        "Endpoint público con HTTPS para recepción de webhooks",
+        "Clave secreta de firma de webhook (Webhook Signing Secret)"
+      ],
+      "configSummary": {
+        "webhookUrl": "/api/webhooks/incoming",
+        "secretConfigured": "No"
+      }
+    }
+  ],
+  "logs": [
+    {
+      "id": "log-1795799559724-2p39g",
+      "timestamp": "2026-11-27T17:12:39.724Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:12:33.434Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Sin email ni enlace de WhatsApp publicados": 1
+        },
+        "pendingPages": 9,
+        "requestsToday": 12
+      }
+    },
+    {
+      "id": "log-1795799559723-3527d",
+      "timestamp": "2026-11-27T17:12:39.723Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para NeuroPlaneta: Sin email ni enlace de WhatsApp publicados",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/"
+      }
+    },
+    {
+      "id": "log-1795799523903-qjxzy",
+      "timestamp": "2026-11-27T17:12:03.903Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:12:03.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 1,
+        "checked": 1,
+        "reasons": {
+          "Email y WhatsApp públicos verificados": 1
+        },
+        "pendingPages": 8,
+        "requestsToday": 11
+      }
+    },
+    {
+      "id": "log-1795799523902-4vtd6",
+      "timestamp": "2026-11-27T17:12:03.902Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Visibility AI: Email y WhatsApp públicos verificados",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "url": "https://www.seonet.com.ar/contacto-seonet.php"
+      }
+    },
+    {
+      "id": "log-1795799494613-pf65t",
+      "timestamp": "2026-11-27T17:11:34.613Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:11:33.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "País de la organización sin verificar": 1
+        },
+        "pendingPages": 7,
+        "requestsToday": 10
+      }
+    },
+    {
+      "id": "log-1795799494612-h9fzq",
+      "timestamp": "2026-11-27T17:11:34.612Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Open Voley: País de la organización sin verificar",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "url": "https://clubtelefonos.ar/"
+      }
+    },
+    {
+      "id": "log-1795799474229-qvhw4",
+      "timestamp": "2026-11-27T17:11:14.229Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:11:05.505Z",
+        "query": "centro educativo contacto institucional Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "Página no accesible: Tiempo de consulta agotado.": 1
+        },
+        "pendingPages": 7,
+        "requestsToday": 9
+      }
+    },
+    {
+      "id": "log-1795799466111-17osy",
+      "timestamp": "2026-11-27T17:11:06.111Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para NeuroPlaneta: 7 resultados, 7 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "query": "centro educativo contacto institucional Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799463423-7at8j",
+      "timestamp": "2026-11-27T17:11:03.423Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "1 borradores de promoción preparados para Visibility AI · Objetivo 2026-11. Sin envíos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina"
+      }
+    },
+    {
+      "id": "log-1795799434646-aq5yp",
+      "timestamp": "2026-11-27T17:10:34.646Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 1 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:10:33.423Z",
+        "query": "agencia marketing digital contacto Argentina",
+        "created": 1,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "Email y WhatsApp públicos verificados": 1
+        },
+        "pendingPages": 9,
+        "requestsToday": 7
+      }
+    },
+    {
+      "id": "log-1795799434643-jr31x",
+      "timestamp": "2026-11-27T17:10:34.643Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Nuevo contacto registrado: Agencia de Marketing Digital, Argentina | Seonet Digital"
+    },
+    {
+      "id": "log-1795799434642-ytfbh",
+      "timestamp": "2026-11-27T17:10:34.642Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Visibility AI: Email y WhatsApp públicos verificados",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "url": "https://www.seonet.com.ar/"
+      }
+    },
+    {
+      "id": "log-1795799434117-vnwhp",
+      "timestamp": "2026-11-27T17:10:34.117Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Visibility AI: 9 resultados, 9 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "query": "agencia marketing digital contacto Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799405322-k13xf",
+      "timestamp": "2026-11-27T17:10:05.322Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:10:03.425Z",
+        "query": "club voleibol contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "País de la organización sin verificar": 1
+        },
+        "pendingPages": 8,
+        "requestsToday": 5
+      }
+    },
+    {
+      "id": "log-1795799405319-3o3mp",
+      "timestamp": "2026-11-27T17:10:05.319Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Open Voley: País de la organización sin verificar",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "url": "https://clubtelefonos.ar/voley/"
+      }
+    },
+    {
+      "id": "log-1795799404063-ao54y",
+      "timestamp": "2026-11-27T17:10:04.063Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Open Voley: 7 resultados, 7 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "query": "club voleibol contacto Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799373503-bujl3",
+      "timestamp": "2026-11-27T17:09:33.503Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:09:33.424Z",
+        "query": "centro educativo contacto institucional Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 3
+      }
+    },
+    {
+      "id": "log-1795799373503-cshoa",
+      "timestamp": "2026-11-27T17:09:33.503Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para NeuroPlaneta: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "query": "centro educativo contacto institucional Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799343516-13xc5",
+      "timestamp": "2026-11-27T17:09:03.516Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:09:03.425Z",
+        "query": "agencia marketing digital contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 2
+      }
+    },
+    {
+      "id": "log-1795799343516-i0r7k",
+      "timestamp": "2026-11-27T17:09:03.516Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Visibility AI: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "query": "agencia marketing digital contacto Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799316597-gsr6a",
+      "timestamp": "2026-11-27T17:08:36.597Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:08:36.434Z",
+        "query": "club voleibol contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 1
+      }
+    },
+    {
+      "id": "log-1795799316597-q96ih",
+      "timestamp": "2026-11-27T17:08:36.597Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Open Voley: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "query": "club voleibol contacto Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799316424-azald",
+      "timestamp": "2026-11-27T17:08:36.424Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "3 campañas creadas por Central para el objetivo 2026-11."
+    },
+    {
+      "id": "log-1795799313419-kpyym",
+      "timestamp": "2026-11-27T17:08:33.419Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794435057859-zxb5v",
+      "timestamp": "2026-11-11T22:10:57.859Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Auditoría de pago ID pay-1794435057839: CONFIRMADO por gervasiomeana@gmail.com",
+      "details": {
+        "paymentId": "pay-1794435057839",
+        "amount": 150,
+        "currency": "USD",
+        "status": "confirmado",
+        "auditor": "gervasiomeana@gmail.com"
+      }
+    },
+    {
+      "id": "log-1794435057856-ah8rc",
+      "timestamp": "2026-11-11T22:10:57.856Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Pago ID pay-1794435057839 modificado. Estado: confirmado"
+    },
+    {
+      "id": "log-1794435057841-q6714",
+      "timestamp": "2026-11-11T22:10:57.841Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Nueva tarea comercial: Revisar y auditar pago de USD 150"
+    },
+    {
+      "id": "log-1794435057839-eoa46",
+      "timestamp": "2026-11-11T22:10:57.839Z",
+      "level": "info",
+      "module": "pagos",
+      "message": "Nuevo cobro registrado: USD 150 (Estado: Pendiente de confirmación manual)"
+    },
+    {
+      "id": "log-1794435045065-o50bt",
+      "timestamp": "2026-11-11T22:10:45.065Z",
+      "level": "warning",
+      "module": "conectores",
+      "message": "Fallo al verificar conector Servidor de Correo Saliente (SMTP / Resend): Verificación fallida: Servidor SMTP no configurado."
+    },
+    {
+      "id": "log-1794435014701-6ziz0",
+      "timestamp": "2026-11-11T22:10:14.701Z",
+      "level": "info",
+      "module": "seguridad",
+      "message": "Administrador inicial configurado: gervasiomeana@gmail.com",
+      "details": {
+        "email": "gervasiomeana@gmail.com",
+        "ip": "127.0.0.1"
+      }
+    },
+    {
+      "id": "log-1794435010720-bwgku",
+      "timestamp": "2026-11-11T22:10:10.720Z",
+      "level": "warning",
+      "module": "seguridad",
+      "message": "Intento fallido de configuración de administrador: Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor.",
+      "details": {
+        "ip": "127.0.0.1",
+        "error": "Clave maestra de configuración (setup key) inválida o ausente. Verifique la clave en el servidor."
+      }
+    },
+    {
+      "id": "log-1794434993485-kk302",
+      "timestamp": "2026-11-11T22:09:53.485Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794434203647-4wfa4",
+      "timestamp": "2026-11-11T21:56:43.647Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-1794433772211-0b5g4",
+      "timestamp": "2026-11-11T21:49:32.211Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Nueva tarea comercial: Intervención requerida: Consulta de Coach Silva (Open Voley)"
+    },
+    {
+      "id": "log-1794433772211-8g49e",
+      "timestamp": "2026-11-11T21:49:32.211Z",
+      "level": "error",
+      "module": "ia",
+      "message": "Error al consultar Gemini API: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+      "details": {
+        "error": "ApiError: {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}"
+      }
+    },
+    {
+      "id": "log-1794433722744-ihqk8",
+      "timestamp": "2026-11-11T21:48:42.744Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
+    {
+      "id": "log-init-1",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Central Comercial inicializada con 4 aplicaciones (Open Voley, Visibility AI, NeuroPlaneta, Funeraria).",
+      "details": {
+        "version": "1.0.0",
+        "storage": "local_json_db"
+      }
+    },
+    {
+      "id": "log-init-2",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "warning",
+      "module": "conectores",
+      "message": "Conectores de correo y WhatsApp marcados como \"Pendiente de conexión\". Todo envío permanece deshabilitado hasta verificación.",
+      "details": {
+        "pendingConnectors": [
+          "conn-email-smtp",
+          "conn-whatsapp-cloud"
+        ]
+      }
+    },
+    {
+      "id": "log-init-3",
+      "timestamp": "2026-11-11T21:48:42.607Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "Campaña \"Open Voley — Clubes de Brasil\" cargada como borrador editable sin destinatarios inventados.",
+      "details": {
+        "campaignId": "camp-open-voley-brasil-clubes"
+      }
+    },
+    {
+      "id": "audit-fixture-payment-150",
+      "timestamp": "2026-11-18T14:09:45.525Z",
+      "level": "warning",
+      "module": "pagos",
+      "message": "Excluido de ingresos el registro de prueba TRANSFER-TEST-9988 (USD 150). No se eliminó el registro."
+    }
+  ]
+}

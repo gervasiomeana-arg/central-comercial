@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-18T14:09:45.527Z",
+  "updatedAt": "2026-11-27T17:13:04.748Z",
   "scheduler": {
     "isRunning": true,
     "automationsPaused": false,
-    "lastRunAt": "2026-11-11T22:10:53.487Z",
-    "nextRunAt": "2026-11-11T22:11:23.487Z",
+    "lastRunAt": "2026-11-27T17:13:03.424Z",
+    "nextRunAt": "2026-11-27T17:13:33.424Z",
     "activeJobsCount": 0,
     "environmentNote": "El motor programado del backend procesará tareas cuando el proceso Node.js esté activo. Mantener abierta la pestaña del navegador no es necesario si se ejecuta como servicio o tarea en segundo plano.",
     "windowsExecutionGuide": "Para ejecutar en Windows de forma autónoma sin depender del navegador:\n1. Instalar Node.js v20+ en Windows.\n2. Abrir PowerShell o CMD en la carpeta del proyecto y ejecutar \"npm run start\" o instalar PM2 con \"npm install -g pm2\" y \"pm2 start server.ts --name central-comercial\".\n3. Alternativamente, configurar el script scripts/run-scheduler-windows.bat en el Programador de Tareas de Windows (Task Scheduler) para que se ejecute al iniciar sesión."
@@ -634,18 +634,73 @@
     }
   ],
   "researchState": {
-    "month": "",
-    "day": "",
-    "requests": 0,
-    "visited": []
+    "month": "2026-11",
+    "day": "2026-11-27",
+    "requests": 13,
+    "visited": [],
+    "status": "waiting",
+    "detail": "1 página revisada; 0 contactos nuevos. Pendientes: 6.",
+    "lastSuccess": "2026-11-27T17:11:06.111Z"
   },
-  "contacts": [],
+  "contacts": [
+    {
+      "id": "contact-9f4859c8-ffb1-4af8-9062-6e070677db0e",
+      "orgName": "Agencia de Marketing Digital, Argentina | Seonet Digital",
+      "contactPerson": "",
+      "role": "Contacto institucional público",
+      "orgType": "Agencias digitales, consultoras y pymes con sitio web",
+      "country": "Argentina",
+      "language": "es",
+      "timezone": "America/Argentina/Buenos_Aires",
+      "website": "https://www.seonet.com.ar",
+      "email": "hola@seonet.com.ar",
+      "phone": "5491136128259",
+      "emailPublications": [
+        {
+          "url": "https://www.seonet.com.ar/",
+          "email": "hola@seonet.com.ar"
+        },
+        {
+          "url": "https://www.seonet.com.ar/contacto-seonet.php",
+          "email": "hola@seonet.com.ar"
+        }
+      ],
+      "publishedWhatsApp": {
+        "number": "5491136128259",
+        "source": "https://www.seonet.com.ar/"
+      },
+      "source": "https://www.seonet.com.ar/",
+      "sourceReviewDate": "2026-11-27T17:10:34.634Z",
+      "interestedAppIds": [
+        "app-visibility-ai"
+      ],
+      "assignedTo": "Central Comercial",
+      "notes": "Datos publicados por la organización y verificados en su sitio.",
+      "history": [
+        {
+          "id": "hist-1795799434643",
+          "timestamp": "2026-11-27T17:10:34.643Z",
+          "type": "creacion",
+          "description": "Contacto registrado desde fuente: https://www.seonet.com.ar/",
+          "author": "Administrador"
+        }
+      ],
+      "preferredChannel": "whatsapp",
+      "permission": "desconocido",
+      "outreachBasis": "public_business_contact",
+      "status": "prospecto",
+      "nextFollowUpDate": null,
+      "createdAt": "2026-11-27T17:10:34.643Z",
+      "updatedAt": "2026-11-27T17:10:34.643Z",
+      "emailPublicationCheckedAt": "2026-11-27T17:11:03.425Z"
+    }
+  ],
   "campaigns": [
     {
       "id": "camp-open-voley-brasil-clubes",
       "appId": "app-open-voley",
       "name": "Open Voley — Clubes de Brasil",
-      "objective": "Prospección directa a directores deportivos y entrenadores de clubes de voleibol de Brasil para presentar la prueba gratuita de 14 días.",
+      "objective": "Prospección directa a directores deportivos y entrenadores de clubes de voleibol de Brasil para presentar la prueba gratuita de 7 días.",
       "country": "Brasil",
       "language": "pt-BR",
       "segment": "Clubes federados de voleibol (Superliga A, B e campeonatos estaduais) e colégios esportivos.",
@@ -653,7 +708,7 @@
         "email",
         "whatsapp"
       ],
-      "messageTemplate": "Olá {nombre}, acompanhamos o excelente trabalho da comissão técnica do {organizacion}.\n\nGostaria de apresentar o Open Voley (https://openvoley.com), plataforma de scouting e análise tática desenvolvida especialmente para treinadores e clubes.\n\nDisponibilizamos 14 dias de teste gratuito sem compromisso para os seus próximos jogos.\n\nSeria interessante agendarmos uma demonstração rápida de 10 minutos esta semana?",
+      "messageTemplate": "Olá {nombre}, acompanhamos o excelente trabalho da comissão técnica do {organizacion}.\n\nGostaria de apresentar o Open Voley (https://openvoley.com), plataforma de scouting e análise tática desenvolvida especialmente para treinadores e clubes.\n\nDisponibilizamos 7 días de teste gratuito sem compromisso para os seus próximos jogos.\n\nSeria interessante agendarmos uma demonstração rápida de 10 minutos esta semana?",
       "followUpTemplates": [
         "Olá {nombre}, tudo bem? Queria verificar se você teve oportunidade de ver a mensagem anterior sobre o teste gratuito do Open Voley para o {organizacion}. Podemos liberar o acesso em 5 minutos.",
         "Olá {nombre}, compreendo que a rotina de treinos e jogos seja intensa. Se fizer sentido mais adiante no campeonato, ficamos à disposição pelo site https://openvoley.com. Um abraço!"
@@ -684,9 +739,366 @@
       },
       "createdAt": "2026-11-11T21:48:42.606Z",
       "updatedAt": "2026-11-11T21:48:42.607Z"
+    },
+    {
+      "id": "goal-2026-11-app-open-voley-argentina",
+      "appId": "app-open-voley",
+      "name": "Open Voley · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Clubes, escuelas, asociaciones y técnicos de voleibol",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "club voleibol contacto Argentina",
+        "club vóley contacto Argentina",
+        "federación voleibol contacto Argentina",
+        "asociación voley contacto Argentina",
+        "escuela voleibol contacto Argentina",
+        "entrenador de voleibol contacto profesional Argentina",
+        "director técnico de vóley contacto profesional Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde Open Voley queremos presentarles nuestros servicios. Plataforma integral de scouting táctico y análisis estadístico de voleibol para entrenadores, cuerpos técnicos, clubes y asociaciones.\n\nPueden conocer las funciones y condiciones en https://openvoley.com. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Open Voley\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Fuera de aplicación, país o idioma": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 5,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://ar.todosnegocios.com/asociacion-de-clubes-liga-argentina-de-011-4115-8010"
+        },
+        {
+          "url": "https://feva.org.ar/secretarias"
+        },
+        {
+          "url": "https://aclav.com/public/web/estadio/67"
+        },
+        {
+          "url": "https://www.aclav.com/public/web/participantes"
+        },
+        {
+          "url": "https://ar.todosnegocios.com/confederacion-argentina-de-voleibol_1L-011-4331-3813"
+        },
+        {
+          "url": "https://clubdeamigos.org.ar/"
+        }
+      ],
+      "researchSeenUrls": [
+        "clubtelefonos.ar/voley",
+        "clubtelefonos.ar/",
+        "clubtelefonos.ar/contacto"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:13:03.429Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:13:03.429Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "País de la organización sin verificar": 1
+        }
+      }
+    },
+    {
+      "id": "goal-2026-11-app-visibility-ai-argentina",
+      "appId": "app-visibility-ai",
+      "name": "Visibility AI · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Agencias digitales, consultoras y pymes con sitio web",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "agencia marketing digital contacto Argentina",
+        "consultora SEO contacto Argentina",
+        "agencia diseño web contacto Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde Visibility AI queremos presentarles nuestros servicios. Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.\n\nPueden conocer las funciones y condiciones en https://visibility-ia.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Visibility AI\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 1,
+        "messagesPending": 1,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Ya preparado en esta campaña": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 4,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://agenciadigital.com.ar/"
+        },
+        {
+          "url": "https://nichoseo.com/agencias-de-marketing-digital-argentina/"
+        },
+        {
+          "url": "https://www.pcmdigital.com.ar/"
+        },
+        {
+          "url": "https://www.sortlist.com/es/l/argentina-ar"
+        },
+        {
+          "url": "https://dilemacreative.ar/"
+        },
+        {
+          "url": "https://mejordigital.com.ar/"
+        },
+        {
+          "url": "https://mktmarketingdigital.com/"
+        },
+        {
+          "url": "https://www.coffeetalk.com.ar/"
+        }
+      ],
+      "researchSeenUrls": [
+        "seonet.com.ar/",
+        "seonet.com.ar/contacto-seonet.php"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:12:03.425Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:12:03.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 1,
+        "checked": 1,
+        "reasons": {
+          "Email y WhatsApp públicos verificados": 1
+        }
+      }
+    },
+    {
+      "id": "goal-2026-11-app-neuroplaneta-argentina",
+      "appId": "app-neuroplaneta",
+      "name": "NeuroPlaneta · Objetivo 2026-11",
+      "goalMonth": "2026-11",
+      "objective": "Contribuir al objetivo conjunto de 5 clientes nuevos con primer pago confirmado.",
+      "country": "Argentina",
+      "language": "es",
+      "segment": "",
+      "researchSegment": "Instituciones educativas y centros con contacto institucional público",
+      "researchQueryVersion": 2,
+      "researchQueries": [
+        "centro educativo contacto institucional Argentina",
+        "institución educativa actividades niños contacto Argentina",
+        "fundación educación familias contacto Argentina"
+      ],
+      "channels": [
+        "email"
+      ],
+      "messageTemplate": "Hola, equipo de {organizacion}:\n\nDesde NeuroPlaneta queremos presentarles nuestros servicios. Plataforma lúdica de actividades y juegos interactivos para niños de 4 a 12 años, con módulo de acompañamiento para adultos y registro de tiempo de uso.\n\nPueden conocer las funciones y condiciones en https://neuroplaneta.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de NeuroPlaneta\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+      "followUpTemplates": [],
+      "timezone": "America/Argentina/Buenos_Aires",
+      "sendWindowStart": "09:00",
+      "sendWindowEnd": "18:00",
+      "dailyLimit": 2,
+      "startDate": "2026-11-27",
+      "endDate": "2026-11-30",
+      "maxFollowUps": 0,
+      "followUpIntervalDays": 4,
+      "stopCriteria": [
+        "respuesta_recibida",
+        "solicitud_baja",
+        "objetivo_alcanzado"
+      ],
+      "mode": "automatico",
+      "status": "lista",
+      "autoPrepare": true,
+      "autoSendEmail": true,
+      "allowPublicEmail": true,
+      "stats": {
+        "contactsCount": 0,
+        "messagesPending": 0,
+        "messagesSent": 0,
+        "messagesFailed": 0,
+        "messagesUnknown": 0,
+        "responsesReceived": 0
+      },
+      "createdAt": "2026-11-27T17:08:36.423Z",
+      "updatedAt": "2026-11-27T17:08:36.423Z",
+      "lastPreparation": {
+        "at": "2026-11-27T17:13:03.426Z",
+        "created": 0,
+        "skipped": {
+          "Fuera de aplicación, país o idioma": 1
+        }
+      },
+      "researchDay": "2026-11-27",
+      "researchCount": 4,
+      "researchQueriesToday": 1,
+      "researchQueue": [
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          },
+          "returnTo": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/"
+        },
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/wp-content/plugins/contact-form-7/includes/css/styles.css?ver=6.2.4.1",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          }
+        },
+        {
+          "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/",
+          "context": {
+            "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/",
+            "appId": "app-neuroplaneta",
+            "country": "Argentina",
+            "title": "Datos de contacto – Centro Educativo Irupé (I.Prof. 14) – (I.T.3)",
+            "countryVerified": true,
+            "topicVerified": true
+          }
+        },
+        {
+          "url": "https://consejo.mec.gob.ar/contacto"
+        },
+        {
+          "url": "https://www.educ.ar/contacto"
+        },
+        {
+          "url": "https://www.mendoza.edu.ar/category/contactos-institucionales/"
+        },
+        {
+          "url": "https://www.austral.edu.ar/educacion/contacto/"
+        },
+        {
+          "url": "https://acel.edu.ar/contacto/"
+        },
+        {
+          "url": "https://ceao.com.ar/contacto.html",
+          "attempts": 1,
+          "retryAt": 1795821074229
+        }
+      ],
+      "researchSeenUrls": [
+        "centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto"
+      ],
+      "researchQueryIndex": 1,
+      "lastResearchAt": "2026-11-27T17:12:33.434Z",
+      "researchLastOutcome": {
+        "at": "2026-11-27T17:12:33.434Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Sin email ni enlace de WhatsApp publicados": 1
+        }
+      }
     }
   ],
-  "conversations": [],
+  "conversations": [
+    {
+      "id": "conv-0d21a259-5795-4c72-baa8-3f86274d2f9d",
+      "contactId": "contact-9f4859c8-ffb1-4af8-9062-6e070677db0e",
+      "appId": "app-visibility-ai",
+      "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+      "channel": "email",
+      "classification": "sin_clasificar",
+      "requiresHumanIntervention": false,
+      "createdAt": "2026-11-27T17:11:03.421Z",
+      "lastMessageAt": "2026-11-27T17:11:03.421Z",
+      "messages": [
+        {
+          "id": "msg-692f58f1-740c-4ce1-b56c-0fc68766a6e2",
+          "conversationId": "conv-0d21a259-5795-4c72-baa8-3f86274d2f9d",
+          "direction": "outbound",
+          "channel": "email",
+          "content": "Hola, equipo de Agencia de Marketing Digital, Argentina | Seonet Digital:\n\nDesde Visibility AI queremos presentarles nuestros servicios. Auditoría automatizada de sitios web, visibilidad digital orgánica, rendimiento técnico y recomendaciones accionables para empresas y agencias.\n\nPueden conocer las funciones y condiciones en https://visibility-ia.ai.studio/. ¿Les interesaría recibir una presentación para evaluar si puede ser útil para su organización?\n\nQuedamos a disposición para responder sus consultas.\nEquipo de Visibility AI\nSi este contacto no corresponde o prefieren no recibir más mensajes, respondan BAJA y no volveremos a contactarlos.",
+          "status": "preparado",
+          "createdAt": "2026-11-27T17:11:03.421Z"
+        }
+      ]
+    }
+  ],
   "clients": [],
   "subscriptions": [],
   "payments": [
@@ -826,6 +1238,384 @@
     }
   ],
   "logs": [
+    {
+      "id": "log-1795799584747-7b8ns",
+      "timestamp": "2026-11-27T17:13:04.747Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:13:03.429Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "País de la organización sin verificar": 1
+        },
+        "pendingPages": 6,
+        "requestsToday": 13
+      }
+    },
+    {
+      "id": "log-1795799584745-u58ya",
+      "timestamp": "2026-11-27T17:13:04.745Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Open Voley: País de la organización sin verificar",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "url": "https://clubtelefonos.ar/contacto/"
+      }
+    },
+    {
+      "id": "log-1795799559724-2p39g",
+      "timestamp": "2026-11-27T17:12:39.724Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:12:33.434Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Sin email ni enlace de WhatsApp publicados": 1
+        },
+        "pendingPages": 9,
+        "requestsToday": 12
+      }
+    },
+    {
+      "id": "log-1795799559723-3527d",
+      "timestamp": "2026-11-27T17:12:39.723Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para NeuroPlaneta: Sin email ni enlace de WhatsApp publicados",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "url": "https://centroeducativoirupe-crr.infd.edu.ar/sitio/institucional/contacto/"
+      }
+    },
+    {
+      "id": "log-1795799523903-qjxzy",
+      "timestamp": "2026-11-27T17:12:03.903Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:12:03.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 1,
+        "checked": 1,
+        "reasons": {
+          "Email y WhatsApp públicos verificados": 1
+        },
+        "pendingPages": 8,
+        "requestsToday": 11
+      }
+    },
+    {
+      "id": "log-1795799523902-4vtd6",
+      "timestamp": "2026-11-27T17:12:03.902Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Visibility AI: Email y WhatsApp públicos verificados",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "url": "https://www.seonet.com.ar/contacto-seonet.php"
+      }
+    },
+    {
+      "id": "log-1795799494613-pf65t",
+      "timestamp": "2026-11-27T17:11:34.613Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:11:33.425Z",
+        "query": "",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "País de la organización sin verificar": 1
+        },
+        "pendingPages": 7,
+        "requestsToday": 10
+      }
+    },
+    {
+      "id": "log-1795799494612-h9fzq",
+      "timestamp": "2026-11-27T17:11:34.612Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Open Voley: País de la organización sin verificar",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "url": "https://clubtelefonos.ar/"
+      }
+    },
+    {
+      "id": "log-1795799474229-qvhw4",
+      "timestamp": "2026-11-27T17:11:14.229Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:11:05.505Z",
+        "query": "centro educativo contacto institucional Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "Página no accesible: Tiempo de consulta agotado.": 1
+        },
+        "pendingPages": 7,
+        "requestsToday": 9
+      }
+    },
+    {
+      "id": "log-1795799466111-17osy",
+      "timestamp": "2026-11-27T17:11:06.111Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para NeuroPlaneta: 7 resultados, 7 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "query": "centro educativo contacto institucional Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799463423-7at8j",
+      "timestamp": "2026-11-27T17:11:03.423Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "1 borradores de promoción preparados para Visibility AI · Objetivo 2026-11. Sin envíos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina"
+      }
+    },
+    {
+      "id": "log-1795799434646-aq5yp",
+      "timestamp": "2026-11-27T17:10:34.646Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 1 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:10:33.423Z",
+        "query": "agencia marketing digital contacto Argentina",
+        "created": 1,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "Email y WhatsApp públicos verificados": 1
+        },
+        "pendingPages": 9,
+        "requestsToday": 7
+      }
+    },
+    {
+      "id": "log-1795799434643-jr31x",
+      "timestamp": "2026-11-27T17:10:34.643Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Nuevo contacto registrado: Agencia de Marketing Digital, Argentina | Seonet Digital"
+    },
+    {
+      "id": "log-1795799434642-ytfbh",
+      "timestamp": "2026-11-27T17:10:34.642Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Visibility AI: Email y WhatsApp públicos verificados",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "url": "https://www.seonet.com.ar/"
+      }
+    },
+    {
+      "id": "log-1795799434117-vnwhp",
+      "timestamp": "2026-11-27T17:10:34.117Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Visibility AI: 9 resultados, 9 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "query": "agencia marketing digital contacto Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799405322-k13xf",
+      "timestamp": "2026-11-27T17:10:05.322Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 1 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:10:03.425Z",
+        "query": "club voleibol contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 1,
+        "reasons": {
+          "Enlaces nuevos pendientes de verificación": 1,
+          "País de la organización sin verificar": 1
+        },
+        "pendingPages": 8,
+        "requestsToday": 5
+      }
+    },
+    {
+      "id": "log-1795799405319-3o3mp",
+      "timestamp": "2026-11-27T17:10:05.319Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Página pública revisada para Open Voley: País de la organización sin verificar",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "url": "https://clubtelefonos.ar/voley/"
+      }
+    },
+    {
+      "id": "log-1795799404063-ao54y",
+      "timestamp": "2026-11-27T17:10:04.063Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Open Voley: 7 resultados, 7 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "query": "club voleibol contacto Argentina",
+        "provider": "DuckDuckGo HTML"
+      }
+    },
+    {
+      "id": "log-1795799373503-bujl3",
+      "timestamp": "2026-11-27T17:09:33.503Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación NeuroPlaneta: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "at": "2026-11-27T17:09:33.424Z",
+        "query": "centro educativo contacto institucional Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 3
+      }
+    },
+    {
+      "id": "log-1795799373503-cshoa",
+      "timestamp": "2026-11-27T17:09:33.503Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para NeuroPlaneta: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-neuroplaneta-argentina",
+        "query": "centro educativo contacto institucional Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799343516-13xc5",
+      "timestamp": "2026-11-27T17:09:03.516Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Visibility AI: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "at": "2026-11-27T17:09:03.425Z",
+        "query": "agencia marketing digital contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 2
+      }
+    },
+    {
+      "id": "log-1795799343516-i0r7k",
+      "timestamp": "2026-11-27T17:09:03.516Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Visibility AI: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-visibility-ai-argentina",
+        "query": "agencia marketing digital contacto Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799316597-gsr6a",
+      "timestamp": "2026-11-27T17:08:36.597Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Investigación Open Voley: 0 contactos nuevos, 0 páginas revisadas.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "at": "2026-11-27T17:08:36.434Z",
+        "query": "club voleibol contacto Argentina",
+        "created": 0,
+        "reused": 0,
+        "checked": 0,
+        "reasons": {
+          "Consulta sin páginas nuevas de organizaciones": 1,
+          "Sin contactos nuevos: buscar otro segmento": 1
+        },
+        "pendingPages": 0,
+        "requestsToday": 1
+      }
+    },
+    {
+      "id": "log-1795799316597-q96ih",
+      "timestamp": "2026-11-27T17:08:36.597Z",
+      "level": "info",
+      "module": "contactos",
+      "message": "Consulta pública para Open Voley: 0 resultados, 0 enlaces nuevos para revisar; 0 repetidos.",
+      "details": {
+        "campaignId": "goal-2026-11-app-open-voley-argentina",
+        "query": "club voleibol contacto Argentina",
+        "provider": "Bing RSS"
+      }
+    },
+    {
+      "id": "log-1795799316424-azald",
+      "timestamp": "2026-11-27T17:08:36.424Z",
+      "level": "info",
+      "module": "campañas",
+      "message": "3 campañas creadas por Central para el objetivo 2026-11."
+    },
+    {
+      "id": "log-1795799313419-kpyym",
+      "timestamp": "2026-11-27T17:08:33.419Z",
+      "level": "info",
+      "module": "sistema",
+      "message": "Motor de tareas programadas del backend iniciado.",
+      "details": {
+        "intervalMs": 30000
+      }
+    },
     {
       "id": "log-1794435057859-zxb5v",
       "timestamp": "2026-11-11T22:10:57.859Z",

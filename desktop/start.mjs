@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
-import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport, waitForChildExit } from './recovery.mjs';
+import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport, waitForChildExit, selectWhatsAppBrowser } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
 import { prepareLocalRecords, dependenciesReady, installDependencies, installWhatsAppDependencies } from './local-app.mjs';
 import { activeRelease, refreshInstalledUpdater } from './auto-update.mjs';
@@ -33,7 +33,7 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, whatsappLinkTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
-let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild, confirmWhatsAppBrowser;
+let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild, confirmWhatsAppBrowser, pairingActive = false;
 let whatsappGeneration=0;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
@@ -57,7 +57,11 @@ function launch(name, command, args, options = {}) {
     }
     if (message?.type === 'healthy') {
       restartCounts.set(name, 0);
-      if(name==='whatsapp'&&!stopping)confirmWhatsAppBrowser?.();
+      if(name==='whatsapp'&&!stopping){
+        confirmWhatsAppBrowser?.();
+        pairingActive=false;
+        if(options.env)options.env={...options.env,CENTRAL_WHATSAPP_PAIR_NUMBER:''};
+      }
       if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');
     }
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
@@ -73,6 +77,7 @@ function launch(name, command, args, options = {}) {
   const onExit = (code, signal) => {
     if (ended) return; ended = true; children.delete(child);
     if (name in components) components[name] = 'stopped';
+    if (name === 'whatsapp') pairingActive = false;
     if (name === 'whatsapp' && code !== 78 && !stopping &&
         !['profile_busy','browser_access','browser_transport','web_unavailable','browser_launch','web_startup','session_timeout'].includes(whatsappStage)) whatsappStage = 'restarting';
     if (stopping) return;
@@ -176,16 +181,25 @@ const installedEdge = [process.env['ProgramFiles(x86)'],process.env.ProgramFiles
   .filter(Boolean).map(dir=>path.join(dir,'Microsoft','Edge','Application','msedge.exe'));
 const installedChrome = [process.env.ProgramFiles,process.env['ProgramFiles(x86)'],process.env.LOCALAPPDATA]
   .filter(Boolean).map(dir=>path.join(dir,'Google','Chrome','Application','chrome.exe'));
-const browserFamily = file => /chrome[.]exe$/i.test(file||'') ? 'chrome' : /msedge[.]exe$/i.test(file||'') ? 'edge' : '';
-const savedFamily = browserFamily(savedBrowser);
-const explicitlyConfigured = process.env.CHROME_PATH;
-const sameBrowserPaths = savedFamily==='chrome' ? installedChrome : savedFamily==='edge' ? installedEdge : [];
-const hasSavedProfile = Boolean(waDir&&fs.existsSync(path.join(waDir,'private-state','whatsapp','session')));
-const candidates = savedBrowser
-  ? [savedBrowser,...sameBrowserPaths,...(savedFamily&&browserFamily(explicitlyConfigured)===savedFamily?[explicitlyConfigured]:[])]
-  : [explicitlyConfigured,...(hasSavedProfile?[]:[...installedEdge,...installedChrome])];
-const browser = candidates.find(file=>{
-  try{return file&&fs.statSync(file).isFile();}catch{return false;}
+const explicitlyConfigured = process.env.CHROME_PATH || '';
+const profileDir = waDir && path.join(waDir, 'private-state', 'whatsapp', 'session');
+const hasSavedProfile = Boolean(profileDir && fs.existsSync(profileDir));
+let profileHint = '';
+if (hasSavedProfile) {
+  try {
+    const localState = path.join(profileDir, 'Local State');
+    if (fs.existsSync(path.join(profileDir, 'Edge')) || (fs.existsSync(localState) && /msedge|microsoft edge/i.test(fs.readFileSync(localState, 'utf8').slice(0, 4096)))) {
+      profileHint = 'edge';
+    }
+  } catch {}
+}
+const browser = selectWhatsAppBrowser({
+  savedBrowser,
+  explicitlyConfigured,
+  installedChrome,
+  installedEdge,
+  hasSavedProfile,
+  profileHint,
 });
 async function prepareWhatsApp(){
   if(!waDir){
@@ -209,7 +223,7 @@ async function prepareWhatsApp(){
   upgradeWorker(path.join(moduleDir,'transports.mjs'),path.join(waDir,'transports.mjs'));
   upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
   const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
-  let pairingSwitchPending=false, pairingActive=false;
+  let pairingSwitchPending=false;
   const startWhatsApp = (phoneNumber = '') => {
     whatsappChild=launch('whatsapp',process.execPath,[waFile], {
       cwd:waDir,

@@ -9,10 +9,8 @@ export function useWhatsAppSessionPolling(page) {
  pollingPages.add(page);
  const waitForFunction=page.waitForFunction.bind(page);
  page.waitForFunction=(predicate,options,...args)=>{
-  const check=String(predicate);
-  const readiness=check.includes('window.Debug?.VERSION') ||
-   check.includes('WAWebSocketModel') || check.includes('typeof window.WWebJS');
-  return waitForFunction(predicate, readiness ? {...options,polling:200} : options, ...args);
+  const usePolling=!options?.polling || options.polling==='raf';
+  return waitForFunction(predicate, usePolling ? {...options,polling:200} : options, ...args);
  };
 }
 export function whatsappStartupFailure(error) {

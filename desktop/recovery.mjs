@@ -55,3 +55,35 @@ export function readOwnerReport(file, now = new Date()) {
     return { day, status: 'registro_no_disponible' };
   }
 }
+
+/**
+ * @param {{
+ *   savedBrowser?: string;
+ *   explicitlyConfigured?: string;
+ *   installedChrome?: string[];
+ *   installedEdge?: string[];
+ *   hasSavedProfile?: boolean;
+ *   profileHint?: string;
+ *   exists?: (file: string) => boolean;
+ * }} options
+ */
+export function selectWhatsAppBrowser({
+  savedBrowser = '',
+  explicitlyConfigured = '',
+  installedChrome = [],
+  installedEdge = [],
+  hasSavedProfile = false,
+  profileHint = '',
+  exists = file => {
+    try { return Boolean(file) && fs.statSync(file).isFile(); } catch { return false; }
+  },
+}) {
+  const family = file => /chrome[.]exe$/i.test(file || '') ? 'chrome' : /msedge[.]exe$/i.test(file || '') ? 'edge' : '';
+  const savedFamily = family(savedBrowser);
+  const sameFamily = savedFamily === 'chrome' ? installedChrome : savedFamily === 'edge' ? installedEdge : [];
+  const fallbackInstalled = profileHint === 'edge' ? [...installedEdge, ...installedChrome] : [...installedChrome, ...installedEdge];
+  const candidates = savedBrowser
+    ? [savedBrowser, ...sameFamily, ...(savedFamily && family(explicitlyConfigured) === savedFamily ? [explicitlyConfigured] : [])]
+    : [explicitlyConfigured, ...(hasSavedProfile ? fallbackInstalled : [...installedEdge, ...installedChrome])];
+  return candidates.find(exists) || '';
+}

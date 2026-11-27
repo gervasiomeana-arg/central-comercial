@@ -12,6 +12,7 @@ const bundledManifest = bundled && path.join(bundled,'node_modules','whatsapp-we
 const requireWhatsApp = bundledManifest && fs.existsSync(bundledManifest)
  ? createRequire(path.join(bundled,'package.json')) : requireLocal;
 const dotenv=requireWhatsApp('dotenv');
+const qrcode=requireWhatsApp('qrcode-terminal');
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
 if(!fs.existsSync(config))throw new Error('Seleccione la carpeta donde ya funciona INICIAR_CORREO.bat.');
@@ -62,6 +63,10 @@ const linkByPhone=/^[1-9]\d{9,14}$/.test(pairNumber);
 class PersistentSession extends LocalAuth {
  async afterBrowserInitialized(){
   await super.afterBrowserInitialized();
+  if(this.client?.pupPage)useWhatsAppSessionPolling(this.client.pupPage);
+  this.client?.pupBrowser?.on('targetcreated',target=>{
+   if(target.type()==='page')void target.page().then(page=>useWhatsAppSessionPolling(page)).catch(()=>{});
+  });
   notifyBrowserAvailable();
  }
  // Keep the local profile even when the provider invalidates its authentication.
@@ -78,8 +83,9 @@ const client=new SessionClient({
  authTimeoutMs,
  ...(linkByPhone || refreshWeb ? {webVersionCache:{type:'none'}} : {}),
  puppeteer:{
-  headless:true, timeout:15000,
+  headless:true, timeout:60000,
   handleSIGINT:false, handleSIGTERM:false, handleSIGHUP:false,
+  args:['--disable-blink-features=AutomationControlled','--no-first-run','--no-default-browser-check'],
   ...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),
  },
 });
@@ -116,37 +122,71 @@ async function ownerReportTick(account){
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
-let pairingRequested=false, lastPairingCode;
+let pairingRequested=false, lastPairingCode, qrTimeoutStarted=false;
 function publishPairingCode(code){
  if(!linkByPhone||stopping||sessionAuthenticated||typeof code!=='string'||!/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i.test(code))return;
  const normalized=code.replace('-','').toUpperCase();
  if(normalized===lastPairingCode)return;
  lastPairingCode=normalized;
+ const formatted=normalized.slice(0,4)+'-'+normalized.slice(4);
  reportPhase('phone_link');
- console.log('[whatsapp] Código para vincular Central con WhatsApp: '+code+'. Ingresalo solo en WhatsApp, en tu celular.');
+ console.log('[whatsapp] Código para vincular Central con WhatsApp: '+formatted+'. Ingresalo solo en WhatsApp, en tu celular (Dispositivos vinculados > Vincular con el número de teléfono).');
+}
+function requestPairingWithRetry(attempt=1){
+ if(stopping||sessionAuthenticated||whatsappReady||lastPairingCode)return;
+ void client.requestPairingCode(pairNumber,true,180000).then(publishPairingCode).catch(error=>{
+  if(stopping||sessionAuthenticated||whatsappReady||lastPairingCode)return;
+  if(attempt<2){
+   console.log('[whatsapp] Reintentando generar el código de vinculación en WhatsApp Web...');
+   setTimeout(()=>requestPairingWithRetry(attempt+1),3000);
+   return;
+  }
+  reportPhase('phone_link_failed');
+  console.log('[whatsapp] WhatsApp Web no pudo generar el código de vinculación: '+(error?.message || 'sin detalle del navegador'));
+  void recover(78);
+ });
 }
 client.on('code',publishPairingCode);
-client.on('qr',()=>{
- if(sessionAuthenticated||whatsappReady||stopping||phase==='qr'||phase==='phone_link')return;
- reportPhase('qr');
- clearTimeout(startupTimeout);
- if(linkByPhone && !pairingRequested){
+client.on('qr',qr=>{
+ if(sessionAuthenticated||whatsappReady||stopping)return;
+ if(linkByPhone){
+  if(phase==='qr'||phase==='phone_link'||pairingRequested)return;
+  reportPhase('qr');
+  clearTimeout(startupTimeout);
   pairingRequested=true;
-  void client.requestPairingCode(pairNumber,true,180000).then(publishPairingCode).catch(()=>{
-   if(stopping||sessionAuthenticated||whatsappReady||lastPairingCode)return;
+  requestPairingWithRetry(1);
+  startupTimeout=setTimeout(()=>{
+   if(sessionAuthenticated||whatsappReady||stopping)return;
    reportPhase('phone_link_failed');
-   console.log('[whatsapp] WhatsApp Web no pudo generar el código de vinculación.');
+   console.log('[whatsapp] Se agotó el tiempo de espera del código de vinculación.');
    void recover(78);
-  });
- } else {
-  console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada.');
+  },5*60000);
+  return;
  }
- startupTimeout=setTimeout(()=>{
-  if(sessionAuthenticated||whatsappReady||stopping)return;
-  if(!linkByPhone && refreshWeb)reportPhase('pairing_required');
-  else if(linkByPhone)reportPhase('phone_link_failed');
-  void recover(startupExitCode());
- },linkByPhone ? 5*60000 : 30000);
+ if(!refreshWeb){
+  if(phase==='qr')return;
+  reportPhase('qr');
+  clearTimeout(startupTimeout);
+  console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada. Refrescando WhatsApp Web...');
+  startupTimeout=setTimeout(()=>{
+   if(sessionAuthenticated||whatsappReady||stopping)return;
+   void recover(startupExitCode());
+  },30000);
+  return;
+ }
+ if(!qrTimeoutStarted){
+  qrTimeoutStarted=true;
+  reportPhase('pairing_required');
+  clearTimeout(startupTimeout);
+  startupTimeout=setTimeout(()=>{
+   if(sessionAuthenticated||whatsappReady||stopping)return;
+   reportPhase('pairing_required');
+   console.log('[whatsapp] Se agotó el tiempo de espera para vincular WhatsApp. El perfil guardado se conserva.');
+   void recover(78);
+  },5*60000);
+ }
+ console.log('[whatsapp] Vincule WhatsApp desde su teléfono (Dispositivos vinculados > Vincular un dispositivo) o use "Vincular Central con un código de WhatsApp" en http://127.0.0.1:39300. No comparta este QR.');
+ qrcode.generate(qr,{small:true});
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
@@ -266,7 +306,7 @@ async function recover(code){
   api('heartbeat',{channel:'whatsapp',whatsapp:false})
  ]);
  try{
-  if(initialization && !client.pupBrowser)await Promise.race([browserAvailable,initialization.catch(()=>{})]);
+  if(initialization && !client.pupBrowser)await Promise.race([browserAvailable,initialization.catch(()=>{}),new Promise(resolve=>setTimeout(resolve,15000))]);
   await client.destroy();
  }catch{
   console.log('[whatsapp] El navegador no confirmó el cierre del perfil.');

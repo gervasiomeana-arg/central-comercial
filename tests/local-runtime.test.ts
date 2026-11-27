@@ -1,11 +1,11 @@
-import { ownerReportSchedule } from '../desktop/whatsapp-commercial.mjs';
+import { ownerReportSchedule, useWhatsAppSessionPolling } from '../desktop/whatsapp-commercial.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { dailyStatistics } from '../server/daily-statistics.js';
-import { readOwnerReport } from '../desktop/recovery.mjs';
+import { readOwnerReport, selectWhatsAppBrowser } from '../desktop/recovery.mjs';
 import { LocalRuntime } from '../server/local-runtime.js';
 import { findConfig, findJarvis, selectedModel, jarvisEnvironment } from '../desktop/config.mjs';
 
@@ -156,4 +156,48 @@ test('una demora conserva el último reporte verificado y una desconexión confi
   assert.equal(runtime.status().reportAt,now);
   runtime.heartbeat({...base,startedAt:now,reportUnavailable:true});
   assert.equal(runtime.status().connections,undefined);
+});
+
+test('polling de WhatsApp reemplaza espera por animación y selección de navegador conserva perfil sin bloqueo', () => {
+  const calls: any[] = [];
+  const page = {
+    waitForFunction(predicate: unknown, options?: Record<string, unknown>) {
+      calls.push({ predicate, options });
+      return Promise.resolve(true);
+    },
+  };
+  useWhatsAppSessionPolling(page);
+  useWhatsAppSessionPolling(page);
+  void page.waitForFunction('() => window.AuthStore');
+  void page.waitForFunction('() => true', { polling: 'raf', timeout: 5000 });
+  void page.waitForFunction('() => true', { polling: 50, timeout: 5000 });
+  assert.deepEqual(calls.map(c => c.options), [
+    { polling: 200 },
+    { polling: 200, timeout: 5000 },
+    { polling: 50, timeout: 5000 },
+  ]);
+
+  const files = new Set(['C:\\Google\\Chrome\\chrome.exe', 'C:\\Microsoft\\Edge\\msedge.exe']);
+  assert.equal(selectWhatsAppBrowser({
+    savedBrowser: '',
+    installedChrome: ['C:\\Google\\Chrome\\chrome.exe'],
+    installedEdge: ['C:\\Microsoft\\Edge\\msedge.exe'],
+    hasSavedProfile: true,
+    exists: f => files.has(f),
+  }), 'C:\\Google\\Chrome\\chrome.exe');
+  assert.equal(selectWhatsAppBrowser({
+    savedBrowser: '',
+    installedChrome: ['C:\\Google\\Chrome\\chrome.exe'],
+    installedEdge: ['C:\\Microsoft\\Edge\\msedge.exe'],
+    hasSavedProfile: true,
+    profileHint: 'edge',
+    exists: f => files.has(f),
+  }), 'C:\\Microsoft\\Edge\\msedge.exe');
+  assert.equal(selectWhatsAppBrowser({
+    savedBrowser: 'C:\\Missing\\msedge.exe',
+    installedChrome: ['C:\\Google\\Chrome\\chrome.exe'],
+    installedEdge: ['C:\\Microsoft\\Edge\\msedge.exe'],
+    hasSavedProfile: true,
+    exists: f => files.has(f),
+  }), 'C:\\Microsoft\\Edge\\msedge.exe');
 });

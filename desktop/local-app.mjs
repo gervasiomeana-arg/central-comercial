@@ -17,17 +17,21 @@ export async function installWhatsAppDependencies(root) {
   const expected=manifest(path.join(cwd,'package.json')).dependencies['whatsapp-web.js'];
   const installed=path.join(cwd,'node_modules','whatsapp-web.js','package.json');
   if(fs.existsSync(installed)&&manifest(installed).version===expected&&
-      fs.existsSync(path.join(cwd,'node_modules','dotenv','package.json')))return;
+      fs.existsSync(path.join(cwd,'node_modules','dotenv','package.json'))&&
+      fs.existsSync(path.join(cwd,'node_modules','qrcode-terminal','package.json')))return;
   const npm=path.join(path.dirname(process.execPath),'node_modules','npm','bin','npm-cli.js');
   if(!fs.existsSync(npm))throw new Error('No se encontró npm de Node.js para instalar WhatsApp.');
-  const lock=path.join(cwd,'package-lock.json');
-  if(!fs.existsSync(lock))throw new Error('Falta el registro de dependencias del ejecutor de WhatsApp.');
-  await new Promise((resolve,reject)=>{
-    const child=spawn(process.execPath,[npm,'ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],{cwd,stdio:'inherit',windowsHide:true});
+  const runNpm=args=>new Promise((resolve,reject)=>{
+    const child=spawn(process.execPath,[npm,...args],{cwd,stdio:'inherit',windowsHide:true});
     const timer=setTimeout(()=>child.kill(),180000);
     child.once('error',error=>{clearTimeout(timer);reject(error);});
     child.once('close',code=>{clearTimeout(timer);code===0?resolve():reject(new Error('No se completaron las dependencias de WhatsApp.'));});
   });
+  const lock=path.join(cwd,'package-lock.json');
+  if(!fs.existsSync(lock)){
+    await runNpm(['install','--package-lock-only','--ignore-scripts','--no-audit','--no-fund']);
+  }
+  await runNpm(['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund']);
 }
 export async function prepareLocalRecords(root,runtimeDir,config) {
   if(!dependenciesReady(root)||!fs.existsSync(path.join(root,'dist','index.html')))throw new Error('Primero abrir PREPARAR_CENTRAL_COMERCIAL.bat del paquete completo.');
