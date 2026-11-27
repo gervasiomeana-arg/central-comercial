@@ -1,5 +1,5 @@
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {nonInterestOnlyContacts,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
+import {nonInterestOnlyContacts,normalizeContactEmail,ownerEmailCorrection,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { createFuneralShiftPilot,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
@@ -213,6 +213,36 @@ class DatabaseManager {
   }
 
   // DATA MIGRATION: Crucial step to fix unverified/invented information in existing persistent database!
+  private applyEmailCorrection(contact: Contact, conversations: Conversation[]): boolean {
+    const original = normalizeContactEmail(contact.email || '');
+    const corrected = ownerEmailCorrection(original);
+    if (!corrected && original === contact.email?.trim().toLowerCase()) return false;
+    const email = corrected || original;
+    if (!email) return false;
+
+    contact.email = email;
+    contact.updatedAt = new Date().toISOString();
+    if (corrected) {
+      contact.undeliverableEmail = original;
+      contact.history ||= [];
+      contact.history.push({
+        id: `owner-email-correction-${contact.id}-${contact.updatedAt}`, timestamp: contact.updatedAt,
+        type: 'nota', author: 'Administrador',
+        description: `Corrección de correo indicada por el titular: ${original} → ${email}.`,
+      });
+    }
+    for (const thread of conversations) {
+      if (thread.contactId !== contact.id) continue;
+      for (const message of thread.messages) {
+        if (message.channel !== 'email' || message.direction !== 'outbound' || message.replyToProviderId ||
+            message.status !== 'preparado' || message.attemptedAt || message.sentAt || message.serviceConfirmationId) continue;
+        if (message.campaignRecipient && normalizeContactEmail(message.campaignRecipient) === original) message.campaignRecipient = email;
+        if (message.approvedRecipient && normalizeContactEmail(message.approvedRecipient) === original) message.approvedRecipient = email;
+      }
+    }
+    return true;
+  }
+
   private migrateData(schema: DatabaseSchema): boolean {
     let changed = false;
 
@@ -255,6 +285,10 @@ class DatabaseManager {
         delete research.detail;
         changed = true;
       }
+    }
+
+    for (const contact of schema.contacts) {
+      if (this.applyEmailCorrection(contact, schema.conversations)) changed = true;
     }
 
     // Recheck historical discoveries too, including snapshots restored on deploy.
@@ -645,7 +679,7 @@ class DatabaseManager {
     matchedByPhone: Contact[];
     matchedByDomain: Contact[];
   } {
-    const emailNorm = contactData.email ? contactData.email.trim().toLowerCase() : '';
+    const emailNorm = ownerEmailCorrection(contactData.email) || normalizeContactEmail(contactData.email || '');
     const phoneNorm = contactData.phone ? contactData.phone.replace(/[^0-9]/g, '') : '';
     let domainNorm = '';
     if (contactData.website) {
@@ -679,6 +713,7 @@ class DatabaseManager {
 
   public saveContact(contact: Contact): Contact {
     const index = this.data.contacts.findIndex(c => c.id === contact.id);
+    this.applyEmailCorrection(contact, this.data.conversations);
     contact.updatedAt = new Date().toISOString();
     if (index >= 0) {
       this.data.contacts[index] = contact;

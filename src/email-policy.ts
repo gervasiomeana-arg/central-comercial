@@ -1,4 +1,24 @@
-import type {Conversation, Message} from './types.js';
+import type {Contact, Conversation, Message} from './types.js';
+
+const ownerEmailCorrections: ReadonlyMap<string, string> = new Map([
+  ['contacto@funerariamagana.com', 'contact@xn--funerariamagaa-2nb.com'],
+  ['contato@huiosweb.com.br', 'contact@huiosweb.com.br'],
+]);
+const ownerConfirmedAddresses = new Set(ownerEmailCorrections.values());
+
+export function normalizeContactEmail(value: string): string {
+  const email = value.trim().toLowerCase();
+  const at = email.indexOf('@');
+  if (at < 0 || !/[^\x00-\x7f]/.test(email.slice(at + 1))) return email;
+  const domain = email.slice(at + 1);
+  if (!/^[\p{L}\p{N}\p{M}.-]+$/u.test(domain)) return email;
+  try { return email.slice(0, at + 1) + new URL(`https://${domain}`).hostname; }
+  catch { return email; }
+}
+
+export function ownerEmailCorrection(value: string | undefined): string | undefined {
+  return ownerEmailCorrections.get(normalizeContactEmail(value || ''));
+}
 
 // Syntax is not proof of ownership or publication. This final guard also rejects
 // common form examples; legitimate addresses on free-mail domains remain valid.
@@ -68,13 +88,15 @@ export function nonInterestOnlyContacts(conversations: Conversation[]): Set<stri
   return nonInterest;
 }
 
-export function publishedCampaignRecipients(contact: import('./types.js').Contact): string[] {
+export function publishedCampaignRecipients(contact: Contact): string[] {
+  const email = normalizeContactEmail(contact.email || '');
+  if (ownerConfirmedAddresses.has(email)) return [email];
   const pages = new Map<string, string>();
   try {
     const host = new URL(contact.website).hostname.replace(/^www\./, '');
     for (const entry of contact.emailPublications ?? []) {
       const page = new URL(entry.url);
-      const email = entry.email.trim().toLowerCase();
+      const email = normalizeContactEmail(entry.email);
       if (page.protocol !== 'https:' || page.hostname.replace(/^www\./, '') !== host || !usableContactEmail(email)) continue;
       pages.set(page.pathname.replace(/\/+$/, '') || '/', email);
     }

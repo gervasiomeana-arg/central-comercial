@@ -1,4 +1,4 @@
-import {usableContactEmail} from '../src/email-policy.js';
+import {normalizeContactEmail, usableContactEmail} from '../src/email-policy.js';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import net from 'node:net';
@@ -115,15 +115,15 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
   if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
   const visibleEmailText=decode(clean.replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi,'').replace(/<[^>]+>/g,' '));
-  const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
+  const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[\p{L}\p{M}\p{N}.-]+\.[A-Z]{2,}/giu)||[];
   for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
   emails.push(...structured.emails);
   const emailHost = hostname.replace(/^www\./, '');
-  const declared = new Set(structured.emails.map(email => email.trim().toLowerCase()));
+  const declared = new Set(structured.emails.map(normalizeContactEmail));
   for (const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
-    try { declared.add(decodeURIComponent(decode(link[1])).trim().toLowerCase()); } catch {}
+    try { declared.add(normalizeContactEmail(decodeURIComponent(decode(link[1])))); } catch {}
   }
-  const valid=[...new Set(emails.map(e=>e.trim().toLowerCase()))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) &&
+  const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) &&
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
     (declared.has(email) || email.split('@')[1] === emailHost));
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';

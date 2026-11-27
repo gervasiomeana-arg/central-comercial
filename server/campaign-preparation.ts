@@ -1,5 +1,5 @@
 import { campaignCountryAllowed } from './campaign-markets.js';
-import {invalidEmailDestination, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
+import {invalidEmailDestination, ownerEmailCorrection, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
 import { randomUUID } from 'node:crypto';
 import type { Application, Campaign, Contact, Conversation, Message } from '../src/types.js';
@@ -95,7 +95,8 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const id = `conv-${randomUUID()}`;
     const timestamp = now.toISOString();
     const messageId = `msg-${randomUUID()}`;
-    const draft: Conversation = { id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel, classification: 'sin_clasificar', requiresHumanIntervention: campaign.mode !== 'automatico', createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: messageId, conversationId: id, direction: 'outbound', channel, content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp }] };
+    const draft: Conversation = { id, contactId: contact.id, appId: app.id, campaignId: campaign.id, channel, classification: 'sin_clasificar', requiresHumanIntervention: campaign.mode !== 'automatico', createdAt: timestamp, lastMessageAt: timestamp, messages: [{ id: messageId, conversationId: id, direction: 'outbound', channel, content: campaign.messageTemplate.replace(/\{([^{}]+)\}/g, (_, key) => values[key]), status: 'preparado', createdAt: timestamp,
+      ...(original && channel === 'email' && original.channel === 'email' ? { campaignRecipient: contact.email } : {}) }] };
     drafts.push(draft);
     preparedToday.add(contact.id);
     if (original) replacements.push({ original, replacementId: messageId });
@@ -128,6 +129,19 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
       else skip('Sin WhatsApp disponible ni correo utilizable');
       continue;
     }
+    const canUseReplacementEmail = emailUsable && campaign.autoSendEmail &&
+      (contact.outreachBasis !== 'public_business_contact' || publishedCampaignRecipients(contact).includes(email));
+    if (canUseReplacementEmail && !usedRecipients.has(recipientKeyFor(contact, 'email'))) {
+      const messages = threads.flatMap(thread => thread.messages);
+      const rejected = messages.find(message => message.channel === 'email' && message.direction === 'outbound' &&
+        !message.replyToProviderId && !message.replacementMessageId && message.reviewStatus !== 'rejected' &&
+        message.approvedRecipient && message.approvedRecipient !== email && definitelyRejectedEmail(message) &&
+        (invalidEmailDestination(message.serviceError || '') || ownerEmailCorrection(message.approvedRecipient) === email));
+      if (rejected && messages.every(message => message.status === 'fallido' || message.reviewStatus === 'rejected')) {
+        prepare(contact, 'email', threads, rejected);
+        continue;
+      }
+    }
     const [thread] = threads;
     const [message] = thread.messages;
     if (threads.length === 1 && thread.messages.length === 1 && message.direction === 'outbound' &&
@@ -138,12 +152,6 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
           message.approvedRecipient === email && contact.undeliverableEmail === email);
       if (message.channel === 'email' && whatsappAllowed && campaign.autoSendWhatsApp && rejectedEmail) {
         prepare(contact, 'whatsapp', threads, message);
-        continue;
-      }
-      if (message.channel === 'email' && rejectedEmail && emailUsable && campaign.autoSendEmail &&
-          message.approvedRecipient && message.approvedRecipient !== email &&
-          invalidEmailDestination(message.serviceError || '')) {
-        prepare(contact, 'email', threads, message);
         continue;
       }
       if (message.channel === 'whatsapp' && emailUsable && campaign.autoSendEmail &&

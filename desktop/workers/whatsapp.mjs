@@ -84,11 +84,10 @@ class SessionClient extends Client {
   });
  }
 }
-const client=new SessionClient({
+const WhatsAppClient=linkByPhone?SessionClient:Client;
+const client=new WhatsAppClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
- authTimeoutMs,
- // Restore the normal launch options used with the already linked profile.
- ...(linkByPhone ? {userAgent:false,webVersionCache:{type:'none'}} : {}),
+ ...(linkByPhone ? {authTimeoutMs,userAgent:false,webVersionCache:{type:'none'}} : {}),
  puppeteer:{
   headless:!visibleBrowser,
   ...(visibleBrowser ? {pipe:true} : {}),

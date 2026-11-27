@@ -1,5 +1,5 @@
 import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
-import { invalidEmailDestination, publishedCampaignRecipients } from '../src/email-policy.js';
+import { invalidEmailDestination, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
 import {searchRequest} from './discovery-plan.js';
@@ -31,12 +31,11 @@ async function domainReceivesEmail(email: string) {
 
 async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
   const now = new Date();
-  const cutoff = now.getTime() - 7 * 86400000;
   const threads = db.getConversations();
   const invalid = new Set(threads.flatMap(thread => thread.messages
     .filter(m => m.channel === 'email' && m.status === 'fallido' && m.approvedRecipient &&
       invalidEmailDestination(m.serviceError || ''))
-    .map(m => m.approvedRecipient!.toLowerCase())));
+    .map(m => normalizeContactEmail(m.approvedRecipient!))));
   for (const thread of threads) {
     const contact = db.getContactById(thread.contactId);
     const campaign = thread.campaignId && db.getCampaignById(thread.campaignId);
@@ -46,15 +45,20 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
         !campaignStrategyReady(campaign, app) || !db.campaignInActiveRun(campaign.id) || contact.outreachBasis !== 'public_business_contact' ||
         contact.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(contact.status) ||
         (contact.emailRecoveryCheckedAt && Date.parse(contact.emailRecoveryCheckedAt) > now.getTime() - 86400000)) continue;
-    const email = contact.email?.trim().toLowerCase();
-    const [message] = thread.messages;
-    const failedAt = Date.parse(message?.emailFailureAt || (message?.serviceError?.startsWith('Dominio descartado antes de enviar:') ? message.attemptedAt || '' : ''));
-    if (thread.messages.length !== 1 || message.channel !== 'email' || message.direction !== 'outbound' ||
-        message.status !== 'fallido' || message.approvedRecipient !== email || !invalid.has(email) ||
-        message.replacementMessageId || !Number.isFinite(failedAt) || failedAt < cutoff || failedAt > now.getTime() ||
-        threads.some(other => other.contactId === contact.id && other.appId === thread.appId &&
-          (other.messages.some(m => m.direction === 'inbound') ||
-            (other.id !== thread.id && other.campaignId === thread.campaignId)))) continue;
+    const original = normalizeContactEmail(contact.email || '');
+    const related = threads.filter(other => other.contactId === contact.id && other.appId === thread.appId);
+    const activeMessages = related.filter(other => other.campaignId === campaign.id).flatMap(other => other.messages);
+    const failedRecipient = thread.messages.find(message => message.channel === 'email' && message.direction === 'outbound' &&
+      message.status === 'fallido' && !message.replyToProviderId && !message.replacementMessageId &&
+      message.approvedRecipient && invalid.has(normalizeContactEmail(message.approvedRecipient)) &&
+      (message.emailFailureAt || message.attemptedAt))?.approvedRecipient;
+    if (!failedRecipient || related.some(other => other.messages.some(message => message.direction === 'inbound')) ||
+        activeMessages.some(message => message.status !== 'fallido' && message.reviewStatus !== 'rejected')) continue;
+    const excluded = new Set(invalid);
+    for (const message of related.flatMap(other => other.messages)) {
+      if (message.channel === 'email' && message.approvedRecipient) excluded.add(normalizeContactEmail(message.approvedRecipient));
+    }
+    if (original && !excluded.has(original) && publishedCampaignRecipients(contact).includes(original)) continue;
 
     let site: URL;
     let source: URL;
@@ -66,33 +70,40 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
     db.saveContact({ ...contact, emailRecoveryCheckedAt: now.toISOString() });
     const queue = [...new Set([source.href, new URL('/', site).href])];
     let context: ResearchCandidate['context'];
-    for (let index = 0; index < Math.min(queue.length, 4); index++) {
+    const publications = new Map<string, { url: string; email: string }>();
+    for (let index = 0; index < Math.min(queue.length, 5); index++) {
       const url = queue[index];
       try {
         const page = await fetcher(url);
         if (host(page.url) !== host(site.href)) continue;
-        const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, invalid);
+        if (db.getSchedulerState().automationsPaused) return;
+        const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, excluded);
         context = result.evidence;
         for (const link of contactLinks(page.text, page.url)) if (!queue.includes(link)) queue.push(link);
-        if (result.contact && await saveRecoveredAddress(contact.id, email, result.contact)) return;
+        const entry = result.contact?.emailPublications?.[0];
+        if (!entry || !result.contact) continue;
+        const pageKey = new URL(entry.url).pathname.replace(/\/+$/, '') || '/';
+        publications.set(pageKey, entry);
+        if ([...publications.values()].filter(publication => publication.email === entry.email).length >= 2 &&
+            await saveRecoveredAddress(contact.id, original, normalizeContactEmail(failedRecipient), result.contact, [...publications.values()])) return;
       } catch { /* An unavailable page can be reviewed on the next day. */ }
     }
     return;
   }
 }
 
-async function saveRecoveredAddress(id: string, original: string, found: Contact) {
+async function saveRecoveredAddress(id: string, original: string, rejected: string, found: Contact, publications: NonNullable<Contact['emailPublications']>) {
   const nextEmail = found.email;
   if (!nextEmail || !await domainReceivesEmail(nextEmail)) return false;
   const latest = db.getContactById(id);
-  if (!latest || db.getSchedulerState().automationsPaused || latest.email.trim().toLowerCase() !== original ||
+  if (!latest || db.getSchedulerState().automationsPaused || normalizeContactEmail(latest.email || '') !== original ||
       latest.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(latest.status)) return false;
   db.saveContact({
     ...latest, email: nextEmail,
-    emailPublications: [...(latest.emailPublications || []).filter(p => p.url !== found.source), ...(found.emailPublications || [])].slice(-12),
-    undeliverableEmail: original, source: found.source, sourceReviewDate: found.sourceReviewDate,
+    emailPublications: publications.filter(entry => entry.email === nextEmail),
+    undeliverableEmail: rejected, source: found.source, sourceReviewDate: found.sourceReviewDate,
     history: [...(latest.history || []), { id: `recovered-${Date.now()}`, type: 'nota', timestamp: new Date().toISOString(),
-      description: `Dirección alternativa publicada por la organización en ${found.source} después de un rebote definitivo.`,
+      description: `Dirección alternativa encontrada en dos páginas de la organización después de un rebote definitivo.`,
       author: 'Central Comercial' }],
   });
   return true;
@@ -275,7 +286,8 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
             try { return host(record.website) === host(page.url); }
             catch { return false; }
           };
-          const existing = db.getContacts().find(c => (contact.email && c.email?.trim().toLowerCase() === contact.email) || sameWebsite(c));
+          const foundEmail = ownerEmailCorrection(contact.email) || normalizeContactEmail(contact.email);
+          const existing = db.getContacts().find(c => (foundEmail && normalizeContactEmail(c.email || '') === foundEmail) || sameWebsite(c));
           if(existing){
             const canUpdate = existing.permission !== 'revocado' && !['baja_solicitada', 'descartado'].includes(existing.status);
             if (canUpdate && sameWebsite(existing) && contact.emailPublications?.length) {
@@ -307,6 +319,7 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
             }
             // Never promote a revoked contact or change its source/permission implicitly.
             if (canUpdate && !existing.interestedAppIds.includes(app.id)) existing.interestedAppIds.push(app.id);
+            if (ownerEmailCorrection(existing.email)) db.saveContact(existing);
             outcome.reused++;
           }else{db.saveContact(contact);outcome.created++;}
         }
