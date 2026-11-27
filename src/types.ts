@@ -87,6 +87,9 @@ export interface ContactHistoryItem {
 }
 
 export interface Contact {
+  volleyballSource?: string;
+  volleyballCheckedAt?: string;
+  volleyballCoach?: boolean;
   funeralShiftEvidence?: string;
   emailPublicationCheckedAt?: string;
   emailPublications?: { url: string; email: string }[];
@@ -132,6 +135,7 @@ export type CampaignStatus =
 export type CampaignMode = 'manual' | 'revision_previa' | 'automatico';
 
 export interface ResearchEvidence {
+  volleyballSource?: string;
   url: string; title: string; appId: string; country: string;
   topicVerified: boolean; countryVerified: boolean;
   funeralShiftEvidence?: string;

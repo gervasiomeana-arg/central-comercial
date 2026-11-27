@@ -42,7 +42,7 @@ export function validateGoal(input: MonthlySalesGoal) {
 }
 export function playbook(app: Application) {
   const name = normalize(`${app.slug} ${app.name}`);
-  if (name.includes('voley')) return { audience: 'Clubes, escuelas y asociaciones de voleibol', reason: 'Sus entrenadores registran partidos y preparan análisis y entrenamientos.', terms: ['voleibol', 'voley', 'volley', 'vôlei'], segments: ['club voleibol contacto', 'club vóley contacto', 'federación voleibol contacto', 'asociación voley contacto', 'escuela voleibol contacto'] };
+  if (name.includes('voley')) return { audience: 'Clubes, escuelas, asociaciones y técnicos de voleibol', reason: 'Sus entrenadores registran partidos y preparan análisis y entrenamientos.', terms: ['voleibol', 'voley', 'volley', 'vôlei', 'volleyball', 'volleybal'], segments: ['club voleibol contacto', 'club vóley contacto', 'federación voleibol contacto', 'asociación voley contacto', 'escuela voleibol contacto', 'entrenador de voleibol contacto profesional', 'director técnico de vóley contacto profesional'] };
   if (name.includes('visibility')) return { audience: 'Agencias digitales, consultoras y pymes con sitio web', reason: 'Pueden contratar auditorías y seguimiento o sumar el servicio para sus clientes.', terms: ['agencia', 'marketing', 'consultora', 'digital', 'seo'], segments: ['agencia marketing digital contacto', 'consultora SEO contacto', 'agencia diseño web contacto'] };
   if (name.includes('funer')) return {audience:'Empresas funerarias y salas velatorias',reason:'Pueden organizar los servicios, recursos, agenda e inventario de su empresa.',terms:['funeraria','funerarias','funerario','funerarios','funeral','funerales','velatorio','velatorios','velatoria','velatorias','servicios funebres'],segments:['empresa funeraria contacto','servicios funerarios contacto','sala velatoria contacto']};
   if (name.includes('neuro')) return { audience: 'Instituciones educativas y centros con contacto institucional público', reason: 'Pueden conocer las actividades y herramientas de acompañamiento adulto. No se investigan familias ni datos de niños.', terms: ['educacion', 'educativo', 'educativa', 'educacao', 'infantil', 'escola', 'infancia', 'escuela', 'inclusion', 'neurodesarrollo', 'actividades infantiles', 'jardin de infantes', 'autismo', 'tdah', 'psicopedagog', 'terapeutic'], segments: ['centro educativo contacto institucional', 'institución educativa actividades niños contacto', 'fundación educación familias contacto'] };
@@ -50,17 +50,17 @@ export function playbook(app: Application) {
 }
 const translatedProspecting = {
   en: {
-    voley: ['volleyball club', 'volleyball federation', 'volleyball academy'],
+    voley: ['volleyball club', 'volleyball federation', 'volleyball academy', 'volleyball coach professional contact'],
     visibility: ['digital marketing agency', 'SEO consultancy', 'web design agency'],
     neuro: ['early childhood education centre', 'kindergarten', 'family education foundation'],
   },
   fr: {
-    voley: ['club de volleyball', 'fédération de volleyball', 'école de volleyball'],
+    voley: ['club de volleyball', 'fédération de volleyball', 'école de volleyball', 'entraîneur de volleyball'],
     visibility: ['agence de marketing numérique', 'consultant SEO', 'agence web'],
     neuro: ['école maternelle', 'centre de la petite enfance', 'association éducative'],
   },
   nl: {
-    voley: ['volleybalclub', 'volleybalbond', 'volleybalschool'],
+    voley: ['volleybalclub', 'volleybalbond', 'volleybalschool', 'volleyballtrainer'],
     visibility: ['digitaal marketingbureau', 'SEO adviesbureau', 'webdesignbureau'],
     neuro: ['kleuterschool', 'centrum voor kinderopvang', 'educatieve stichting'],
   },
@@ -84,7 +84,7 @@ export function researchQueriesFor(app: Application, country: string) {
   }
   if (language !== 'pt-BR') return playbook(app).segments.map(segment => `${segment} ${market}`);
   const name=normalize(`${app.slug} ${app.name}`);
-  const segments=name.includes('voley')?['clube vôlei contato','escola voleibol contato','federação voleibol contato']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('funer')?['empresa funerária contato','serviços funerários contato','sala velatória contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
+  const segments=name.includes('voley')?['clube vôlei contato','escola voleibol contato','federação voleibol contato','treinador de vôlei contato profissional','técnico de voleibol contato profissional']:name.includes('visibility')?['agência marketing digital contato','consultoria SEO contato','agência desenvolvimento web contato']:name.includes('funer')?['empresa funerária contato','serviços funerários contato','sala velatória contato']:name.includes('neuro')?['instituição educação infantil contato','escola atividades infantis contato','fundação educação famílias contato']:[];
   return segments.map(segment=>`${segment} ${country}`);
 }
 // Catalog execution is explicit and distinct from a completed AI proposal.

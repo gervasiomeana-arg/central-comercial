@@ -1,3 +1,4 @@
+import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
 import {emailPromotionHold, invalidEmailDestination, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
@@ -72,7 +73,7 @@ export function claimCommercialEmail(id: string, now = new Date()) {
           (discoveredPromotion && !verified.includes(recipient))) continue;
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
-        if (contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
+        if (!volleyballRecipientAllowed(app, contact, recipient) || contact.status === 'cliente' || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined) {

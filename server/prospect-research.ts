@@ -1,3 +1,4 @@
+import { isOpenVoley, volleyballMediaDomain, volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
 import { invalidEmailDestination, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
@@ -79,7 +80,7 @@ async function recoverBouncedContact(fetcher: typeof fetchPublicText) {
         if (db.getSchedulerState().automationsPaused) return;
         const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, excluded);
         context = result.evidence;
-        for (const link of contactLinks(page.text, page.url)) if (!queue.includes(link)) queue.push(link);
+        for (const link of contactLinks(page.text, page.url, isOpenVoley(app))) if (!queue.includes(link)) queue.push(link);
         const entry = result.contact?.emailPublications?.[0];
         if (!entry || !result.contact) continue;
         const pageKey = new URL(entry.url).pathname.replace(/\/+$/, '') || '/';
@@ -139,15 +140,54 @@ async function verifyQueuedContact(contact: Contact, now: number, fetcher: typeo
       if (!page || host(page.url) !== host(site.href)) continue;
       const result = reviewContactPage(page.text, page.url, app, contact.country, new Date(now), context);
       context = result.evidence;
-      for (const link of contactLinks(page.text,page.url)) if (!pages.includes(link)) pages.push(link);
+      for (const link of contactLinks(page.text,page.url,isOpenVoley(app))) if (!pages.includes(link)) pages.push(link);
       const latest = db.getContactById(contact.id);
       const entry = result.contact?.emailPublications?.[0];
-      if (!latest || host(latest.website) !== host(site.href) || !entry) continue;
+      if (!latest || host(latest.website) !== host(site.href) || !entry ||
+          (latest.volleyballCoach && entry.email !== normalizeContactEmail(latest.email))) continue;
       latest.emailPublications = [...(latest.emailPublications || []).filter(item => item.url !== entry.url), entry].slice(-12);
       db.save();
       if (publishedCampaignRecipients(latest).length) return;
     }
   } catch { /* Keep the draft pending when there is insufficient evidence. */ }
+}
+
+async function reviewExistingVolleyballContact(fetcher: typeof fetchPublicText) {
+  const app = db.getApplications().find(isOpenVoley);
+  if (!app?.campaignsAllowed) return;
+  const contacts = db.getContacts();
+  const candidate = contacts.filter(contact => contact.interestedAppIds.includes(app.id) && contact.website &&
+    contact.permission !== 'revocado' && !['cliente', 'baja_solicitada', 'descartado'].includes(contact.status) &&
+    !volleyballMediaDomain(contact.email?.split('@').pop() || '') && !volleyballRecipientAllowed(app, contact) &&
+    (!contact.volleyballCheckedAt || Date.parse(contact.volleyballCheckedAt) <= Date.now() - 7 * 86400000))
+    .sort((a, b) => (a.volleyballCheckedAt || '').localeCompare(b.volleyballCheckedAt || ''))[0];
+  if (!candidate) return;
+  candidate.volleyballCheckedAt = new Date().toISOString();
+  db.save();
+  try {
+    const site = publicUrl(candidate.website);
+    const pages = [new URL('/', site).href];
+    if (candidate.source && host(candidate.source) === host(site.href) && !pages.includes(candidate.source)) pages.unshift(candidate.source);
+    let context: ResearchCandidate['context'];
+    for (let i = 0; i < pages.length && i < 3; i++) {
+      if (db.getSchedulerState().automationsPaused) return;
+      const page = await fetcher(pages[i]).catch(() => undefined);
+      if (!page || host(page.url) !== host(site.href)) continue;
+      const reviewed = reviewContactPage(page.text, page.url, app, candidate.country, new Date(), context);
+      context = reviewed.evidence;
+      for (const link of contactLinks(page.text, page.url, true)) if (!pages.includes(link)) pages.push(link);
+      const verified = reviewed.contact;
+      const latest = db.getContactById(candidate.id);
+      if (!verified?.volleyballSource || !latest || latest.website !== candidate.website || db.getSchedulerState().automationsPaused) continue;
+      const sameEmail = verified.email && normalizeContactEmail(latest.email || '') === verified.email;
+      const samePhone = verified.phone && whatsappPhone(latest.phone || '') === verified.phone;
+      if (!(sameEmail || samePhone) || (latest.email && !sameEmail) || (latest.phone && !samePhone)) continue;
+      latest.volleyballSource = verified.volleyballSource;
+      latest.volleyballCoach = verified.volleyballCoach;
+      db.save();
+      return;
+    }
+  } catch { /* Keep the contact out of promotions until the source can be verified. */ }
 }
 
 export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetchPublicText) {
@@ -182,6 +222,14 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         state.status='quota';state.detail='Cupo diario alcanzado. La cola se conserva para mañana.';db.save();
       }
       return;
+    }
+    if (report.remaining && remaining() > 1 && fetcher === fetchPublicText) {
+      await reviewExistingVolleyballContact(async url => {
+        if (remaining() <= 1) throw new ResearchQuota('Cupo de páginas alcanzado.');
+        state.requests++;
+        db.save();
+        return fetcher(url);
+      });
     }
     const lastAppResearch=new Map<string,string>();
     for(const c of campaigns){
@@ -287,7 +335,9 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
             catch { return false; }
           };
           const foundEmail = ownerEmailCorrection(contact.email) || normalizeContactEmail(contact.email);
-          const existing = db.getContacts().find(c => (foundEmail && normalizeContactEmail(c.email || '') === foundEmail) || sameWebsite(c));
+          const existing = db.getContacts().find(c => contact.volleyballCoach || c.volleyballCoach
+            ? Boolean(contact.volleyballCoach && c.volleyballCoach && c.source === contact.source)
+            : Boolean((foundEmail && normalizeContactEmail(c.email || '') === foundEmail) || sameWebsite(c)));
           if(existing){
             const canUpdate = existing.permission !== 'revocado' && !['baja_solicitada', 'descartado'].includes(existing.status);
             if (canUpdate && sameWebsite(existing) && contact.emailPublications?.length) {
@@ -314,6 +364,11 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
                 description: `Enlace institucional de WhatsApp verificado en ${contact.source}.`, author: 'Central Comercial',
               });
             }
+            if (canUpdate && sameWebsite(existing) && contact.volleyballSource &&
+                ((!existing.email || normalizeContactEmail(existing.email) === contact.email) &&
+                 (!existing.phone || whatsappPhone(existing.phone) === contact.phone))) {
+              existing.volleyballSource = contact.volleyballSource;
+            }
             if (canUpdate && sameWebsite(existing) && contact.funeralShiftEvidence) {
               existing.funeralShiftEvidence = contact.funeralShiftEvidence;
             }
@@ -326,8 +381,8 @@ export async function researchGoalProspects(fetcher:typeof fetchPublicText=fetch
         if (!reviewed.contact?.email || !reviewed.contact.phone || reviewed.contact.emailPublications?.length === 1) {
           const context=reviewed.evidence;
           if(!context.topicVerified && !candidate.context && new URL(page.url).pathname!=='/') {enqueue({url:new URL('/',page.url).href,context,returnTo:page.url},true);}
-          if(context.topicVerified){
-          for(const url of contactLinks(page.text,page.url).reverse())if(url!==page.url)enqueue({url,context},true);
+          if(context.topicVerified && !reviewed.contact?.volleyballCoach){
+          for(const url of contactLinks(page.text,page.url,isOpenVoley(app)).reverse())if(url!==page.url)enqueue({url,context},true);
           const root=new URL('/',page.url).href;
           if(page.url!==root && !candidate.context)enqueue({url:root,context,returnTo:page.url},true);
           if(candidate.returnTo&&context.topicVerified&&context.countryVerified)enqueue({url:candidate.returnTo,context},true);

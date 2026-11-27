@@ -1,3 +1,4 @@
+import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { normalize } from './sales-director.js';
 import { researchGoalProspects } from './prospect-research.js';
 import { db } from './db.js';
@@ -127,7 +128,9 @@ class CommercialScheduler {
         const campaign = thread.campaignId && active.get(thread.campaignId);
         const capacity = capacities.get(thread.appId);
         const contact = contactById.get(thread.contactId);
-        if (!campaign || !capacity || !contact || campaign.mode !== 'automatico') continue;
+        const app = db.getApplicationById(thread.appId);
+        if (!campaign || !capacity || !contact || !app || !volleyballRecipientAllowed(app, contact) ||
+            campaign.mode !== 'automatico') continue;
         for (const message of thread.messages) {
           if (message.direction !== 'outbound' || message.replyToProviderId || message.replacementMessageId ||
               message.reviewStatus === 'rejected' || !['preparado','pendiente'].includes(message.status)) continue;

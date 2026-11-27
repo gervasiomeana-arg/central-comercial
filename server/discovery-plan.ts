@@ -1,3 +1,4 @@
+import { isOpenVoley } from './volleyball-outreach.js';
 import type {Application,Campaign} from '../src/types.js';
 import { marketFor } from './campaign-markets.js';
 import {normalize,researchQueriesFor,prospectingTerms} from './sales-director.js';
@@ -8,7 +9,13 @@ export function prospectQuery(query:string,app:Application,country:string){
    (audience.test(q) || researchQueriesFor(app,country).some(candidate=>normalize(candidate)===q))&&prospectingTerms(app,country).some(t=>q.includes(normalize(t)))&&!q.includes(normalize(app.name));
 }
 export function repairDiscoveryPlan(c:Campaign,app:Application){
- if(c.researchDiscoveryVersion===3)return false;
+ if(c.researchDiscoveryVersion===3){
+  if (!isOpenVoley(app)) return false;
+  const queries = [...new Set([...(c.researchQueries || []), ...researchQueriesFor(app, c.country)])];
+  if (queries.length === c.researchQueries?.length) return false;
+  c.researchQueries = queries;
+  return true;
+ }
  c.researchRepairArchive={at:new Date().toISOString(),queries:c.researchQueries||[],queue:c.researchQueue||[],seen:c.researchSeenUrls||[],count:c.researchCount||0,nextAttemptAt:c.researchNextAttemptAt,outcome:c.researchLastOutcome,previousAiPlan:c.intelligencePlanId};
  if(!c.researchQueries?.length||!c.researchQueries.every(q=>prospectQuery(q,app,c.country))){
   c.researchQueries=researchQueriesFor(app,c.country);c.catalogStrategy={version:1,appId:app.id,country:c.country};delete c.intelligencePlanId;

@@ -1,3 +1,4 @@
+import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
 import {invalidEmailDestination, ownerEmailCorrection, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, unlimitedCampaignOutreach} from './sales-director.js';
@@ -119,6 +120,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     if ((!emailAllowed && !whatsappAllowed) || ['cliente', 'descartado', 'baja_solicitada'].includes(contact.status)) { skip('Sin autorización o fuera de prospección'); continue; }
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) { skip('Fuente sin revisar'); continue; }
+    if (!volleyballRecipientAllowed(app, contact)) { skip('Actividad de voleibol pendiente de verificar'); continue; }
     if (responded.has(contact.id)) { skip('Ya respondió: revisar conversación'); continue; }
     const email = contact.email?.trim().toLowerCase() || '';
     const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;

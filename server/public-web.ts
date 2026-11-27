@@ -1,3 +1,4 @@
+import { isOpenVoley, volleyballMediaPage, volleyballProfile } from './volleyball-outreach.js';
 import {normalizeContactEmail, usableContactEmail} from '../src/email-policy.js';
 import https from 'node:https';
 import dns from 'node:dns/promises';
@@ -58,9 +59,9 @@ export function searchLinks(xml: string) {
     try { const url = publicUrl(decode(link || '').trim()); return excluded.test(url.hostname) ? [] : [url.href]; } catch { return []; }
   }))].slice(0, 10);
 }
-export function contactLinks(html: string, base: string) {
+export function contactLinks(html: string, base: string, includeVolleyball = false) {
   return [...new Set([...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].flatMap(match => {
-    try { const url = publicUrl(new URL(decode(match[1]), base).href); return hostKey(url.href) === hostKey(base) && /contact|contato|contacto|institucional|quienes|quem-somos|about/i.test(url.pathname) ? [url.href] : []; } catch { return []; }
+    try { const url = publicUrl(new URL(decode(match[1]), base).href); return hostKey(url.href) === hostKey(base) && (/contact|contato|contacto|institucional|quienes|quem-somos|about/i.test(url.pathname) || (includeVolleyball && /\/(?:voley|volei|voleibol|volleyball)\/?$/i.test(url.pathname))) ? [url.href] : []; } catch { return []; }
   }))].sort((a,b)=>Number(/contact/i.test(b))-Number(/contact/i.test(a))).slice(0, 3);
 }
 const word=(text:string,term:string)=>new RegExp(`\\b${normalize(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(normalize(text));
@@ -92,13 +93,23 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   }
   const inherited=context&&context.appId===app.id&&normalize(context.country)===normalize(country)&&hostKey(context.url)===hostKey(url)?context:undefined;
   const structured=organizationData(html), rule=marketFor(country);
-  const whatsappLink = clean.match(/href\s*=\s*["']https?:\/\/wa\.me\/(\+?\d{10,15})(?=[?/"'#])/i)?.[1] ||
-    clean.match(/href\s*=\s*["']https?:\/\/(?:api|web)\.whatsapp\.com\/send\?[^"'<>]*?\bphone=(?:%2B|\+)?(\d{10,15})(?=[&#"'])/i)?.[1];
-  const displayedWhatsApp = text.match(/\bwhats\s*app\s*(?:[:·-]\s*)?(\+[1-9][\d ().-]{8,24}\d)/i)?.[1];
+  const title=decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||new URL(url).hostname).slice(0,160);
+  const volleyball = isOpenVoley(app);
+  const page = new URL(url);
+  const heading = decode(clean.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' ') || '');
+  const editorial = /property=["']og:type["'][^>]*content=["']article["']|["']@type["']\s*:\s*["'](?:NewsArticle|Article|BlogPosting)["']/i.test(html);
+  const profile = volleyball ? volleyballProfile(heading, title, page, editorial) ||
+    volleyballProfile(title, title, page, editorial) : undefined;
+  const channelHtml = profile === 'coach' ? clean.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ||
+    clean.replace(/<(?:header|footer|nav)\b[^>]*>[\s\S]*?<\/(?:header|footer|nav)>/gi, '') : clean;
+  const channelText = profile === 'coach' ? decode(channelHtml.replace(/<[^>]+>/g, ' ')) : text;
+  const whatsappLink = channelHtml.match(/href\s*=\s*["']https?:\/\/wa\.me\/(\+?\d{10,15})(?=[?/"'#])/i)?.[1] ||
+    channelHtml.match(/href\s*=\s*["']https?:\/\/(?:api|web)\.whatsapp\.com\/send\?[^"'<>]*?\bphone=(?:%2B|\+)?(\d{10,15})(?=[&#"'])/i)?.[1];
+  const displayedWhatsApp = channelText.match(/\bwhats\s*app\s*(?:[:·-]\s*)?(\+[1-9][\d ().-]{8,24}\d)/i)?.[1];
   const candidatePhone = (whatsappLink || displayedWhatsApp || '').replace(/\D/g, '');
   const phone = /^[1-9]\d{9,14}$/.test(candidatePhone) ? candidatePhone : '';
-  const telephone=clean.match(/href\s*=\s*["']tel:\s*(\+[^"']+)["']/i)?.[1].replace(/\D/g,'')||'';
-  const title=decode(clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||new URL(url).hostname).slice(0,160);
+  const telephone=channelHtml.match(/href\s*=\s*["']tel:\s*(\+[^"']+)["']/i)?.[1].replace(/\D/g,'')||'';
+  const volleyballSource = profile ? url : !editorial && !volleyballMediaPage(page) ? inherited?.volleyballSource : undefined;
   const countryText = rule?.iso === 'MX' ? text.replace(/\b(?:new|nuevo) m[eé]xico\b/gi, '') : text;
   const structuredCountry = structured.countries.some(name =>
     (rule?.aliases || [country]).some(alias => normalize(alias) === normalize(name)) || rule?.iso === name.toUpperCase());
@@ -111,25 +122,36 @@ export function reviewContactPage(html: string, url: string, app: Application, c
     /\b(?:24\s*(?:horas|hrs?\.?|h)\b|nuestras sucursales\b|varias sucursales\b)/i.test(text)
     ? url : inherited?.funeralShiftEvidence;
   const evidence:ResearchEvidence = { url, appId: app.id, country, title, countryVerified, funeralShiftEvidence,
-    topicVerified: Boolean(inherited?.topicVerified || prospectingTerms(app,country).some(term => word(text,term))) };
-  if(!evidence.topicVerified)return {contact:null,evidence,reason:'Actividad de la organización sin verificar'};
+    volleyballSource: volleyball ? volleyballSource : undefined,
+    topicVerified: volleyball ? Boolean(volleyballSource) : Boolean(inherited?.topicVerified || prospectingTerms(app,country).some(term => word(text,term))) };
+  if(!evidence.topicVerified)return {contact:null,evidence,reason:volleyball?'Sin actividad propia de voleibol verificada':'Actividad de la organización sin verificar'};
   if(!evidence.countryVerified)return {contact:null,evidence,reason:'País de la organización sin verificar'};
-  const visibleEmailText=decode(clean.replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi,'').replace(/<[^>]+>/g,' '));
+  const visibleEmailText=decode(channelHtml.replace(/<textarea\b[^>]*>[\s\S]*?<\/textarea>/gi,'').replace(/<[^>]+>/g,' '));
   const emails:string[]=visibleEmailText.match(/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[\p{L}\p{M}\p{N}.-]+\.[A-Z]{2,}/giu)||[];
-  for(const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
-  emails.push(...structured.emails);
+  for(const link of channelHtml.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {try{emails.push(decodeURIComponent(decode(link[1])));}catch{/* Malformed mail links are ignored. */}}
+  if (profile !== 'coach') emails.push(...structured.emails);
   const emailHost = hostname.replace(/^www\./, '');
-  const declared = new Set(structured.emails.map(normalizeContactEmail));
-  for (const link of clean.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
+  const declared = new Set(profile === 'coach' ? [] : structured.emails.map(normalizeContactEmail));
+  for (const link of channelHtml.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
     try { declared.add(normalizeContactEmail(decodeURIComponent(decode(link[1])))); } catch {}
   }
   const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) &&
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
-    (declared.has(email) || email.split('@')[1] === emailHost));
+    (declared.has(email) || email.split('@')[1] === emailHost) &&
+    (profile !== 'coach' || !/^(?:info|contacto?|contato|administracion|secretaria|hola)@/.test(email)));
   const email=valid.sort((a,b)=>Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(b))-Number(/^(info|contacto|contact|administracion|secretaria|hola|contato)@/.test(a)))[0]||'';
+  if (profile === 'coach' && !email && !phone) return {contact:null,evidence:{...evidence,volleyballSource:undefined,topicVerified:false},reason:'Perfil técnico sin contacto profesional publicado'};
   if(!email&&!phone)return {contact:null,evidence,reason:'Sin email ni enlace de WhatsApp publicados'};
   const additional=inherited?` Actividad y país contrastados también en ${inherited.url}.`:'';
   const contact:Contact={id:`contact-${randomUUID()}`,orgName:inherited?.title&&!/^(contacto|contact|contato|home|inicio)$/i.test(inherited.title)?inherited.title:title,contactPerson:'',role:'Contacto institucional público',orgType:playbook(app).audience,country,language:marketLanguage(country),timezone:'America/Argentina/Buenos_Aires',website:new URL(url).origin,email,phone,emailPublications:email&&!/\b(?:directorio|ranking|lista de|mejores funerarias)\b/i.test(title)?[{url,email}]:undefined,funeralShiftEvidence,publishedWhatsApp:phone?{number:phone,source:url}:undefined,source:url,sourceReviewDate:now.toISOString(),interestedAppIds:[app.id],assignedTo:'Central Comercial',notes:`Datos publicados por la organización y verificados en su sitio.${additional}`,history:[],preferredChannel:phone?'whatsapp':'email',permission:'desconocido',outreachBasis:'public_business_contact',status:'prospecto',nextFollowUpDate:null,createdAt:now.toISOString(),updatedAt:now.toISOString()};
+  if (volleyball && volleyballSource) contact.volleyballSource = volleyballSource;
+  if (profile === 'coach') {
+    contact.volleyballCoach = true;
+    contact.orgName = (heading || title).trim().split(/\s+[|–—]\s+/)[0];
+    contact.contactPerson = contact.orgName;
+    contact.role = 'Profesional de voleibol';
+    contact.orgType = 'Técnicos de voleibol';
+  }
   return {contact,evidence,reason:phone ? (email ? 'Email y WhatsApp públicos verificados' : 'WhatsApp público verificado') : 'Email público verificado'};
 }
 export function extractContact(html:string,url:string,app:Application,country:string,now=new Date(),context?:ResearchEvidence):Contact|null {
@@ -159,6 +181,6 @@ export function relevantSearchLinks(document:string,app:Application,country:stri
  return [...new Set(entries.flatMap(item=>{try{const u=publicUrl(item.url),text=item.text+' '+u.hostname+u.pathname;
   const topic=prospectingTerms(app,country).some(t=>word(text,t));
   const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(rule && u.hostname.endsWith('.'+rule.iso.toLowerCase()));
-  return !excluded.test(u.hostname)&&topic&&place?[u.href]:[];
+  return !excluded.test(u.hostname)&&(!isOpenVoley(app)||!volleyballMediaPage(u))&&topic&&place?[u.href]:[];
  }catch{return [];}}))].slice(0,10);
 }
