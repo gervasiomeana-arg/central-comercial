@@ -21,6 +21,7 @@ const whatsappStageLabels: Record<WhatsAppStage, string> = {
   qr: 'Central todavía no pudo recuperar su sesión guardada de WhatsApp.',
   loading: 'Sesión autenticada. WhatsApp está cargando.',
   verifying: 'Sesión abierta. Central está comprobando el número vinculado.',
+  identity_unavailable: 'WhatsApp abrió la sesión. Central sigue esperando que WhatsApp confirme el número de la cuenta.',
   connected: 'Sesión verificada. Esperando la confirmación del servidor local.',
   server_rejected: 'El ejecutor abrió WhatsApp, pero el servidor de Central no confirmó el enlace. Revisá el mensaje en el iniciador.',
   auth_failed: 'WhatsApp rechazó la sesión guardada del ejecutor.',
@@ -78,7 +79,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
       if(remote || local.reportUnavailable)setConnections(local.online&&local.connections?local.connections:{email:false,whatsapp:false,intelligence:false});
       else {
         const [jarvis,goal,channel]=await Promise.all([api.getJarvisStatus(),api.getSalesGoal(),api.getRealChannelTests()]);
-        setConnections({email:goal.worker.online&&goal.worker.send&&goal.worker.read,whatsapp:channel.commercialWhatsApp?.ready ?? channel.whatsappReady,intelligence:jarvis.ready});
+        setConnections({email:goal.worker.online&&goal.worker.send&&goal.worker.read,whatsapp:channel.commercialWhatsApp?.ready === true,intelligence:jarvis.ready});
       }
       setError('');
     } catch (e: any) { setError(e.message); }
@@ -91,7 +92,7 @@ export function LocalRuntimePanel({remote=false}:{remote?:boolean}) {
     <div className="flex items-start justify-between gap-4"><div className="flex items-start gap-4"><Monitor size={25} className="mt-1 text-emerald-300 shrink-0" /><div><p className="text-xs uppercase tracking-widest text-slate-400 mb-2">Una sola Central Comercial</p><h2 id="runtime-title" className="text-xl font-semibold">Tu computadora, conectada al negocio.</h2><p className="text-sm text-slate-300 mt-2">Un iniciador coordina correo, WhatsApp y motor de inteligencia. La operación autónoma y los registros se conservan en tu PC dedicada.</p></div></div><button onClick={() => void refresh()} disabled={busy} aria-label="Actualizar estado de mi computadora" className="p-3 rounded-xl bg-white/10 min-h-12 min-w-12 disabled:opacity-40"><RefreshCw size={18} /></button></div>
     <div className="grid sm:grid-cols-3 gap-4">{items.map(item => <div key={item.id} className="rounded-xl border border-white/10 p-4"><div className="flex items-center gap-2 text-sm font-medium">{connections[item.id] && !reportUnavailable ? <CheckCircle2 size={16} className="text-emerald-300" /> : <Circle size={16} className="text-slate-400" />}{item.name}</div><p className="text-sm text-slate-300 mt-2">{reportUnavailable ? (connections[item.id] ? 'Vinculado en el último reporte' : 'Esperando confirmación del servidor') : connections[item.id] ? (item.id === 'whatsapp' ? 'Sesión vinculada según el ejecutor' : 'Conexión confirmada por el ejecutor') : item.id === 'whatsapp' && runtime?.whatsappStage ? whatsappStageLabels[runtime.whatsappStage] : runtime?.online && runtime.components?.[item.id] === 'running' ? 'Proceso iniciado; conexión pendiente' : 'Pendiente de conexión'}</p></div>)}</div>
     {!remote && runtime?.online && !runtime.diagnosticMode && !connections.whatsapp &&
-      runtime.components?.whatsapp === 'stopped' && <div className="space-y-2">
+      runtime.components?.whatsapp !== 'missing' && runtime.whatsappStage !== 'phone_link' && <div className="space-y-2">
         <button className="rounded-xl bg-white/10 px-4 py-2 text-sm" onClick={() => void requestPhoneLink()} disabled={linking}>
           Vincular Central con un código de WhatsApp
         </button>

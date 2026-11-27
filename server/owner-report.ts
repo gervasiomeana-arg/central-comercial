@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { Router } from 'express';
 import { accountingDay } from '../src/ledger.js';
 import { diagnosticMode } from './execution-role.js';
@@ -14,12 +15,15 @@ export function registerOwnerReportRoutes(router: Router) {
     }
     if (whatsappStatus().ready) return res.json({ alreadyConnected: true });
     const root = path.join(process.env.LOCALAPPDATA, 'CentralComercial', 'WhatsApp', 'private-state');
+    const request = path.join(root, 'link-by-phone-request');
+    const temporary = request + '.' + randomUUID();
     try {
-      fs.writeFileSync(path.join(root, 'link-by-phone-request'), TEST_RECIPIENTS.whatsapp, { flag: 'wx', mode: 0o600 });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        return res.status(503).json({ error: 'El ejecutor local de WhatsApp no pudo recibir la solicitud.' });
-      }
+      fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(temporary, TEST_RECIPIENTS.whatsapp, { flag: 'wx', mode: 0o600 });
+      fs.renameSync(temporary, request);
+    } catch {
+      try { fs.rmSync(temporary, { force: true }); } catch {}
+      return res.status(503).json({ error: 'El ejecutor local de WhatsApp no pudo recibir la solicitud.' });
     }
     return res.status(202).json({ alreadyConnected: false });
   });

@@ -3,30 +3,17 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 // Session readiness is unrelated to page rendering. Browsers can stop animation
 // frames while a window is hidden or Windows is locked (wwebjs issue #201940).
+const pollingPages = new WeakSet();
 export function useWhatsAppSessionPolling(page) {
+ if(!page || pollingPages.has(page))return;
+ pollingPages.add(page);
  const waitForFunction=page.waitForFunction.bind(page);
  page.waitForFunction=(predicate,options,...args)=>{
   const check=String(predicate);
   const readiness=check.includes('window.Debug?.VERSION') ||
    check.includes('WAWebSocketModel') || check.includes('typeof window.WWebJS');
-  return waitForFunction(predicate, readiness ? {polling:200,...options} : options, ...args);
+  return waitForFunction(predicate, readiness ? {...options,polling:200} : options, ...args);
  };
-}
-export async function openWhatsAppPhoneLink(page, signal) {
- const handle=await page.waitForFunction(()=>{
-  const label=/^(?:vincular con (?:el )?número de teléfono|iniciar sesión con (?:el )?número de teléfono|link with phone number|log in with phone number|conectar com (?:o )?número de telefone|vincular com (?:o )?número de telefone)(?:\s+instead)?$/i;
-  return [...document.querySelectorAll('button, a, [role="button"], [role="link"]')].find(element=>
-   !element.closest('[hidden], [aria-hidden="true"]') && !element.matches(':disabled, [aria-disabled="true"]') &&
-   element.getClientRects().length && label.test((element.textContent||'').replace(/\s+/g,' ').trim())
-  ) || false;
- },{polling:200,timeout:25000,signal});
- try{
-  if(signal.aborted)return;
-  if(new URL(page.url()).origin!=='https://web.whatsapp.com')throw new Error('WhatsApp Web cambió de página.');
-  const control=handle.asElement();
-  if(!control)throw new Error('WhatsApp Web no mostró la opción por teléfono.');
-  await control.click();
- }finally{await handle.dispose();}
 }
 export function whatsappStartupFailure(error) {
  const message = typeof error === 'string' ? error : String(error?.message || '');

@@ -80,7 +80,11 @@ export async function stageRelease(sha){
   // Repair the lock only inside this isolated staged release; never touch the user's records.
   await run(npm,['install','--package-lock-only','--ignore-scripts','--no-audit','--no-fund'],src,180000);
   await run(npm,['ci','--include=dev','--ignore-scripts','--no-audit','--no-fund'],src,600000);
-  await run(npm,['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],path.join(src,'channel-worker'),180000);
+  const channelWorker=path.join(src,'channel-worker');
+  if(!fs.existsSync(path.join(channelWorker,'package-lock.json'))){
+   await run(npm,['install','--package-lock-only','--ignore-scripts','--no-audit','--no-fund'],channelWorker,180000);
+  }
+  await run(npm,['ci','--omit=dev','--ignore-scripts','--no-audit','--no-fund'],channelWorker,180000);
   await run(npm,['run','build'],src,180000);
   if(!fs.existsSync(path.join(src,'dist','index.html')))throw new Error('Build incompleto');
   fs.renameSync(src,dest);return dest;

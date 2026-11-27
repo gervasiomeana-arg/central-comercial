@@ -16,7 +16,7 @@ const PROMOTION = 'Conocé Open Voley: una plataforma de scouting y análisis de
 // Separate from commercial contacts, payments and conversion metrics.
 export class ChannelTestQueue {
   private jobs: TestJob[];
-  private worker: { id: string; at: number; email: boolean; whatsapp: boolean } | null = null;
+  private workers: Partial<Record<Channel, { id: string; at: number; ready: boolean }>> = {};
   constructor(private filename: string, private now = () => Date.now()) {
     this.jobs = fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')) : [];
     if (!Array.isArray(this.jobs)) throw new Error('Registro de pruebas inválido. Conserve el archivo y revise su respaldo.');
@@ -40,18 +40,31 @@ export class ChannelTestQueue {
     }
     if (changed) this.save();
   }
-  heartbeat(id: string, email: boolean, whatsapp: boolean) {
-    if (!id || id.length > 100) throw new Error('Identificador de ejecutor inválido.');
-    if (this.worker && this.now() - this.worker.at < 90000 && this.worker.id !== id) {
-      throw new Error('Ya hay otro ejecutor activo. Cierre el anterior antes de iniciar otro.');
+  private activeWorker(channel: Channel) {
+    const worker = this.workers[channel];
+    return worker && this.now() - worker.at < 90000 ? worker : undefined;
+  }
+  heartbeat(id: string, email: boolean, whatsapp: boolean, channel?: Channel) {
+    if (typeof id !== 'string' || !id || id.length > 100) throw new Error('Identificador de ejecutor inválido.');
+    const channels: Channel[] = channel ? [channel] : ['email', 'whatsapp'];
+    const ready = { email, whatsapp };
+    for (const current of channels) {
+      const worker = this.activeWorker(current);
+      if (ready[current] && worker?.ready && worker.id !== id) {
+        throw new Error('Ya hay otro ejecutor de pruebas activo para este canal.');
+      }
     }
-    this.worker = { id, at: this.now(), email, whatsapp };
+    for (const current of channels) {
+      const worker = this.activeWorker(current);
+      if (!worker || worker.id === id || ready[current]) this.workers[current] = { id, at: this.now(), ready: ready[current] };
+    }
   }
   status() {
     this.expire();
-    const online = Boolean(this.worker && this.now() - this.worker.at < 90000);
-    return { recipients: TEST_RECIPIENTS, online,
-      emailReady: online && Boolean(this.worker?.email), whatsappReady: online && Boolean(this.worker?.whatsapp),
+    const email = this.activeWorker('email');
+    const whatsapp = this.activeWorker('whatsapp');
+    return { recipients: TEST_RECIPIENTS, online: Boolean(email || whatsapp),
+      emailReady: Boolean(email?.ready), whatsappReady: Boolean(whatsapp?.ready),
       jobs: this.jobs.slice(-20).reverse().map(({ lease, workerId, ...job }) => job) };
   }
   enqueue(channels: Channel[]) {
@@ -71,10 +84,12 @@ export class ChannelTestQueue {
       state: 'pendiente' as const, createdAt: this.now(), updatedAt: this.now() }));
     this.jobs.push(...created); this.save(); return created;
   }
-  claim(workerId: string) {
+  claim(workerId: string, channel?: Channel) {
     this.expire();
-    if (!this.worker || this.worker.id !== workerId || this.now() - this.worker.at >= 90000) throw new Error('Ejecutor desconectado.');
-    const job = this.jobs.find(j => j.state === 'pendiente' && this.worker![j.channel]);
+    const channels: Channel[] = channel ? [channel] : ['email', 'whatsapp'];
+    const owned = channels.filter(current => this.activeWorker(current)?.id === workerId);
+    if (!owned.length) throw new Error('Ejecutor desconectado.');
+    const job = this.jobs.find(j => j.state === 'pendiente' && owned.includes(j.channel) && this.activeWorker(j.channel)?.ready);
     if (!job) return null;
     job.state = 'en_proceso'; job.updatedAt = this.now(); job.workerId = workerId;
     job.lease = crypto.randomBytes(24).toString('hex'); this.save(); return { ...job };
@@ -103,9 +118,10 @@ export function registerWorkerTestRoutes(app: Express, queue: ChannelTestQueue) 
     res.setHeader('Cache-Control', 'no-store');
     if (!workerAuthorized(req.headers.authorization)) return res.status(401).json({ error: 'Ejecutor no autorizado.' });
     try {
-      const { workerId } = req.body;
-      if (req.params.action === 'heartbeat') { queue.heartbeat(workerId, req.body.email === true, req.body.whatsapp === true); return res.json({ ok: true }); }
-      if (req.params.action === 'claim') return res.json({ job: queue.claim(workerId) });
+      const { workerId, channel } = req.body;
+      if (channel !== undefined && channel !== 'email' && channel !== 'whatsapp') return res.status(400).json({ error: 'Canal inválido.' });
+      if (req.params.action === 'heartbeat') { queue.heartbeat(workerId, req.body.email === true, req.body.whatsapp === true, channel); return res.json({ ok: true }); }
+      if (req.params.action === 'claim') return res.json({ job: queue.claim(workerId, channel) });
       if (req.params.action === 'complete') { queue.complete(req.body.id, workerId, req.body.lease, req.body.result || {}); return res.json({ ok: true }); }
       return res.status(404).json({ error: 'Acción desconocida.' });
     } catch (error: any) { return res.status(409).json({ error: error.message }); }

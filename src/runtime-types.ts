@@ -31,7 +31,7 @@ export interface OwnerReportStatus {
   at?: string;
 }
 
-export const whatsappStages = ['starting', 'qr', 'loading', 'verifying', 'connected', 'server_rejected', 'auth_failed', 'restarting',
+export const whatsappStages = ['starting', 'qr', 'loading', 'verifying', 'identity_unavailable', 'connected', 'server_rejected', 'auth_failed', 'restarting',
   'profile_busy', 'browser_access', 'browser_transport', 'web_unavailable', 'browser_launch', 'web_startup', 'session_timeout', 'phone_link', 'phone_link_failed'] as const;
 export type WhatsAppStage = typeof whatsappStages[number];
 

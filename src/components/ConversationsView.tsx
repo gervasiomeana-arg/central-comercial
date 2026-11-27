@@ -622,7 +622,7 @@ function WhatsAppOverview({viewingPcRecords, contacts, campaigns, conversations,
           const runtime = await api.getLocalRuntime();
           ready = runtime.online && !runtime.reportUnavailable ? runtime.connections?.whatsapp ?? null : null;
         } else {
-          ready = (await api.getRealChannelTests()).whatsappReady;
+          ready = (await api.getRealChannelTests()).commercialWhatsApp?.ready ?? null;
         }
         if (!cancelled) setConnected(ready);
       } catch {

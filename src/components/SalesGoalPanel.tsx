@@ -6,7 +6,7 @@ import type { MonthlySalesGoal } from '../types.js';
 export function SalesGoalPanel({ onNavigate, selectedApp = 'all' }: { onNavigate: (tab: string, appId: string) => void; selectedApp?: string }) {
   const [whatsappReady,setWhatsappReady]=useState(false);
   const [report,setReport] = useState<any>(null), [goal,setGoal] = useState<MonthlySalesGoal|null>(null), [editing,setEditing] = useState(false), [error,setError] = useState(''), [busy,setBusy] = useState(false);
-  const load = async () => { try { const [r,channels] = await Promise.all([api.getSalesGoal(),api.getRealChannelTests()]); setWhatsappReady(Boolean(channels.whatsappReady)); setReport(r); if(!editing) setGoal(r.goal); } catch(e:any){setError(e.message);} };
+  const load = async () => { try { const [r,channels] = await Promise.all([api.getSalesGoal(),api.getRealChannelTests()]); setWhatsappReady(Boolean(channels.commercialWhatsApp?.ready)); setReport(r); if(!editing) setGoal(r.goal); } catch(e:any){setError(e.message);} };
   useEffect(()=>{ void load(); const timer=setInterval(()=>void load(),30000); return()=>clearInterval(timer); },[editing]);
   const save=async(e:React.FormEvent)=>{e.preventDefault(); if(!goal)return; setBusy(true);setError('');try{const r=await api.saveSalesGoal(goal);setReport(r);setGoal(r.goal);setEditing(false);}catch(e:any){setError(e.message);}finally{setBusy(false);}};
   return <section className="cc-panel cc-goal-panel" aria-label="Objetivo mensual">

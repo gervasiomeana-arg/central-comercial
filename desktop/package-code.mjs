@@ -9,8 +9,8 @@ export function copyCode(source,target){
       if(entry.isSymbolicLink()||entry.name.startsWith('.')||['private-state','node_modules','central-worker-backups'].includes(entry.name))continue;
       const file=path.join(dir,relative,entry.name);
       if(entry.isDirectory())walk(dir,path.join(relative,entry.name));
-      else if(dir==='dist'||/\.(?:ts|tsx|js|mjs|css|md|bat|txt)$/.test(entry.name))copy(path.join(source,file),path.join(target,file));
+      else if(dir==='dist'||(dir==='channel-worker'&&['package.json','package-lock.json'].includes(entry.name))||/\.(?:ts|tsx|js|mjs|css|md|bat|txt)$/.test(entry.name))copy(path.join(source,file),path.join(target,file));
     }
   };
-  for(const dir of ['server','src','dist','desktop','email-worker','openjarvis-worker'])walk(dir);
+  for(const dir of ['server','src','dist','desktop','email-worker','openjarvis-worker','channel-worker'])walk(dir);
 }

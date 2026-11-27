@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { findConfig, findJarvis, executable, jarvisEnvironment, selectedModel } from './config.mjs';
 import { retryDelay, upgradeWorker, atomicJSON, readOwnerReport } from './recovery.mjs';
 import { saveCheckpoint } from './checkpoint.mjs';
-import { prepareLocalRecords, dependenciesReady, installDependencies } from './local-app.mjs';
+import { prepareLocalRecords, dependenciesReady, installDependencies, installWhatsAppDependencies } from './local-app.mjs';
 import { activeRelease, refreshInstalledUpdater } from './auto-update.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,11 +33,13 @@ const components = { email: 'missing', whatsapp: 'missing', intelligence: 'missi
 const issues = new Set(), children = new Set();
 let stopping = false, timer, backupTimer, whatsappLinkTimer, reporting = false, backingUp = false, backupAt;
 const retryTimers = new Set(), restartCounts = new Map();
-let backendStarted = false, whatsappStage;
+let backendStarted = false, whatsappStage, restartWhatsAppWithPairing, whatsappChild;
+let whatsappGeneration=0;
 const log = (name, line) => console.log(`[${name}] ${line}`);
 function launch(name, command, args, options = {}) {
   if(stopping || (name === 'whatsapp' && components.whatsapp === 'running'))return null;
   const at = Date.now();
+  const generation = name === 'whatsapp' ? ++whatsappGeneration : 0;
   const effectiveArgs=command===process.execPath?args:[path.join(root,'desktop','managed-native.mjs'),command,...args];
   const background = name === 'intelligence' || name === 'ollama';
   const child = spawn(process.execPath, effectiveArgs, { cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], ...options,
@@ -45,6 +47,7 @@ function launch(name, command, args, options = {}) {
   });
   children.add(child);
   if (['email', 'whatsapp', 'intelligence'].includes(name)) components[name] = 'running';
+  if(name==='whatsapp'){whatsappChild=child;whatsappStage='starting';}
   // Keep output only in this window. In particular, QR codes are never sent to the app.
   child.stdout?.on('data', data => process.stdout.write(data));
   child.stderr?.on('data', data => process.stderr.write(data));
@@ -55,6 +58,13 @@ function launch(name, command, args, options = {}) {
     if (message?.type === 'healthy') {restartCounts.set(name, 0);if(!Object.values(components).includes('stopped'))issues.delete('component_stopped');}
     if (message?.type === 'attention' && ['email_auth', 'whatsapp_auth'].includes(message.code)) issues.add(message.code);
   });
+  const retry = (wait, nextOptions) => {
+    const scheduled = setTimeout(() => {
+      retryTimers.delete(scheduled);
+      if (name !== 'whatsapp' || generation === whatsappGeneration) launch(name, command, args, nextOptions);
+    },wait);
+    retryTimers.add(scheduled);
+  };
   let ended = false;
   const onExit = (code, signal) => {
     if (ended) return; ended = true; children.delete(child);
@@ -65,11 +75,11 @@ function launch(name, command, args, options = {}) {
     issues.add('component_stopped');
     log(name, `Proceso finalizado (${signal || code || 'sin código'}).`);
     if (name === 'backend' && !backendStarted) return;
+    if (name === 'whatsapp' && code === 79 && restartWhatsAppWithPairing?.()) return;
     if (name === 'whatsapp' && code === 76 && options.env?.CENTRAL_WHATSAPP_REFRESH_WEB !== 'true') {
       log(name, 'Reintentando con la versión actual de WhatsApp Web y el mismo perfil guardado.');
       const env = {...options.env, CENTRAL_WHATSAPP_REFRESH_WEB:'true'};
-      const timer = setTimeout(() => { retryTimers.delete(timer); launch(name, command, args, {...options, env}); }, 3000);
-      retryTimers.add(timer);
+      retry(3000,{...options,env});
       return;
     }
     const syncRetries = Number(options.env?.CENTRAL_WHATSAPP_SYNC_RETRIES || 0);
@@ -77,8 +87,7 @@ function launch(name, command, args, options = {}) {
       const next = syncRetries + 1;
       const env = {...options.env, CENTRAL_WHATSAPP_SYNC_RETRIES:String(next)};
       log(name, 'La sesión se autenticó pero no quedó lista. Volviendo a abrir el mismo perfil para completar la sincronización.');
-      const timer = setTimeout(() => { retryTimers.delete(timer); launch(name, command, args, {...options, env}); }, 30000 * next);
-      retryTimers.add(timer);
+      retry(30000*next,{...options,env});
       return;
     }
     if (code === 78 || (name === 'whatsapp' && code === 77)) {
@@ -89,7 +98,7 @@ function launch(name, command, args, options = {}) {
     }
     const count = Date.now() - at > 600000 ? 1 : (restartCounts.get(name) || 0) + 1; restartCounts.set(name, count);
     const wait = retryDelay(count); log(name, `Recuperación automática en ${Math.round(wait / 1000)} segundos. Se conserva el registro de trabajos.`);
-    const timer = setTimeout(() => { retryTimers.delete(timer); if (!stopping) launch(name, command, args, options); }, wait); retryTimers.add(timer);
+    retry(wait,options);
   };
   child.on('error', () => onExit(1)); child.on('exit', onExit);
   return child;
@@ -155,34 +164,75 @@ const waDir = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'C
 const waFile = waDir && path.join(waDir, 'worker.mjs');
 const browserFile = waDir && path.join(waDir, 'browser-path.txt');
 const savedBrowser = browserFile && fs.existsSync(browserFile) ? fs.readFileSync(browserFile, 'utf8').trim() : '';
-const browser = savedBrowser || process.env.CHROME_PATH;
-if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modules'))) {
-  if (browser && fs.existsSync(browser) && fs.statSync(browser).isFile()) {
-    upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));
-    upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
-    const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
-    const startWhatsApp = (phoneNumber = '') => launch('whatsapp',process.execPath,[waFile], {
+const installedEdge = [process.env['ProgramFiles(x86)'],process.env.ProgramFiles,process.env.LOCALAPPDATA]
+  .filter(Boolean).map(dir=>path.join(dir,'Microsoft','Edge','Application','msedge.exe'));
+const installedChrome = [process.env.ProgramFiles,process.env['ProgramFiles(x86)'],process.env.LOCALAPPDATA]
+  .filter(Boolean).map(dir=>path.join(dir,'Google','Chrome','Application','chrome.exe'));
+const sameBrowserPaths = /chrome[.]exe$/i.test(savedBrowser) ? installedChrome : /msedge[.]exe$/i.test(savedBrowser) ? installedEdge : [];
+const candidates = savedBrowser ? [savedBrowser,...sameBrowserPaths,process.env.CHROME_PATH]
+  : [process.env.CHROME_PATH,...installedEdge,...installedChrome];
+const browser = candidates.find(file=>{
+  try{return file&&fs.statSync(file).isFile();}catch{return false;}
+});
+async function prepareWhatsApp(){
+  if(!waDir){
+    issues.add('whatsapp_missing');return;
+  }
+  if(!browser){
+    issues.add('browser_missing');log('whatsapp','No se encontró el navegador configurado ni una instalación compatible.');
+    return;
+  }
+  const moduleDir=path.join(root,'channel-worker');
+  await installWhatsAppDependencies(root);
+  if(stopping)return;
+  upgradeWorker(path.join(root,'desktop','whatsapp-commercial.mjs'),path.join(waDir,'commercial.mjs'));
+  upgradeWorker(path.join(moduleDir,'transports.mjs'),path.join(waDir,'transports.mjs'));
+  upgradeWorker(path.join(root,'desktop','workers','whatsapp.mjs'),waFile);
+  const linkRequest = path.join(waDir,'private-state','link-by-phone-request');
+  let pairingSwitchPending=false, pairingActive=false;
+  const startWhatsApp = (phoneNumber = '') => {
+    whatsappChild=launch('whatsapp',process.execPath,[waFile], {
       cwd:waDir,
       env:{...process.env,CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE:config.file,CHROME_PATH:browser,
         PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_PAIR_NUMBER:phoneNumber,CENTRAL_WHATSAPP_REFRESH_WEB:'false',
-        CENTRAL_WHATSAPP_MODULE_DIR:path.join(root,'channel-worker'),CENTRAL_WHATSAPP_SYNC_RETRIES:'0'},
+        CENTRAL_WHATSAPP_MODULE_DIR:moduleDir,CENTRAL_WHATSAPP_SYNC_RETRIES:'0'},
     });
-    const tryPhoneLink = () => {
-      if (stopping || diagnosticMode || components.whatsapp === 'running' || !fs.existsSync(linkRequest)) return;
-      let phoneNumber;
-      try {
-        const requestedAt = fs.statSync(linkRequest).mtimeMs;
-        phoneNumber = fs.readFileSync(linkRequest,'utf8').trim();
-        fs.unlinkSync(linkRequest);
-        if (Date.now()-requestedAt > 5*60000 || !/^[1-9]\d{9,14}$/.test(phoneNumber)) return;
-      } catch { return; }
-      startWhatsApp(phoneNumber);
-    };
-    startWhatsApp();
-    whatsappLinkTimer = setInterval(tryPhoneLink, 2500);
-  }
-  else { issues.add('browser_missing'); log('whatsapp', 'Falta la ruta del navegador ya vinculado. No se cambió la sesión.'); }
-} else { issues.add('whatsapp_missing'); log('whatsapp', 'No se encontró el ejecutor de WhatsApp previamente vinculado.'); }
+    pairingActive=Boolean(whatsappChild&&phoneNumber);
+    return Boolean(whatsappChild);
+  };
+  const tryPhoneLink = () => {
+    if (stopping || diagnosticMode || !fs.existsSync(linkRequest)) return false;
+    if (components.whatsapp === 'running') {
+      if(!pairingSwitchPending&&!pairingActive&&whatsappChild?.connected&&
+          !['connected','verifying','loading','phone_link','server_rejected','identity_unavailable'].includes(whatsappStage)){
+        pairingSwitchPending=true;
+        const current=whatsappChild;
+        current.send({type:'whatsapp_prepare_pairing'},error=>{if(error)pairingSwitchPending=false;});
+        current.once('exit',()=>{pairingSwitchPending=false;});
+      }
+      return false;
+    }
+    pairingSwitchPending=false;
+    let phoneNumber;
+    try {
+      const requestedAt = fs.statSync(linkRequest).mtimeMs;
+      phoneNumber = fs.readFileSync(linkRequest,'utf8').trim();
+      if (Date.now()-requestedAt > 5*60000 || !/^[1-9]\d{9,14}$/.test(phoneNumber)) {
+        fs.unlinkSync(linkRequest);return false;
+      }
+      if(!startWhatsApp(phoneNumber))return false;
+      fs.unlinkSync(linkRequest);
+      return true;
+    } catch { return false; }
+  };
+  restartWhatsAppWithPairing=tryPhoneLink;
+  if(!tryPhoneLink())startWhatsApp();
+  whatsappLinkTimer=setInterval(tryPhoneLink,2500);
+}
+void prepareWhatsApp().catch(error=>{
+  issues.add('whatsapp_missing');
+  log('whatsapp',`No se pudo preparar el ejecutor de WhatsApp: ${error.message}`);
+});
 
 // Dedicated OpenJarvis profile: explicit local engine, no channels, no inherited API keys.
 const profile = path.join(runtimeDir, 'intelligence'); fs.mkdirSync(profile, { recursive: true });

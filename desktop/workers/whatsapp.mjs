@@ -1,12 +1,17 @@
-import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
 import {sendWhatsAppTest} from './transports.mjs';
-import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure} from './commercial.mjs';
+import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,useWhatsAppSessionPolling,whatsappStartupFailure} from './commercial.mjs';
 
+const requireLocal = createRequire(import.meta.url);
+const bundled = process.env.CENTRAL_WHATSAPP_MODULE_DIR;
+const bundledManifest = bundled && path.join(bundled,'node_modules','whatsapp-web.js','package.json');
+const requireWhatsApp = bundledManifest && fs.existsSync(bundledManifest)
+ ? createRequire(path.join(bundled,'package.json')) : requireLocal;
+const dotenv=requireWhatsApp('dotenv');
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
 if(!fs.existsSync(config))throw new Error('Seleccione la carpeta donde ya funciona INICIAR_CORREO.bat.');
@@ -48,11 +53,6 @@ async function api(action,body={},area='channel-tests'){
  if(!response.ok){const error=new Error(`Central Comercial respondió HTTP ${response.status} en ${area}/${action}`);error.httpStatus=response.status;throw error;}
  return response.json();
 }
-const requireLocal = createRequire(import.meta.url);
-const bundled = process.env.CENTRAL_WHATSAPP_MODULE_DIR;
-const bundledManifest = bundled && path.join(bundled,'node_modules','whatsapp-web.js','package.json');
-const requireWhatsApp = bundledManifest && fs.existsSync(bundledManifest)
- ? createRequire(path.join(bundled,'package.json')) : requireLocal;
 const {Client,LocalAuth}=requireWhatsApp('whatsapp-web.js');
 console.log('[whatsapp] Biblioteca '+requireWhatsApp('whatsapp-web.js/package.json').version);
 const pairNumber=process.env.CENTRAL_WHATSAPP_PAIR_NUMBER||'';
@@ -61,7 +61,13 @@ class PersistentSession extends LocalAuth {
  // Keep the local profile even when the provider invalidates its authentication.
  async logout(){}
 }
-const client=new Client({
+class SessionClient extends Client {
+ async inject(){
+  useWhatsAppSessionPolling(this.pupPage);
+  return super.inject();
+ }
+}
+const client=new SessionClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
  authTimeoutMs,
  userAgent:false,
@@ -104,21 +110,24 @@ async function ownerReportTick(account){
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
-let pairingRequested=false;
-client.on('code', code=>{
- if(linkByPhone && !stopping && !sessionAuthenticated && /^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i.test(code)){
-  reportPhase('phone_link');
-  console.log('[whatsapp] Código para vincular Central con WhatsApp: '+code+'. Ingresalo solo en WhatsApp, en tu celular.');
- }
-});
+let pairingRequested=false, lastPairingCode;
+function publishPairingCode(code){
+ if(!linkByPhone||stopping||sessionAuthenticated||typeof code!=='string'||!/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i.test(code))return;
+ const normalized=code.replace('-','').toUpperCase();
+ if(normalized===lastPairingCode)return;
+ lastPairingCode=normalized;
+ reportPhase('phone_link');
+ console.log('[whatsapp] Código para vincular Central con WhatsApp: '+code+'. Ingresalo solo en WhatsApp, en tu celular.');
+}
+client.on('code',publishPairingCode);
 client.on('qr',()=>{
  if(sessionAuthenticated||whatsappReady||stopping||phase==='qr'||phase==='phone_link')return;
  reportPhase('qr');
  clearTimeout(startupTimeout);
  if(linkByPhone && !pairingRequested){
   pairingRequested=true;
-  void client.requestPairingCode(pairNumber,true,180000).catch(()=>{
-   if(stopping||sessionAuthenticated||whatsappReady)return;
+  void client.requestPairingCode(pairNumber,true,180000).then(publishPairingCode).catch(()=>{
+   if(stopping||sessionAuthenticated||whatsappReady||lastPairingCode)return;
    reportPhase('phone_link_failed');
    console.log('[whatsapp] WhatsApp Web no pudo generar el código de vinculación.');
    void recover(78);
@@ -126,7 +135,6 @@ client.on('qr',()=>{
  } else {
   console.log('[whatsapp] El navegador todavía no reconoce la sesión guardada.');
  }
- // Allow the saved profile to finish loading. Never display a QR code.
  startupTimeout=setTimeout(()=>{
   if(sessionAuthenticated||whatsappReady||stopping)return;
   void recover(startupExitCode());
@@ -164,16 +172,27 @@ function currentWid(){
 }
 
 async function resolveAccount(wid){
- const direct=String(wid||'').match(/^(\d+)@c\.us$/);
- if(direct)return direct[1];
- if(!/^\d+@lid$/.test(wid||'')||typeof client.getContactLidAndPhone!=='function')return '';
+ const phone=identity=>String(identity||'').match(/^(\d{10,15})@(?:c\.us|s\.whatsapp\.net)$/)?.[1]||'';
+ const direct=phone(wid);
+ if(direct)return direct;
+ if(!/^\d+@lid$/.test(wid||''))return '';
  let timer;
  try{
+  const local=await Promise.race([
+   client.pupPage?.evaluate(()=>{
+    const own=window.require('WAWebUserPrefsMeUser').getMaybeMePnUser();
+    return own?._serialized || own?.$1 || (own?.user&&own?.server ? own.user+'@'+own.server : '');
+   }).catch(()=>''), new Promise(resolve=>{timer=setTimeout(()=>resolve(''),3000);}),
+  ]);
+  clearTimeout(timer);
+  if(phone(local))return phone(local);
+  if(typeof client.getContactLidAndPhone!=='function')return '';
   const records=await Promise.race([
-   client.getContactLidAndPhone([wid]),
+   client.getContactLidAndPhone([wid]).catch(()=>[]),
    new Promise(resolve=>{timer=setTimeout(()=>resolve([]),8000);}),
   ]);
-  return String(records?.[0]?.pn||'').match(/^(\d+)(?:@(?:c\.us|s\.whatsapp\.net))?$/)?.[1]||'';
+  const pn=records?.[0]?.pn;
+  return phone(pn)||(/^\d{10,15}$/.test(pn||'') ? pn : '');
  }finally{clearTimeout(timer);}
 }
 
@@ -192,10 +211,11 @@ async function tick(){
   const ready=whatsappReady&&Boolean(account);
   await api('heartbeat',{ready,account},'commercial-whatsapp');
   if(stopping)return;
-  await api('heartbeat',{email:false,whatsapp:ready}).catch(error => console.log(`Verificación de canales pendiente: ${error.message}`));
+  const testReady=await api('heartbeat',{channel:'whatsapp',whatsapp:ready})
+   .then(()=>true).catch(()=>false);
   if(stopping)return;
   confirmed=ready;
-  if(whatsappReady)reportPhase(ready?'connected':'verifying');
+  if(whatsappReady)reportPhase(ready?'connected':'identity_unavailable');
   if(ready&&!verified){
    verified=true;
    process.send?.({type:'healthy'});
@@ -207,7 +227,8 @@ async function tick(){
   await commercial.tick();
   if(stopping||!whatsappReady)return;
   for(const entry of Object.values(journal))if(entry.result&&!entry.reported){try{await api('complete',{id:entry.id,lease:entry.lease,result:entry.result});entry.reported=true;save();}catch(error){if(error.httpStatus===409){entry.reported=true;save();}else throw error;}}
-  const {job}=await api('claim');if(!job)return;
+  if(!testReady)return;
+  const {job}=await api('claim',{channel:'whatsapp'});if(!job)return;
   if(job.channel!=='whatsapp'||canonicalPhone(job.recipient)!==canonicalPhone(account))throw new Error('Solo se permiten comprobaciones al numero personal del propietario.');
   if(journal[job.id]){const previous=journal[job.id];await api('complete',{id:job.id,lease:job.lease,result:previous.result});previous.reported=true;save();return;}
   const entry=journal[job.id]={id:job.id,lease:job.lease,result:{state:'resultado_desconocido',evidence:'Intento iniciado; ante una interrupcion no se reenvia automaticamente.'}};save();
@@ -234,12 +255,17 @@ async function recover(code){
 
  await Promise.allSettled([
   api('heartbeat',{ready:false,account:''},'commercial-whatsapp'),
-  api('heartbeat',{email:false,whatsapp:false})
+  api('heartbeat',{channel:'whatsapp',whatsapp:false})
  ]);
  await Promise.race([client.destroy().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);
  process.exit(code);
 }
-if(process.send)process.on('disconnect',()=>void recover(75));
+if(process.send){
+ process.on('disconnect',()=>void recover(75));
+ process.on('message',message=>{
+  if(message?.type==='whatsapp_prepare_pairing'&&!whatsappReady&&!sessionAuthenticated&&!linkByPhone)void recover(79);
+ });
+}
 process.on('SIGINT',()=>void recover(0));
 process.on('SIGTERM',()=>void recover(0));
 await tick();
