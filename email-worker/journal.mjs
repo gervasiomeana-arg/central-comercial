@@ -1,5 +1,11 @@
 import { Resolver } from 'node:dns/promises';
 import { createHash } from 'node:crypto';
+export function smtpRecipient(value) {
+  if (typeof value !== 'string') return undefined;
+  const address = value.trim().replace(/\.+$/, '');
+  return /^[^\s@<>,;]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(address) ? address : undefined;
+}
+
 const fingerprint = job => createHash('sha256').update(JSON.stringify([job.recipient, job.subject, job.content, job.inReplyTo || ''])).digest('hex');
 export function initializeJournal(state) {
   state.done ||= {}; state.outcomes ||= {};

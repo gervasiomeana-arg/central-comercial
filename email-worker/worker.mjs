@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { initializeJournal, reserveMessage, finishMessage, collectBounces, hasInvalidMailDomain } from './journal.mjs';
+import { initializeJournal, reserveMessage, finishMessage, collectBounces, hasInvalidMailDomain, smtpRecipient } from './journal.mjs';
 import nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -47,14 +47,20 @@ async function send(){
   const {job}=await api('claim');if(!job)return false;
   // Persist before SMTP. A crash here becomes an unknown result, never an automatic resend.
   const {shouldSend,result}=reserveMessage(state,job);save();if(!shouldSend){await flush();return true;}
-  if (!job.inReplyTo && await hasInvalidMailDomain(job.recipient, {requireMx:true})) {
+  const recipient = smtpRecipient(job.recipient);
+  if (!recipient) {
+    result.outcome = 'rejected';
+    result.response = 'Dirección descartada antes de SMTP: 5.1.3, formato inválido.';
+    finishMessage(state, job, result); save(); await flush(); return true;
+  }
+  if (!job.inReplyTo && await hasInvalidMailDomain(recipient, {requireMx:true})) {
     result.outcome = 'rejected';
     result.response = 'Dominio descartado antes de enviar: 5.1.2, sin MX utilizable para promociones.';
     finishMessage(state, job, result); save(); await flush(); return true;
   }
   try{
-    const receipt=await smtp.sendMail({from:env.EMAIL_ADDRESS,to:job.recipient,subject:job.subject,text:job.content,messageId:job.providerMessageId,inReplyTo:job.inReplyTo,references:job.inReplyTo?[job.inReplyTo]:undefined,headers:{'X-Central-Comercial-Id':job.messageId},disableFileAccess:true,disableUrlAccess:true});
-    result.outcome=receipt.accepted?.some(a=>String(a).toLowerCase()===job.recipient.toLowerCase())?'accepted':'rejected';result.response=String(receipt.response||'Sin respuesta SMTP');
+    const receipt=await smtp.sendMail({from:env.EMAIL_ADDRESS,to:recipient,subject:job.subject,text:job.content,messageId:job.providerMessageId,inReplyTo:job.inReplyTo,references:job.inReplyTo?[job.inReplyTo]:undefined,headers:{'X-Central-Comercial-Id':job.messageId},disableFileAccess:true,disableUrlAccess:true});
+    result.outcome=receipt.accepted?.some(a=>String(a).toLowerCase()===recipient.toLowerCase())?'accepted':'rejected';result.response=String(receipt.response||'Sin respuesta SMTP');
   }catch(error){result.outcome=error.responseCode>=500?'rejected':'unknown';result.response=String(error.response||error.code||'Resultado SMTP desconocido');if([534,535].includes(error.responseCode)){authBlocked=true;reconnect=true;process.send?.({type:'attention',code:'email_auth'});setTimeout(()=>process.exit(78),2000);}}
   finishMessage(state,job,result);save();await flush();return true;
 }
