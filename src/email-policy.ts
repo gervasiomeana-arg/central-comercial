@@ -11,10 +11,12 @@ const ownerConfirmedAddresses = new Set(ownerEmailCorrections.values());
 export function normalizeContactEmail(value: string): string {
   const email = value.trim().toLowerCase();
   const at = email.indexOf('@');
-  if (at < 0 || !/[^\x00-\x7f]/.test(email.slice(at + 1))) return email;
-  const domain = email.slice(at + 1);
+  if (at < 0 || at !== email.lastIndexOf('@')) return email;
+  const domain = email.slice(at + 1).replace(/\.+$/, '');
   if (!/^[\p{L}\p{N}\p{M}.-]+$/u.test(domain)) return email;
-  try { return email.slice(0, at + 1) + new URL(`https://${domain}`).hostname; }
+  const local = email.slice(0, at + 1);
+  if (!/[^\x00-\x7f]/.test(domain)) return local + domain;
+  try { return local + new URL(`https://${domain}`).hostname; }
   catch { return email; }
 }
 

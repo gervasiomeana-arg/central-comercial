@@ -184,7 +184,7 @@ test('polling de WhatsApp reemplaza espera por animación y selección de navega
     installedEdge: ['C:\\Microsoft\\Edge\\msedge.exe'],
     hasSavedProfile: true,
     exists: f => files.has(f),
-  }), 'C:\\Google\\Chrome\\chrome.exe');
+  }), '');
   assert.equal(selectWhatsAppBrowser({
     savedBrowser: '',
     installedChrome: ['C:\\Google\\Chrome\\chrome.exe'],

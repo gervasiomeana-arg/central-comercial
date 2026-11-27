@@ -81,9 +81,10 @@ export function selectWhatsAppBrowser({
   const family = file => /chrome[.]exe$/i.test(file || '') ? 'chrome' : /msedge[.]exe$/i.test(file || '') ? 'edge' : '';
   const savedFamily = family(savedBrowser);
   const sameFamily = savedFamily === 'chrome' ? installedChrome : savedFamily === 'edge' ? installedEdge : [];
-  const fallbackInstalled = profileHint === 'edge' ? [...installedEdge, ...installedChrome] : [...installedChrome, ...installedEdge];
+  const matchingProfile = profileHint === 'edge' ? installedEdge : profileHint === 'chrome' ? installedChrome : [];
   const candidates = savedBrowser
     ? [savedBrowser, ...sameFamily, ...(savedFamily && family(explicitlyConfigured) === savedFamily ? [explicitlyConfigured] : [])]
-    : [explicitlyConfigured, ...(hasSavedProfile ? fallbackInstalled : [...installedEdge, ...installedChrome])];
+    : [(!hasSavedProfile || !profileHint || family(explicitlyConfigured) === profileHint) ? explicitlyConfigured : '',
+      ...(hasSavedProfile ? matchingProfile : [...installedEdge, ...installedChrome])];
   return candidates.find(exists) || '';
 }

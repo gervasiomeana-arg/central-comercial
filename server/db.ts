@@ -290,6 +290,20 @@ class DatabaseManager {
     for (const contact of schema.contacts) {
       if (this.applyEmailCorrection(contact, schema.conversations)) changed = true;
     }
+    for (const thread of schema.conversations) for (const message of thread.messages) {
+      if (message.channel !== 'email' || message.direction !== 'outbound' ||
+          !['pendiente', 'preparado'].includes(message.status) || message.attemptedAt ||
+          message.sentAt || message.serviceConfirmationId) continue;
+      for (const field of ['campaignRecipient', 'approvedRecipient'] as const) {
+        const address = message[field];
+        if (!address) continue;
+        const normalized = normalizeContactEmail(address);
+        if (normalized !== address && usableContactEmail(normalized)) {
+          message[field] = normalized;
+          changed = true;
+        }
+      }
+    }
 
     // Recheck historical discoveries too, including snapshots restored on deploy.
     // Keep the source, notes and messages; never change delivery evidence.

@@ -1,7 +1,7 @@
 import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {emailDomainsWithDeliveryProblems, emailPromotionHold, invalidEmailDestination, recoverableEmailFailure, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
+import {emailDomainsWithDeliveryProblems, emailPromotionHold, invalidEmailDestination, normalizeContactEmail, recoverableEmailFailure, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -64,12 +64,14 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     for (const msg of conv.messages) {
       if (msg.channel !== 'email' || msg.direction !== 'outbound' || (msg.status !== 'preparado' && !(msg.status === 'pendiente' && campaign?.mode === 'automatico' && !msg.replyToProviderId)) || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
-      const defaultRecipient = contact.email?.trim().toLowerCase();
+      const defaultRecipient = normalizeContactEmail(contact.email || '');
       const discoveredPromotion = !replying && contact.outreachBasis === 'public_business_contact';
       const verified = discoveredPromotion ? publishedCampaignRecipients(contact).filter(email =>
         !invalid.has(email) && email !== contact.undeliverableEmail && !delayedDomains.has(email.split('@')[1])) : [];
-      const recipient = replying ? msg.approvedRecipient?.toLowerCase() || defaultRecipient
-        : discoveredPromotion ? msg.campaignRecipient ?? verified[0] : defaultRecipient;
+      const approvedRecipient = msg.approvedRecipient && normalizeContactEmail(msg.approvedRecipient);
+      const campaignRecipient = msg.campaignRecipient && normalizeContactEmail(msg.campaignRecipient);
+      const recipient = replying ? approvedRecipient || defaultRecipient
+        : discoveredPromotion ? campaignRecipient ?? verified[0] : defaultRecipient;
       if (!usableContactEmail(recipient) || invalid.has(recipient) || contact.undeliverableEmail === recipient ||
           (discoveredPromotion && !verified.includes(recipient))) continue;
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
@@ -94,10 +96,11 @@ export function claimCommercialEmail(id: string, now = new Date()) {
         }
       }
       if (!replying && conv.requiresHumanIntervention && db.getTasks().some(t => t.relatedId === conv.id && t.status === 'pendiente')) continue;
-      if (msg.approvedRecipient && msg.approvedRecipient.toLowerCase() !== recipient) continue;
+      if (approvedRecipient && approvedRecipient !== recipient) continue;
       if (!directorUnlimited && dailyContacts.size >= goal.dailyEmailLimit && !dailyContacts.has(outreachKey(conv, msg))) continue;
       if (discoveredPromotion && !msg.campaignRecipient && verified.length === 2 &&
-          !conv.messages.some(m => m.campaignRecipient === verified[1] || m.approvedRecipient === verified[1])) {
+          !conv.messages.some(m => normalizeContactEmail(m.campaignRecipient || '') === verified[1] ||
+            normalizeContactEmail(m.approvedRecipient || '') === verified[1])) {
         const nextMessage: Message = {
           id: randomUUID(), conversationId: conv.id, direction: 'outbound', channel: 'email',
           content: msg.content, status: 'preparado', campaignRecipient: verified[1], createdAt: now.toISOString(),

@@ -12,7 +12,6 @@ const bundledManifest = bundled && path.join(bundled,'node_modules','whatsapp-we
 const requireWhatsApp = bundledManifest && fs.existsSync(bundledManifest)
  ? createRequire(path.join(bundled,'package.json')) : requireLocal;
 const dotenv=requireWhatsApp('dotenv');
-const qrcode=requireWhatsApp('qrcode-terminal');
 const directory=path.dirname(fileURLToPath(import.meta.url));
 const config=process.env.CENTRAL_CONFIG_FILE||path.join(directory,'.env');
 if(!fs.existsSync(config))throw new Error('Seleccione la carpeta donde ya funciona INICIAR_CORREO.bat.');
@@ -122,7 +121,7 @@ async function ownerReportTick(account){
  saveOwnerReports();console.log('Informe WhatsApp '+day+': '+ownerReports[key].status);
 }
 const commercial=commercialWhatsAppRunner({client,stateDir,call:(action,data={})=>api(action,data,'commercial-whatsapp')});
-let pairingRequested=false, lastPairingCode, qrTimeoutStarted=false;
+let pairingRequested=false, lastPairingCode;
 function publishPairingCode(code){
  if(!linkByPhone||stopping||sessionAuthenticated||typeof code!=='string'||!/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/i.test(code))return;
  const normalized=code.replace('-','').toUpperCase();
@@ -147,7 +146,7 @@ function requestPairingWithRetry(attempt=1){
  });
 }
 client.on('code',publishPairingCode);
-client.on('qr',qr=>{
+client.on('qr',()=>{
  if(sessionAuthenticated||whatsappReady||stopping)return;
  if(linkByPhone){
   if(phase==='qr'||phase==='phone_link'||pairingRequested)return;
@@ -174,19 +173,11 @@ client.on('qr',qr=>{
   },30000);
   return;
  }
- if(!qrTimeoutStarted){
-  qrTimeoutStarted=true;
+ if(phase!=='pairing_required'){
   reportPhase('pairing_required');
   clearTimeout(startupTimeout);
-  startupTimeout=setTimeout(()=>{
-   if(sessionAuthenticated||whatsappReady||stopping)return;
-   reportPhase('pairing_required');
-   console.log('[whatsapp] Se agotó el tiempo de espera para vincular WhatsApp. El perfil guardado se conserva.');
-   void recover(78);
-  },5*60000);
+  console.log('[whatsapp] WhatsApp requiere vinculación. El código se solicita desde Conexiones de Central Comercial.');
  }
- console.log('[whatsapp] Vincule WhatsApp desde su teléfono (Dispositivos vinculados > Vincular un dispositivo) o use "Vincular Central con un código de WhatsApp" en http://127.0.0.1:39300. No comparta este QR.');
- qrcode.generate(qr,{small:true});
 });
 client.on('authenticated',()=>{
  if(whatsappReady||sessionAuthenticated||stopping)return;
