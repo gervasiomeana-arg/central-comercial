@@ -44,7 +44,8 @@ export function emailPromotionHold(messages: Message[], now = Date.now()) {
   const windowMs = 60 * 60 * 1000;
   const failureTimes = new Map<string, number>();
   for (const message of messages) {
-    if (message.emailDeliveryStatus?.startsWith('4.')) continue;
+    if (message.emailDeliveryStatus?.startsWith('4.') ||
+        recoverableEmailFailure(message.serviceError || '', message.emailDeliveryStatus)) continue;
     if (message.channel !== 'email' || message.direction !== 'outbound' || message.replyToProviderId ||
         message.status !== 'fallido' || !message.emailFailureAt || !message.approvedRecipient) continue;
     const at = Date.parse(message.emailFailureAt);

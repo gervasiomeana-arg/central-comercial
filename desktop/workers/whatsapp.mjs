@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import wwebjs from 'whatsapp-web.js';
+import {createRequire} from 'node:module';
 import {sendWhatsAppTest} from './transports.mjs';
 import {commercialWhatsAppRunner,ownerReportSchedule,ownerInstantReport,sendToChatWithAck,whatsappStartupFailure,useWhatsAppSessionPolling,openWhatsAppPhoneLink} from './commercial.mjs';
 
@@ -27,7 +27,7 @@ let whatsappReady=false,running=false,stopping=false,verified=false;
 let linkedAccount='', linkedWid='';
 const authTimeoutMs=90000;
 const refreshWeb=process.env.CENTRAL_WHATSAPP_REFRESH_WEB==='true';
-const startupExitCode=()=>linkByPhone||refreshWeb?78:76;
+const startupExitCode=()=>sessionAuthenticated?77:linkByPhone||refreshWeb?78:76;
 let phase, startupTimeout, sessionAuthenticated=false;
 function reportPhase(next) {
  if(phase===next)return;
@@ -40,7 +40,7 @@ function waitForSession() {
   reportPhase('session_timeout');
   console.log('[whatsapp] WhatsApp no terminó de iniciar con el perfil guardado.');
   void recover(startupExitCode());
- },2*authTimeoutMs+60000);
+ },sessionAuthenticated ? 120000 : 2*authTimeoutMs+60000);
 }
 async function api(action,body={},area='channel-tests'){
  const response=await fetch(new URL(`/api/${area}/worker/${action}`,origin),{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({workerId,...body}),signal:AbortSignal.timeout(20000),redirect:'error'})
@@ -48,7 +48,13 @@ async function api(action,body={},area='channel-tests'){
  if(!response.ok){const error=new Error(`Central Comercial respondió HTTP ${response.status} en ${area}/${action}`);error.httpStatus=response.status;throw error;}
  return response.json();
 }
-const {Client,LocalAuth}=wwebjs;
+const requireLocal = createRequire(import.meta.url);
+const bundled = process.env.CENTRAL_WHATSAPP_MODULE_DIR;
+const bundledManifest = bundled && path.join(bundled,'node_modules','whatsapp-web.js','package.json');
+const requireWhatsApp = bundledManifest && fs.existsSync(bundledManifest)
+ ? createRequire(path.join(bundled,'package.json')) : requireLocal;
+const {Client,LocalAuth}=requireWhatsApp('whatsapp-web.js');
+console.log('[whatsapp] Biblioteca '+requireWhatsApp('whatsapp-web.js/package.json').version);
 const linkByPhone=process.env.CENTRAL_WHATSAPP_LINK_BY_PHONE==='true';
 const visibleBrowser=process.platform==='win32'&&linkByPhone;
 const phoneLinkNavigation=new AbortController();
@@ -89,7 +95,9 @@ class SessionClient extends Client {
 const WhatsAppClient=linkByPhone?SessionClient:Client;
 const client=new WhatsAppClient({
  authStrategy:new PersistentSession({dataPath:path.join(stateDir,'whatsapp')}),
- ...(linkByPhone || refreshWeb ? {authTimeoutMs,userAgent:false,webVersionCache:{type:'none'}} : {}),
+ authTimeoutMs,
+ userAgent:false,
+ ...(linkByPhone || refreshWeb ? {webVersionCache:{type:'none'}} : {}),
  puppeteer:{
   headless:!visibleBrowser,
   ...(visibleBrowser ? {pipe:true} : {}),
@@ -148,6 +156,7 @@ client.on('authenticated',()=>{
  waitForSession();
 });
 client.on('ready',()=>{
+ if(stopping||whatsappReady)return;
  clearTimeout(startupTimeout);
  phoneLinkNavigation.abort();
  whatsappReady=true;

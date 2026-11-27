@@ -47,9 +47,9 @@ async function send(){
   const {job}=await api('claim');if(!job)return false;
   // Persist before SMTP. A crash here becomes an unknown result, never an automatic resend.
   const {shouldSend,result}=reserveMessage(state,job);save();if(!shouldSend){await flush();return true;}
-  if (!job.inReplyTo && await hasInvalidMailDomain(job.recipient)) {
+  if (!job.inReplyTo && await hasInvalidMailDomain(job.recipient, {requireMx:true})) {
     result.outcome = 'rejected';
-    result.response = 'Dominio descartado antes de enviar: 5.1.2, no admite correo.';
+    result.response = 'Dominio descartado antes de enviar: 5.1.2, sin MX utilizable para promociones.';
     finishMessage(state, job, result); save(); await flush(); return true;
   }
   try{
@@ -101,7 +101,7 @@ async function read(){
       console.error('Lote histórico pendiente:', error.message);
     }
   }
-  await reviewArchivedBounces(threads);
+  return threads;
 }
 async function reviewArchivedBounces(threads) {
   if (Date.now() < (state.archivedBounceReviewAt || 0) + 6 * 3600000) return;
@@ -186,12 +186,14 @@ async function tick(){
   if(!await connect())return;
   await heartbeat();
   await flush();
-  try{await read();}catch(error){if(!imap?.usable)throw error;console.error('Lectura del buzón pendiente:',error.message);return;}
+  let threads;
+  try{threads=await read();}catch(error){if(!imap?.usable)throw error;console.error('Lectura del buzón pendiente:',error.message);return;}
   // Import replies and bounces first, then let the server authorize each send.
   for(let count=0;count<3&&!authBlocked;count++){
    if(count)await new Promise(resolve=>setTimeout(resolve,1500));
    if(!await send())break;
   }
+  if(threads)await reviewArchivedBounces(threads);
   process.send?.({type:'healthy'});
  }catch(error){
   console.error(new Date().toISOString(),error.message);
@@ -206,7 +208,7 @@ if (batch === 'enviar' || batch === 'revisar') {
   if (!await connect()) throw new Error('El correo no está disponible.');
   await heartbeat();
   await flush();
-  if (batch === 'revisar') await read();
+  if (batch === 'revisar') { const threads = await read(); if(threads)await reviewArchivedBounces(threads); }
   else {
    await read();
    while (await send()) {

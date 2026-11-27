@@ -84,7 +84,7 @@ function organizationData(html:string) {
   }
   return found;
 }
-export function reviewContactPage(html: string, url: string, app: Application, country: string, now=new Date(), context?:ResearchEvidence, excludedEmails: ReadonlySet<string> = new Set()) {
+export function reviewContactPage(html: string, url: string, app: Application, country: string, now=new Date(), context?:ResearchEvidence, excludedEmails: ReadonlySet<string> = new Set(), excludedMailDomains: ReadonlySet<string> = new Set()) {
   const clean=html.replace(/<!--[\s\S]*?-->/g,'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,'');
   const text=decode(clean.replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ');
   const hostname = hostKey(url);
@@ -135,7 +135,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   for (const link of channelHtml.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
     try { declared.add(normalizeContactEmail(decodeURIComponent(decode(link[1])))); } catch {}
   }
-  const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) &&
+  const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) && !excludedMailDomains.has(email.split('@')[1]) &&
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
     (declared.has(email) || email.split('@')[1] === emailHost) &&
     (profile !== 'coach' || !/^(?:info|contacto?|contato|administracion|secretaria|hola)@/.test(email)));

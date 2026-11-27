@@ -1,5 +1,5 @@
 import { isOpenVoley, volleyballMediaDomain, volleyballRecipientAllowed } from './volleyball-outreach.js';
-import { resolve4, resolve6, resolveMx } from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
 import { emailDomainsWithDeliveryProblems, recoverableEmailFailure, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
 import { whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, mexicoRegions } from './campaign-markets.js';
@@ -18,16 +18,11 @@ const candidateKey=(candidate:ResearchCandidate)=>{const u=new URL(candidate.url
 const reason=(outcome:ResearchOutcome,label:string)=>{outcome.reasons[label]=(outcome.reasons[label]||0)+1;};
 
 async function domainReceivesEmail(email: string) {
-  const domain = email.split('@')[1];
+  const resolver = new Resolver({ timeout: 2000, tries: 2 });
   try {
-    const records = await resolveMx(domain);
-    if (records.length) return records.some(record => record.exchange && record.exchange !== '.');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENODATA') return false;
-  }
-  // SMTP allows delivery to address records when a domain has no MX records.
-  const results = await Promise.allSettled([resolve4(domain), resolve6(domain)]);
-  return results.some(result => result.status === 'fulfilled' && result.value.length > 0);
+    const records = await resolver.resolveMx(email.split('@')[1]);
+    return records.some(record => record.exchange && record.exchange !== '.');
+  } catch { return false; }
 }
 
 async function recoverBouncedContacts(fetcher: typeof fetchPublicText) {
@@ -83,11 +78,11 @@ async function recoverBouncedContacts(fetcher: typeof fetchPublicText) {
         const page = await fetcher(url);
         if (host(page.url) !== host(site.href)) continue;
         if (db.getSchedulerState().automationsPaused) return;
-        const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, excluded);
+        const result = reviewContactPage(page.text, page.url, app, contact.country, now, context, excluded, blockedDomains);
         context = result.evidence;
         for (const link of contactLinks(page.text, page.url, isOpenVoley(app))) if (!queue.includes(link)) queue.push(link);
         const entry = result.contact?.emailPublications?.[0];
-        if (!entry || !result.contact || blockedDomains.has(entry.email.split('@')[1])) continue;
+        if (!entry || !result.contact) continue;
         const pageKey = new URL(entry.url).pathname.replace(/\/+$/, '') || '/';
         publications.set(pageKey, entry);
         if ([...publications.values()].filter(publication => publication.email === entry.email).length >= 2 &&

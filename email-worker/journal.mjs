@@ -59,9 +59,10 @@ export function collectBounces(mail, originalHeaders, threads, sender) {
 
 
 const domainCache = new Map();
-export async function hasInvalidMailDomain(address) {
+export async function hasInvalidMailDomain(address, {requireMx = false} = {}) {
   const domain = address.split('@').at(-1).toLowerCase();
-  const cached = domainCache.get(domain);
+  const key = `${domain}:${requireMx}`;
+  const cached = domainCache.get(key);
   if (cached?.expiresAt > Date.now()) return cached.invalid;
   const resolver = new Resolver({ timeout: 2000, tries: 2 });
   let invalid;
@@ -72,6 +73,7 @@ export async function hasInvalidMailDomain(address) {
     if (error.code === 'ENOTFOUND') invalid = true;
     else if (error.code !== 'ENODATA') return false;
   }
+  if (invalid === undefined && requireMx) invalid = true;
   if (invalid === undefined) {
     // SMTP can fall back to address records if the domain publishes no MX.
     const records = await Promise.allSettled([resolver.resolve4(domain), resolver.resolve6(domain)]);
@@ -80,6 +82,6 @@ export async function hasInvalidMailDomain(address) {
     else return false;
   }
   if (domainCache.size >= 1000) domainCache.delete(domainCache.keys().next().value);
-  domainCache.set(domain, { invalid, expiresAt: Date.now() + 3600000 });
+  domainCache.set(key, { invalid, expiresAt: Date.now() + 3600000 });
   return invalid;
 }

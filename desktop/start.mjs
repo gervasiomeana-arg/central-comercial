@@ -72,7 +72,16 @@ function launch(name, command, args, options = {}) {
       retryTimers.add(timer);
       return;
     }
-    if (code === 78) {
+    const syncRetries = Number(options.env?.CENTRAL_WHATSAPP_SYNC_RETRIES || 0);
+    if (name === 'whatsapp' && code === 77 && syncRetries < 2) {
+      const next = syncRetries + 1;
+      const env = {...options.env, CENTRAL_WHATSAPP_SYNC_RETRIES:String(next)};
+      log(name, 'La sesión se autenticó pero no quedó lista. Volviendo a abrir el mismo perfil para completar la sincronización.');
+      const timer = setTimeout(() => { retryTimers.delete(timer); launch(name, command, args, {...options, env}); }, 30000 * next);
+      retryTimers.add(timer);
+      return;
+    }
+    if (code === 78 || (name === 'whatsapp' && code === 77)) {
       log(name, name === 'whatsapp'
         ? 'Se detuvo la recuperación de WhatsApp. El perfil guardado se conserva.'
         : 'Se necesita revisar la autorización. No se reintenta hasta corregirla.');
@@ -155,7 +164,8 @@ if (waFile && fs.existsSync(waFile) && fs.existsSync(path.join(waDir, 'node_modu
     const startWhatsApp = linkByPhone => launch('whatsapp',process.execPath,[waFile], {
       cwd:waDir,
       env:{...process.env,CENTRAL_URL:config.url.href,CENTRAL_CONFIG_FILE:config.file,CHROME_PATH:browser,
-        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone),CENTRAL_WHATSAPP_REFRESH_WEB:'false'},
+        PUPPETEER_SKIP_DOWNLOAD:'true',CENTRAL_WHATSAPP_LINK_BY_PHONE:String(linkByPhone),CENTRAL_WHATSAPP_REFRESH_WEB:'false',
+        CENTRAL_WHATSAPP_MODULE_DIR:path.join(root,'channel-worker'),CENTRAL_WHATSAPP_SYNC_RETRIES:'0'},
     });
     const tryPhoneLink = () => {
       if (stopping || diagnosticMode || components.whatsapp === 'running' || !fs.existsSync(linkRequest)) return;
