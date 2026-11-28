@@ -1,3 +1,4 @@
+import { isGovernmentAudience } from './campaign-audience.js';
 import { isOpenVoley, volleyballMediaPage, volleyballProfile } from './volleyball-outreach.js';
 import {normalizeContactEmail, usableContactEmail} from '../src/email-policy.js';
 import https from 'node:https';
@@ -66,11 +67,12 @@ export function contactLinks(html: string, base: string, includeVolleyball = fal
 }
 const word=(text:string,term:string)=>new RegExp(`\\b${normalize(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`).test(normalize(text));
 function organizationData(html:string) {
-  const found:{countries:string[];emails:string[]}={countries:[],emails:[]};
+  const found:{countries:string[];emails:string[];government:boolean}={countries:[],emails:[],government:false};
   const visit=(value:any,depth=0)=>{
     if(depth>4||!value||typeof value!=='object')return;
     if(Array.isArray(value)){value.slice(0,40).forEach(v=>visit(v,depth+1));return;}
     const type=String(value['@type']||'');
+    if(/GovernmentOrganization|GovernmentOffice/i.test(type)) found.government=true;
     if(/Organization|LocalBusiness|School|SportsClub|SportsActivityLocation|EducationalOrganization/i.test(type)) {
       const address=Array.isArray(value.address)?value.address:[value.address];
       for(const item of address){const country=item?.addressCountry;const name=typeof country==='string'?country:country?.name||country?.identifier;if(typeof name==='string')found.countries.push(name);}
@@ -97,6 +99,10 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   const volleyball = isOpenVoley(app);
   const page = new URL(url);
   const heading = decode(clean.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, ' ') || '');
+  if (structured.government || isGovernmentAudience({urls:[url],names:[title,heading,inherited?.title ?? '']})) {
+    return {contact:null,evidence:{url,appId:app.id,country,title,countryVerified:false,topicVerified:false},
+      reason:'Organismo público fuera de las campañas comerciales'};
+  }
   const editorial = /property=["']og:type["'][^>]*content=["']article["']|["']@type["']\s*:\s*["'](?:NewsArticle|Article|BlogPosting)["']/i.test(html);
   const profile = volleyball ? volleyballProfile(heading, title, page, editorial) ||
     volleyballProfile(title, title, page, editorial) : undefined;
@@ -136,7 +142,7 @@ export function reviewContactPage(html: string, url: string, app: Application, c
   for (const link of channelHtml.matchAll(/href\s*=\s*["']mailto:([^"'?]+)(?:\?[^"']*)?["']/gi)) {
     try { declared.add(normalizeContactEmail(decodeURIComponent(decode(link[1])))); } catch {}
   }
-  const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) && !excludedMailDomains.has(email.split('@')[1]) &&
+  const valid=[...new Set(emails.map(normalizeContactEmail))].filter(email => usableContactEmail(email) && !excludedEmails.has(email) && !excludedMailDomains.has(email.split('@')[1]) && !isGovernmentAudience({email}) &&
     !/^(?:filler@|[^@]+@(?:empresa\.mx|tumarca\.com|mailservice\.com)$)/i.test(email) &&
     (declared.has(email) || email.split('@')[1] === emailHost || (profile === 'coach' && Boolean(main))) &&
     (profile !== 'coach' || !/^(?:info|contacto?|contato|administracion|secretaria|hola)@/.test(email)));
@@ -184,6 +190,6 @@ export function relevantSearchLinks(document:string,app:Application,country:stri
  return [...new Set(entries.flatMap(item=>{try{const u=publicUrl(item.url),text=item.text+' '+u.hostname+u.pathname;
   const topic=prospectingTerms(app,country).some(t=>word(text,t));
   const place=(rule?.aliases||[country]).some(t=>word(text,t))||Boolean(rule && u.hostname.endsWith('.'+rule.iso.toLowerCase()));
-  return !excluded.test(u.hostname)&&(!isOpenVoley(app)||!volleyballMediaPage(u))&&topic&&place?[u.href]:[];
+  return !excluded.test(u.hostname)&&!isGovernmentAudience({urls:[u.href]})&&(!isOpenVoley(app)||!volleyballMediaPage(u))&&topic&&place?[u.href]:[];
  }catch{return [];}}))].slice(0,10);
 }

@@ -1,3 +1,4 @@
+import { governmentCampaignContact } from './campaign-audience.js';
 import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignCountryAllowed } from './campaign-markets.js';
 import {recoverableEmailFailure, ownerEmailCorrection, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
@@ -123,6 +124,7 @@ export function prepareCampaign(campaign: Campaign, app: Application | undefined
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) { skip('Fuente sin revisar'); continue; }
     if (!volleyballRecipientAllowed(app, contact)) { skip('Actividad de voleibol pendiente de verificar'); continue; }
+    if (governmentCampaignContact(contact)) { skip('Organismo público fuera de la campaña'); continue; }
     if (responded.has(contact.id)) { skip('Ya respondió: revisar conversación'); continue; }
     const email = contact.email?.trim().toLowerCase() || '';
     const emailUsable = emailAllowed && usableContactEmail(email) && contact.undeliverableEmail !== email;

@@ -1,3 +1,4 @@
+import { governmentCampaignContact } from './campaign-audience.js';
 import { isOpenVoley, volleyballMediaDomain, volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { Resolver } from 'node:dns/promises';
 import { emailDomainsWithDeliveryProblems, recoverableEmailFailure, normalizeContactEmail, ownerEmailCorrection, publishedCampaignRecipients } from '../src/email-policy.js';
@@ -39,7 +40,7 @@ async function recoverBouncedContacts(fetcher: typeof fetchPublicText) {
     const contact = db.getContactById(thread.contactId);
     const campaign = thread.campaignId && db.getCampaignById(thread.campaignId);
     const app = db.getApplicationById(thread.appId);
-    if (!contact || !campaign || !app || !campaign.autoSendEmail || !campaign.channels.includes('email') ||
+    if (!contact || governmentCampaignContact(contact) || !campaign || !app || !campaign.autoSendEmail || !campaign.channels.includes('email') ||
         !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) ||
         !campaignStrategyReady(campaign, app) || !db.campaignInActiveRun(campaign.id) || contact.outreachBasis !== 'public_business_contact' ||
         contact.permission === 'revocado' || ['baja_solicitada','descartado','cliente'].includes(contact.status) ||

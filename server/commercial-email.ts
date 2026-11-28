@@ -1,7 +1,8 @@
+import { governmentCampaignContact } from './campaign-audience.js';
 import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { campaignWhatsAppPaused, whatsappAuthorized, whatsappCampaignEligible, whatsappPhone } from '../src/whatsapp-policy.js';
 import { campaignCountryAllowed, marketLanguage } from './campaign-markets.js';
-import {emailDomainsWithDeliveryProblems, emailPromotionHold, invalidEmailDestination, normalizeContactEmail, recoverableEmailFailure, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
+import {campaignEmailAddress, emailDomainsWithDeliveryProblems, emailPromotionHold, invalidEmailDestination, normalizeContactEmail, recoverableEmailFailure, isAutomaticNotice, isReferralAcknowledgement, publishedCampaignRecipients, usableContactEmail} from '../src/email-policy.js';
 import {campaignStrategyReady, orderCommercialConversations, unlimitedCampaignOutreach, unlimitedDirectorOutreach,dailyOutreachKeys,outreachKey} from './sales-director.js';
 import { randomUUID, createHash } from 'node:crypto';
 import type { Express } from 'express';
@@ -63,19 +64,19 @@ export function claimCommercialEmail(id: string, now = new Date()) {
     for (const msg of conv.messages) {
       if (msg.channel !== 'email' || msg.direction !== 'outbound' || (msg.status !== 'preparado' && !(msg.status === 'pendiente' && campaign?.mode === 'automatico' && !msg.replyToProviderId)) || msg.replacementMessageId || msg.reviewStatus === 'rejected' || msg.attemptedAt) continue;
       const replying = Boolean(msg.replyToProviderId);
-      const defaultRecipient = normalizeContactEmail(contact.email || '');
+      const defaultRecipient = replying ? normalizeContactEmail(contact.email || '') : campaignEmailAddress(contact.email || '');
       const discoveredPromotion = !replying && contact.outreachBasis === 'public_business_contact';
       const verified = discoveredPromotion ? publishedCampaignRecipients(contact).filter(email =>
-        !invalid.has(email) && email !== contact.undeliverableEmail && !delayedDomains.has(email.split('@')[1])) : [];
-      const approvedRecipient = msg.approvedRecipient && normalizeContactEmail(msg.approvedRecipient);
-      const campaignRecipient = msg.campaignRecipient && normalizeContactEmail(msg.campaignRecipient);
+        !invalid.has(email) && !governmentCampaignContact(contact, email) && email !== contact.undeliverableEmail && !delayedDomains.has(email.split('@')[1])) : [];
+      const approvedRecipient = msg.approvedRecipient && (replying ? normalizeContactEmail : campaignEmailAddress)(msg.approvedRecipient);
+      const campaignRecipient = msg.campaignRecipient && campaignEmailAddress(msg.campaignRecipient);
       const recipient = replying ? approvedRecipient || defaultRecipient
         : discoveredPromotion ? campaignRecipient ?? verified[0] : defaultRecipient;
       if (!usableContactEmail(recipient) || invalid.has(recipient) || contact.undeliverableEmail === recipient ||
           (discoveredPromotion && !verified.includes(recipient))) continue;
       if (replying) { if (!goal.answerEmail || msg.reviewStatus !== 'approved') continue; }
       else {
-        if (!volleyballRecipientAllowed(app, contact, recipient) || contact.status === 'cliente' || delayedDomains.has(recipient.split('@')[1]) || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
+        if (governmentCampaignContact(contact, recipient) || !volleyballRecipientAllowed(app, contact, recipient) || contact.status === 'cliente' || delayedDomains.has(recipient.split('@')[1]) || promotionHold || !campaignCountryAllowed(app, contact.country)) continue;
         if (!goal.sendEmail || !report.remaining || campaign&&!campaignStrategyReady(campaign,app) || (campaign && !db.campaignInActiveRun(campaign.id)) || (campaign?.goalMonth && (campaign.goalMonth !== goal.month || !goal.countries.includes(campaign.country))) || !campaign?.autoSendEmail || !campaign.channels.includes('email') || !['lista','activa','bloqueada_por_configuracion'].includes(campaign.status) || conv.messages.some(m => m.direction === 'inbound')) continue;
         if (contact.permission !== 'autorizado' && !(contact.permission === 'desconocido' && campaign.allowPublicEmail && contact.outreachBasis === 'public_business_contact')) continue;
         if (campaign.maxContacts !== undefined) {

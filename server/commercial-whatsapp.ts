@@ -1,3 +1,4 @@
+import { governmentCampaignContact } from './campaign-audience.js';
 import { volleyballRecipientAllowed } from './volleyball-outreach.js';
 import { accountingDay } from '../src/ledger.js';
 import { isAutomaticNotice } from '../src/email-policy.js';
@@ -68,7 +69,7 @@ export function claimWhatsApp(id:string,now=new Date()){
    if (campaignWhatsAppPaused && (conv.campaignId || !reply)) continue;
    if(reply){if(!report.goal.answerEmail||msg.reviewStatus!=='approved')continue;}
    else{
-    if (!volleyballRecipientAllowed(app, contact) || contact.status === 'cliente' || !campaignCountryAllowed(app, contact.country)) continue;
+    if (governmentCampaignContact(contact) || !volleyballRecipientAllowed(app, contact) || contact.status === 'cliente' || !campaignCountryAllowed(app, contact.country)) continue;
     const reviewedAt = Date.parse(contact.sourceReviewDate);
     if (!contact.source?.trim() || !Number.isFinite(reviewedAt) || reviewedAt > now.getTime()) continue;
     if(!report.remaining||!campaign?.autoSendWhatsApp||!campaign.channels.includes('whatsapp')||!db.campaignInActiveRun(campaign.id)||!campaignStrategyReady(campaign,db.getApplicationById(campaign.appId))||!['lista','activa','bloqueada_por_configuracion'].includes(campaign.status)||conv.messages.some(m=>m.direction==='inbound'))continue;

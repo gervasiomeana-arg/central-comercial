@@ -24,6 +24,12 @@ export function ownerEmailCorrection(value: string | undefined): string | undefi
   return ownerEmailCorrections.get(normalizeContactEmail(value || ''));
 }
 
+export function campaignEmailAddress(value: string): string {
+  return ownerEmailCorrection(value) || normalizeContactEmail(value);
+}
+
+export const funerariaMaganaEmail = 'contacto@xn--funerariamagaa-2nb.com';
+
 // Syntax is not proof of ownership or publication. This final guard also rejects
 // common form examples; legitimate addresses on free-mail domains remain valid.
 export function exampleContactEmail(value: unknown): boolean {
@@ -112,14 +118,14 @@ export function nonInterestOnlyContacts(conversations: Conversation[]): Set<stri
 }
 
 export function publishedCampaignRecipients(contact: Contact): string[] {
-  const email = normalizeContactEmail(contact.email || '');
+  const email = campaignEmailAddress(contact.email || '');
   if (ownerConfirmedAddresses.has(email)) return [email];
   const pages = new Map<string, string>();
   try {
     const host = new URL(contact.website).hostname.replace(/^www\./, '');
     for (const entry of contact.emailPublications ?? []) {
       const page = new URL(entry.url);
-      const email = normalizeContactEmail(entry.email);
+      const email = campaignEmailAddress(entry.email);
       if (page.protocol !== 'https:' || page.hostname.replace(/^www\./, '') !== host || !usableContactEmail(email)) continue;
       pages.set(page.pathname.replace(/\/+$/, '') || '/', email);
     }

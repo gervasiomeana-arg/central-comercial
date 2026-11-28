@@ -1,5 +1,6 @@
+import { governmentCampaignContact } from './campaign-audience.js';
 import {repairDiscoveryPlan} from './discovery-plan.js';
-import {nonInterestOnlyContacts,normalizeContactEmail,ownerEmailCorrection,publishedCampaignRecipients,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
+import {nonInterestOnlyContacts,campaignEmailAddress,funerariaMaganaEmail,normalizeContactEmail,ownerEmailCorrection,publishedCampaignRecipients,exampleContactEmail,isAutomaticNotice,isReferralAcknowledgement,usableContactEmail} from '../src/email-policy.js';
 import {campaignWhatsAppPaused, whatsappCampaignEligible} from '../src/whatsapp-policy.js';
 import { createFuneralShiftPilot, funeralShiftQueries,  campaignStrategyReady, defaultGoal, goalProgress, goalCampaigns, unlimitedDirectorOutreach, validateGoal, playbook, operationalSummary, researchQueriesFor, normalize } from './sales-director.js';
 import { accountingDay, generateCharges, validateLedgerSubscription, clientLedger, cents, validDay } from '../src/ledger.js';
@@ -216,9 +217,10 @@ class DatabaseManager {
   private applyEmailCorrection(contact: Contact, conversations: Conversation[]): boolean {
     const original = normalizeContactEmail(contact.email || '');
     const corrected = ownerEmailCorrection(original);
-    if (!corrected && original === contact.email?.trim().toLowerCase()) return false;
     const email = corrected || original;
-    if (!email) return false;
+    const correctName = email === funerariaMaganaEmail && contact.orgName !== 'Funeraria Magaña';
+    if (!email || (!correctName && !corrected && original === contact.email?.trim().toLowerCase())) return false;
+    if (correctName) contact.orgName = 'Funeraria Magaña';
 
     contact.email = email;
     contact.updatedAt = new Date().toISOString();
@@ -290,14 +292,26 @@ class DatabaseManager {
     for (const contact of schema.contacts) {
       if (this.applyEmailCorrection(contact, schema.conversations)) changed = true;
     }
+    const contactsById = new Map(schema.contacts.map(contact => [contact.id, contact]));
     for (const thread of schema.conversations) for (const message of thread.messages) {
-      if (message.channel !== 'email' || message.direction !== 'outbound' ||
-          !['pendiente', 'preparado'].includes(message.status) || message.attemptedAt ||
-          message.sentAt || message.serviceConfirmationId) continue;
+      if (message.direction !== 'outbound' || !['pendiente', 'preparado'].includes(message.status) ||
+          message.attemptedAt || message.sentAt || message.serviceConfirmationId) continue;
+      const contact = contactsById.get(thread.contactId);
+      const recipient = message.channel === 'email' ? message.campaignRecipient || message.approvedRecipient || contact?.email : contact?.email;
+      if (contact && thread.campaignId && !message.replyToProviderId && message.reviewStatus !== 'rejected' &&
+          governmentCampaignContact(contact, recipient)) {
+        message.reviewStatus = 'rejected';
+        message.reviewedAt = new Date().toISOString();
+        message.reviewedBy = 'Regla comercial: organismo público fuera de campaña';
+        message.draftRevision = (message.draftRevision || 0) + 1;
+        changed = true;
+        continue;
+      }
+      if (message.channel !== 'email') continue;
       for (const field of ['campaignRecipient', 'approvedRecipient'] as const) {
         const address = message[field];
         if (!address) continue;
-        const normalized = normalizeContactEmail(address);
+        const normalized = message.replyToProviderId ? normalizeContactEmail(address) : campaignEmailAddress(address);
         if (normalized !== address && usableContactEmail(normalized)) {
           message[field] = normalized;
           changed = true;
